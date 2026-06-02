@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Politeia — Fundación</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400&family=Archivo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --tinta:#1a1a37;
+    --azul:#137a9f;
+    --rosa:#fce3da;
+    --blanco:#ffffff;
+    --hueso:#f7f5f2;
+    --gris:#5b5b6b;
+    --linea:rgba(26,26,55,.12);
+    --display:'Fraunces',Georgia,serif;
+    --texto:'Archivo',system-ui,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:var(--texto);
+    color:var(--tinta);
+    background:var(--hueso);
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 32px}
+  section{position:relative}
+
+  /* NAV */
+  nav{
+    position:sticky;top:0;z-index:50;
+    background:rgba(247,245,242,.82);
+    backdrop-filter:blur(12px);
+    border-bottom:1px solid var(--linea);
+  }
+  .nav-in{display:flex;align-items:center;justify-content:space-between;height:72px}
+  .logo{font-family:var(--display);font-weight:600;font-size:1.45rem;letter-spacing:-.01em;display:flex;align-items:center;gap:10px}
+  .logo .dot{width:11px;height:11px;border-radius:50%;background:var(--azul);display:inline-block}
+  .nav-links{display:flex;gap:34px;align-items:center;font-size:.92rem;font-weight:500}
+  .nav-links a{color:var(--gris);transition:color .2s}
+  .nav-links a:hover{color:var(--tinta)}
+  .nav-cta{background:var(--tinta);color:var(--blanco)!important;padding:10px 20px;border-radius:100px;font-size:.86rem;font-weight:600}
+  .nav-cta:hover{background:var(--azul)}
+  @media(max-width:860px){.nav-links a:not(.nav-cta){display:none}}
+
+  /* HERO */
+  .hero{padding:96px 0 80px;position:relative;overflow:hidden}
+  .hero-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:60px;align-items:center}
+  .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:.78rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--azul);margin-bottom:26px}
+  .eyebrow::before{content:"";width:28px;height:1.5px;background:var(--azul)}
+  h1{font-family:var(--display);font-weight:500;font-size:clamp(2.6rem,5.2vw,4.3rem);line-height:1.04;letter-spacing:-.02em;margin-bottom:26px}
+  h1 em{font-style:italic;color:var(--azul)}
+  .tw{color:var(--azul);font-style:italic}
+  #tw-text{font-style:italic}
+  .caret{display:inline-block;width:3px;height:.85em;background:var(--azul);margin-left:4px;vertical-align:baseline;animation:blink 1s step-end infinite;transform:translateY(2px)}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+  .hero p{font-size:1.12rem;color:var(--gris);max-width:34ch;margin-bottom:36px}
+  .btn-row{display:flex;gap:14px;flex-wrap:wrap}
+  .btn{padding:14px 26px;border-radius:100px;font-weight:600;font-size:.94rem;transition:all .2s;display:inline-flex;align-items:center;gap:8px}
+  .btn-primary{background:var(--azul);color:var(--blanco)}
+  .btn-primary:hover{background:var(--tinta);transform:translateY(-2px)}
+  .btn-ghost{border:1.5px solid var(--linea);color:var(--tinta)}
+  .btn-ghost:hover{border-color:var(--tinta)}
+  .hero-art{position:relative;aspect-ratio:1/1.05;border-radius:18px;overflow:hidden;background:var(--tinta);display:flex;flex-direction:column;justify-content:flex-end;padding:36px}
+  .hero-art::before{content:"";position:absolute;top:-40px;right:-40px;width:200px;height:200px;border-radius:50%;background:var(--azul);opacity:.3;filter:blur(30px)}
+  .hero-art::after{content:"";position:absolute;bottom:-50px;left:-30px;width:180px;height:180px;border-radius:50%;background:var(--rosa);opacity:.22;filter:blur(30px)}
+  .carousel-label{position:relative;font-size:.74rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--rosa);margin-bottom:auto;display:flex;align-items:center;gap:8px}
+  .carousel-label::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--azul);box-shadow:0 0 0 4px rgba(19,122,159,.25)}
+  .carousel{position:relative;height:170px}
+  .slide{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;opacity:0;transform:translateY(12px);transition:opacity .6s,transform .6s;pointer-events:none}
+  .slide.active{opacity:1;transform:translateY(0);pointer-events:auto}
+  .slide-cat{font-size:.78rem;font-weight:600;letter-spacing:.05em;color:var(--azul);margin-bottom:12px}
+  .slide h3{font-family:var(--display);font-weight:500;font-size:1.65rem;line-height:1.18;color:var(--hueso);margin-bottom:14px}
+  .slide-go{font-size:.86rem;font-weight:600;color:var(--rosa)}
+  .dots{position:relative;display:flex;gap:8px;margin-top:24px}
+  .dots button{width:24px;height:3px;border:none;border-radius:2px;background:rgba(247,245,242,.25);cursor:pointer;padding:0;transition:background .3s}
+  .dots button.on{background:var(--azul)}
+  @media(max-width:860px){.hero-grid{grid-template-columns:1fr}.hero-art{display:none}}
+
+  /* MARQUEE strip */
+  .strip{background:var(--tinta);color:var(--hueso);padding:18px 0;overflow:hidden;white-space:nowrap}
+  .strip-track{display:inline-block;animation:slide 30s linear infinite;font-family:var(--display);font-size:1.15rem}
+  .strip-track span{margin:0 28px;opacity:.85}
+  .strip-track span b{color:var(--azul);font-style:italic;font-weight:400}
+  @keyframes slide{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+  /* SECTION HEADING */
+  .sec{padding:90px 0}
+  .sec-head{margin-bottom:48px;max-width:640px}
+  .sec-head .eyebrow{margin-bottom:18px}
+  .sec-head h2{font-family:var(--display);font-weight:500;font-size:clamp(2rem,3.6vw,2.9rem);letter-spacing:-.02em;line-height:1.08}
+  .sec-head p{color:var(--gris);font-size:1.05rem;margin-top:16px}
+
+  /* ENTORNO cards */
+  .entorno{background:var(--blanco)}
+  .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+  .card{border:1px solid var(--linea);border-radius:16px;padding:30px;background:var(--hueso);transition:all .25s;position:relative;overflow:hidden;min-height:230px;display:flex;flex-direction:column}
+  .card:hover{transform:translateY(-4px);box-shadow:0 18px 40px rgba(26,26,55,.1);border-color:transparent}
+  .card .ico{width:46px;height:46px;border-radius:12px;background:var(--azul);display:flex;align-items:center;justify-content:center;margin-bottom:20px}
+  .card .ico svg{width:24px;height:24px;stroke:var(--blanco)}
+  .card h3{font-family:var(--display);font-size:1.4rem;font-weight:600;margin-bottom:8px}
+  .card p{color:var(--gris);font-size:.95rem;flex-grow:1}
+  .card .go{margin-top:18px;font-weight:600;font-size:.9rem;color:var(--azul);display:flex;align-items:center;gap:6px}
+  .card.soon .ico{background:var(--gris);opacity:.6}
+  .badge{position:absolute;top:20px;right:20px;font-size:.68rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;background:var(--rosa);color:var(--tinta);padding:5px 11px;border-radius:100px}
+  @media(max-width:860px){.cards{grid-template-columns:1fr}}
+
+  /* OBSERVATORIO */
+  .posts{display:grid;grid-template-columns:repeat(3,1fr);gap:26px}
+  .post{background:var(--blanco);border-radius:16px;overflow:hidden;border:1px solid var(--linea);transition:all .25s;cursor:pointer}
+  .post:hover{transform:translateY(-4px);box-shadow:0 18px 40px rgba(26,26,55,.1)}
+  .post-img{aspect-ratio:16/10;background:linear-gradient(135deg,var(--azul),var(--tinta));position:relative}
+  .post-img::after{content:"";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.5);font-size:.8rem;letter-spacing:.05em}
+  .post-img[style*="url"]::after{display:none}
+  .post-body{padding:24px}
+  .post-cat{font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--azul);margin-bottom:10px;display:block}
+  .post-body h4{font-family:var(--display);font-size:1.22rem;font-weight:600;line-height:1.25;margin-bottom:10px}
+  .post-body .meta{font-size:.84rem;color:var(--gris);margin-top:14px}
+  .skeleton{pointer-events:none;animation:pulse 1.4s ease-in-out infinite}
+  .skeleton .post-img{background:var(--linea)}
+  .skeleton h4,.skeleton .post-cat,.skeleton .meta{color:transparent;background:var(--linea);border-radius:4px}
+  @keyframes pulse{0%,100%{opacity:.5}50%{opacity:.85}}
+  .blog-error{grid-column:1/-1;text-align:center;color:var(--gris);padding:30px;font-size:.95rem}
+  @media(max-width:860px){.posts{grid-template-columns:1fr}}
+
+  /* NOVEDADES */
+  .novedades{background:var(--tinta);color:var(--hueso)}
+  .novedades .sec-head h2,.novedades .logo{color:var(--hueso)}
+  .nov-list{display:flex;flex-direction:column;gap:2px;border-top:1px solid rgba(255,255,255,.14)}
+  .nov-item{display:grid;grid-template-columns:140px 1fr auto;gap:24px;padding:26px 4px;border-bottom:1px solid rgba(255,255,255,.14);align-items:center;transition:padding .2s}
+  .nov-item:hover{padding-left:14px}
+  .nov-date{font-size:.82rem;color:var(--azul);font-weight:600;letter-spacing:.04em}
+  .nov-item h4{font-family:var(--display);font-size:1.3rem;font-weight:500}
+  .nov-item .arrow{opacity:.4;font-size:1.3rem}
+  @media(max-width:680px){.nov-item{grid-template-columns:1fr;gap:6px}.nov-item .arrow{display:none}}
+
+  /* MIEMBROS */
+  .team{display:grid;grid-template-columns:repeat(4,1fr);gap:24px}
+  .member{text-align:center}
+  .member .ph{aspect-ratio:1;border-radius:14px;background:var(--rosa);margin-bottom:16px;position:relative;overflow:hidden}
+  .member .ph::after{content:"foto";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--tinta);opacity:.35;font-size:.82rem}
+  .member h4{font-family:var(--display);font-size:1.18rem;font-weight:600}
+  .member span{font-size:.86rem;color:var(--gris)}
+  @media(max-width:860px){.team{grid-template-columns:repeat(2,1fr)}}
+
+  /* NEWSLETTER */
+  .news{background:var(--blanco)}
+  .news-box{background:var(--tinta);border-radius:24px;padding:64px;text-align:center;position:relative;overflow:hidden}
+  .news-box::before{content:"";position:absolute;top:-60px;right:-60px;width:240px;height:240px;border-radius:50%;background:var(--azul);opacity:.25;filter:blur(20px)}
+  .news-box::after{content:"";position:absolute;bottom:-80px;left:-40px;width:200px;height:200px;border-radius:50%;background:var(--rosa);opacity:.18;filter:blur(20px)}
+  .news-box h2{font-family:var(--display);color:var(--hueso);font-size:clamp(1.8rem,3.4vw,2.6rem);font-weight:500;margin-bottom:14px;position:relative}
+  .news-box p{color:rgba(247,245,242,.7);max-width:46ch;margin:0 auto 30px;position:relative}
+  .news-form{display:flex;gap:10px;max-width:460px;margin:0 auto;position:relative}
+  .news-form input{flex:1;padding:15px 22px;border-radius:100px;border:none;font-family:var(--texto);font-size:.95rem}
+  .news-form button{background:var(--azul);color:var(--blanco);border:none;padding:15px 28px;border-radius:100px;font-weight:600;font-family:var(--texto);cursor:pointer;transition:background .2s}
+  .news-form button:hover{background:var(--rosa);color:var(--tinta)}
+  @media(max-width:560px){.news-box{padding:40px 24px}.news-form{flex-direction:column}}
+
+  /* FOOTER */
+  footer{background:var(--hueso);padding:70px 0 40px;border-top:1px solid var(--linea)}
+  .foot-grid{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;gap:40px;margin-bottom:50px}
+  .foot-grid p{color:var(--gris);font-size:.92rem;max-width:30ch;margin-top:16px}
+  .foot-col h5{font-size:.78rem;letter-spacing:.1em;text-transform:uppercase;color:var(--tinta);margin-bottom:16px;font-weight:700}
+  .foot-col a{display:block;color:var(--gris);font-size:.92rem;margin-bottom:10px;transition:color .2s}
+  .foot-col a:hover{color:var(--azul)}
+  .foot-bottom{border-top:1px solid var(--linea);padding-top:28px;display:flex;justify-content:space-between;font-size:.84rem;color:var(--gris);flex-wrap:wrap;gap:10px}
+  @media(max-width:860px){.foot-grid{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap nav-in">
+    <div class="logo"><span class="dot"></span>Politeia</div>
+    <div class="nav-links">
+      <a href="#entorno">Entorno</a>
+      <a href="#observatorio">Blog</a>
+      <a href="#novedades">Novedades</a>
+      <a href="#equipo">Equipo</a>
+      <a href="#news" class="nav-cta">Suscribirse</a>
+    </div>
+  </div>
+</nav>
+
+<section class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="eyebrow">Acercar la ciudadanía a la política</span>
+      <h1>La política <em>también</em><br><span class="tw"><span id="tw-text"></span><span class="caret"></span></span></h1>
+      <p>Politeia abre los datos, las leyes y las elecciones para participar con información accesible al ciudadano.</p>
+      <div class="btn-row">
+        <a href="#entorno" class="btn btn-primary">Explorá Politeia →</a>
+        <a href="#observatorio" class="btn btn-ghost">Leer el Blog</a>
+      </div>
+    </div>
+    <div class="hero-art">
+      <span class="carousel-label">Lo último</span>
+      <div class="carousel" id="carousel">
+        <a class="slide" href="#observatorio">
+          <span class="slide-cat">Nota · Instituciones</span>
+          <h3>Por qué la transparencia no alcanza (y qué hacer)</h3>
+          <span class="slide-go">Leer →</span>
+        </a>
+        <a class="slide" href="#novedades">
+          <span class="slide-cat">Novedad · 28 May</span>
+          <h3>Lanzamos la nueva versión de Promesas</h3>
+          <span class="slide-go">Ver →</span>
+        </a>
+        <a class="slide" href="#observatorio">
+          <span class="slide-cat">Nota · Participación</span>
+          <h3>Cómo diseñar una consulta ciudadana que la gente use</h3>
+          <span class="slide-go">Leer →</span>
+        </a>
+        <a class="slide" href="#novedades">
+          <span class="slide-cat">Novedad · 12 May</span>
+          <h3>Politeia en la Jornada de Tecnología Cívica</h3>
+          <span class="slide-go">Ver →</span>
+        </a>
+      </div>
+      <div class="dots" id="dots"></div>
+    </div>
+  </div>
+</section>
+
+<div class="strip">
+  <div class="strip-track">
+    <span>Datos abiertos <b>·</b></span><span>Participación <b>·</b></span><span>Transparencia <b>·</b></span><span>Análisis <b>·</b></span><span>Ciudadanía <b>·</b></span>
+    <span>Datos abiertos <b>·</b></span><span>Participación <b>·</b></span><span>Transparencia <b>·</b></span><span>Análisis <b>·</b></span><span>Ciudadanía <b>·</b></span>
+  </div>
+</div>
+
+<!-- ENTORNO -->
+<section class="sec entorno" id="entorno">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">El entorno Politeia</span>
+      <h2>Herramientas para mirar la política de cerca.</h2>
+      <p>Un conjunto de aplicaciones abiertas y gratuitas. Cada una resuelve una pregunta concreta.</p>
+    </div>
+    <div class="cards">
+      <a class="card" href="https://politeiatest.vercel.app/" target="_blank">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></div>
+        <h3>Promesas</h3>
+        <p>Compará tus posturas con las de los partidos y candidatos antes de votar. Sin sesgos, con fuentes.</p>
+        <span class="go">Abrir la app →</span>
+      </a>
+      <div class="card soon">
+        <span class="badge">Próximamente</span>
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4"/><path d="M9 9v.01M9 12v.01M9 15v.01"/></svg></div>
+        <h3>Quorum</h3>
+        <p>Seguí qué se vota en el Congreso, quién lo propone y cómo te afecta. En lenguaje claro.</p>
+        <span class="go" style="color:var(--gris)">En desarrollo</span>
+      </div>
+      <a class="card" href="#observatorio">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg></div>
+        <h3>Blog</h3>
+        <p>Análisis e investigación sobre innovación política, instituciones y participación.</p>
+        <span class="go">Ver artículos →</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- OBSERVATORIO -->
+<section class="sec" id="observatorio">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Blog</span>
+      <h2>Lo último que estamos pensando.</h2>
+      <p>Análisis e investigación sobre innovación política, instituciones y participación.</p>
+    </div>
+    <div class="posts" id="blog-posts">
+      <article class="post skeleton"><div class="post-img"></div><div class="post-body"><span class="post-cat">&nbsp;</span><h4>Cargando notas…</h4><div class="meta">&nbsp;</div></div></article>
+      <article class="post skeleton"><div class="post-img"></div><div class="post-body"><span class="post-cat">&nbsp;</span><h4>&nbsp;</h4><div class="meta">&nbsp;</div></div></article>
+      <article class="post skeleton"><div class="post-img"></div><div class="post-body"><span class="post-cat">&nbsp;</span><h4>&nbsp;</h4><div class="meta">&nbsp;</div></div></article>
+    </div>
+    <div style="margin-top:40px"><a href="https://politeia1.wordpress.com" target="_blank" class="btn btn-ghost">Ver todas las notas →</a></div>
+  </div>
+</section>
+
+<!-- NOVEDADES -->
+<section class="sec novedades" id="novedades">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Novedades</span>
+      <h2>Lo que está pasando en la Fundación.</h2>
+    </div>
+    <div class="nov-list">
+      <div class="nov-item">
+        <span class="nov-date">28 MAY 2026</span>
+        <h4>Lanzamos la nueva versión de Promesas</h4>
+        <span class="arrow">→</span>
+      </div>
+      <div class="nov-item">
+        <span class="nov-date">12 MAY 2026</span>
+        <h4>Politeia presente en la Jornada de Tecnología Cívica</h4>
+        <span class="arrow">→</span>
+      </div>
+      <div class="nov-item">
+        <span class="nov-date">30 ABR 2026</span>
+        <h4>Sumamos tres nuevos miembros al equipo de investigación</h4>
+        <span class="arrow">→</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- EQUIPO -->
+<section class="sec" id="equipo">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">Quiénes somos</span>
+      <h2>Un equipo que cruza política, datos y diseño.</h2>
+    </div>
+    <div class="team">
+      <div class="member"><div class="ph"></div><h4>Nombre Apellido</h4><span>Dirección</span></div>
+      <div class="member"><div class="ph"></div><h4>Nombre Apellido</h4><span>Coordinación</span></div>
+      <div class="member"><div class="ph"></div><h4>Nombre Apellido</h4><span>Investigación</span></div>
+      <div class="member"><div class="ph"></div><h4>Nombre Apellido</h4><span>Tecnología</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- NEWSLETTER -->
+<section class="sec news" id="news">
+  <div class="wrap">
+    <div class="news-box">
+      <h2>Recibí lo que importa, sin ruido.</h2>
+      <p>Cada tanto, un mail con nuestras notas, novedades y lecturas sobre política y participación. Sin spam.</p>
+      <form class="news-form" onsubmit="event.preventDefault();this.querySelector('input').value='';this.querySelector('button').textContent='¡Listo! ✓'">
+        <input type="email" placeholder="tu@email.com" required>
+        <button type="submit">Suscribirme</button>
+      </form>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div>
+        <div class="logo"><span class="dot"></span>Politeia</div>
+        <p>Fundación dedicada a la transparencia política y la participación ciudadana en Argentina.</p>
+      </div>
+      <div class="foot-col">
+        <h5>Entorno</h5>
+        <a href="#">Promesas</a>
+        <a href="#">Quorum</a>
+        <a href="#">Blog</a>
+      </div>
+      <div class="foot-col">
+        <h5>Fundación</h5>
+        <a href="#">Quiénes somos</a>
+        <a href="#">Novedades</a>
+        <a href="#">Contacto</a>
+      </div>
+      <div class="foot-col">
+        <h5>Seguinos</h5>
+        <a href="#">Instagram</a>
+        <a href="#">LinkedIn</a>
+        <a href="#">X / Twitter</a>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <span>© 2026 Fundación Politeia. Hecho en Argentina.</span>
+      <span>politeia.ar</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var el = document.getElementById('tw-text');
+  if(!el) return;
+  // Cada frase arranca con "es " fijo y cambia lo que sigue.
+  var endings = ['tuya','de Fran','de Rosa','de Juana','de todos','tuya también','de vos'];
+  var prefix = 'es ';
+  var typeSpeed = 75;     // velocidad al escribir
+  var deleteSpeed = 45;   // velocidad al borrar
+  var holdTime = 1600;    // pausa con la frase completa
+  var i = 0;
+
+  function typePhrase(){
+    var full = prefix + endings[i];
+    var pos = 0;
+    (function type(){
+      el.textContent = full.slice(0, pos);
+      pos++;
+      if(pos <= full.length){
+        setTimeout(type, typeSpeed);
+      } else {
+        setTimeout(deletePhrase, holdTime);
+      }
+    })();
+  }
+
+  function deletePhrase(){
+    var full = el.textContent;
+    // borra hasta dejar solo "es " (length 3)
+    (function del(){
+      if(full.length > prefix.length){
+        full = full.slice(0, -1);
+        el.textContent = full;
+        setTimeout(del, deleteSpeed);
+      } else {
+        i = (i + 1) % endings.length;
+        setTimeout(typePhrase, 300);
+      }
+    })();
+  }
+
+  typePhrase();
+})();
+
+(function(){
+  var slides = document.querySelectorAll('#carousel .slide');
+  var dotsBox = document.getElementById('dots');
+  if(!slides.length || !dotsBox) return;
+  var idx = 0, timer;
+
+  slides.forEach(function(_, n){
+    var b = document.createElement('button');
+    b.addEventListener('click', function(){ go(n); reset(); });
+    dotsBox.appendChild(b);
+  });
+  var dots = dotsBox.querySelectorAll('button');
+
+  function go(n){
+    slides[idx].classList.remove('active');
+    dots[idx].classList.remove('on');
+    idx = n;
+    slides[idx].classList.add('active');
+    dots[idx].classList.add('on');
+  }
+  function next(){ go((idx + 1) % slides.length); }
+  function reset(){ clearInterval(timer); timer = setInterval(next, 4500); }
+
+  go(0);
+  reset();
+})();
+
+/* === Traer notas reales del blog desde WordPress.com === */
+(function(){
+  var SITE = 'politeia1.wordpress.com';
+  var API = 'https://public-api.wordpress.com/wp/v2/sites/' + SITE;
+  var box = document.getElementById('blog-posts');
+  if(!box) return;
+
+  // limpia el HTML de un texto (WordPress devuelve títulos con etiquetas)
+  function limpiar(html){
+    var t = document.createElement('textarea');
+    t.innerHTML = html;
+    return t.value.replace(/<[^>]*>/g,'').trim();
+  }
+  function fecha(iso){
+    try{
+      return new Date(iso).toLocaleDateString('es-AR',{day:'numeric',month:'short',year:'numeric'});
+    }catch(e){ return ''; }
+  }
+
+  // pedimos las últimas 6 notas, con la imagen destacada incluida (_embed)
+  fetch(API + '/posts?per_page=6&_embed')
+    .then(function(r){ if(!r.ok) throw new Error('http'); return r.json(); })
+    .then(function(posts){
+      if(!posts.length){
+        box.innerHTML = '<div class="blog-error">Todavía no hay notas publicadas.</div>';
+        return;
+      }
+      box.innerHTML = posts.slice(0,3).map(function(p){
+        var titulo = limpiar(p.title.rendered);
+        var link = p.link;
+        var when = fecha(p.date);
+        // imagen destacada si existe
+        var img = '';
+        try{
+          var media = p._embedded['wp:featuredmedia'][0].source_url;
+          if(media) img = 'style="background-image:url(\'' + media + '\');background-size:cover;background-position:center"';
+        }catch(e){}
+        return '<a class="post" href="' + link + '" target="_blank" rel="noopener">' +
+                 '<div class="post-img" ' + img + '></div>' +
+                 '<div class="post-body">' +
+                   '<span class="post-cat">Nota</span>' +
+                   '<h4>' + titulo + '</h4>' +
+                   '<div class="meta">' + when + '</div>' +
+                 '</div></a>';
+      }).join('');
+    })
+    .catch(function(){
+      box.innerHTML = '<div class="blog-error">No pudimos cargar las notas en este momento. Probá recargar la página.</div>';
+    });
+})();
+</script>
+
+</body>
+</html>
