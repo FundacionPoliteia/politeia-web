@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { sanitizeTags } from '../lib/taxonomy';
 
 const ENDINGS = ['tuya', 'de Fran', 'de Rosa', 'de Juana', 'de todos', 'tuya también', 'de vos'];
 const PREFIX = 'es ';
@@ -43,12 +44,15 @@ export default function Hero({ destacadas = [] }) {
 
   // carrusel
   const [slide, setSlide] = useState(0);
+  const [carouselPaused, setCarouselPaused] = useState(false);
   const slides = destacadas.slice(0, 4);
   useEffect(() => {
-    if (!slides.length) return;
+    if (!slides.length || carouselPaused) return;
     const t = setInterval(() => setSlide((s) => (s + 1) % slides.length), 4500);
     return () => clearInterval(t);
-  }, [slides.length]);
+  }, [carouselPaused, slides.length]);
+
+  const activePost = slides[slide] || null;
 
   return (
     <section className="hero">
@@ -69,25 +73,40 @@ export default function Hero({ destacadas = [] }) {
             <Link href="/blog" className="btn btn-ghost">Leer el Blog</Link>
           </div>
         </div>
-        <div className="hero-art">
+        <div
+          className="hero-art"
+          onMouseEnter={() => setCarouselPaused(true)}
+          onMouseLeave={() => setCarouselPaused(false)}
+        >
           <span className="carousel-label">Lo último</span>
           <div className="carousel">
             {slides.length === 0 && (
               <div className="slide active">
-                <h3 style={{ color: 'var(--hueso)' }}>Bienvenidos a Politeia</h3>
+                <div className="slide-content">
+                  <h3 style={{ color: 'var(--hueso)' }}>Bienvenidos a Politeia</h3>
+                </div>
               </div>
             )}
             {slides.map((p, i) => (
-              <Link
-                key={p.id}
-                href={`/blog/${p.slug}`}
-                className={`slide ${i === slide ? 'active' : ''}`}
+              <div
+                key={p.id || p.slug || i}
+                className={`slide ${p.imagen ? 'has-image' : ''} ${i === slide ? 'active' : ''}`}
+                style={p.imagen ? { '--slide-bg': `url('${p.imagen}')` } : {}}
               >
-                <span className="slide-cat">{p.categoria || 'Nota'}</span>
-                <h3>{p.titulo}</h3>
-                <span className="slide-go">Leer →</span>
-              </Link>
+                <div className="slide-content">
+                  <span className="slide-cat">{etiquetasHero(p)[0]}</span>
+                  <h3>{p.titulo}</h3>
+                  <span className="slide-go">Leer →</span>
+                </div>
+              </div>
             ))}
+            {activePost?.slug && (
+              <Link
+                aria-label={`Leer ${activePost.titulo}`}
+                className="slide-card-link"
+                href={`/blog/${activePost.slug}`}
+              />
+            )}
           </div>
           <div className="dots">
             {slides.map((_, i) => (
@@ -103,4 +122,9 @@ export default function Hero({ destacadas = [] }) {
       </div>
     </section>
   );
+}
+
+function etiquetasHero(post) {
+  const tags = sanitizeTags(post?.tags);
+  return tags.length ? tags : ['Nota'];
 }

@@ -1,0 +1,210 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import request from 'supertest';
+import { createApp } from '../src/app.js';
+import { buildSessionCookie, expandRoles, verifySessionCookie } from '../src/auth.js';
+import { config, parseEnvValue } from '../src/config.js';
+import { canManageAllPosts, toBlogAuthorView } from '../src/repositories/posts.js';
+import { isAllowedRoleEmail, sanitizeAssignedRoles } from '../src/repositories/users.js';
+
+test('GET /healthz returns service health', async () => {
+  const res = await request(createApp()).get('/healthz').expect(200);
+
+  assert.deepEqual(res.body, {
+    ok: true,
+    service: 'politeia-blog-api',
+  });
+});
+
+test('GET /v1/me accepts a valid session cookie', async () => {
+  const previousDevAuth = config.devAuth;
+  config.devAuth = false;
+  const session = buildSessionCookie({
+    email: 'dev@politeia.ar',
+    name: 'Dev Politeia',
+    roles: ['admin'],
+  });
+
+  try {
+    const res = await request(createApp())
+      .get('/v1/me')
+      .set('Cookie', `${config.sessionCookieName}=${encodeURIComponent(session)}`)
+      .expect(200);
+
+    assert.equal(res.body.user.email, 'dev@politeia.ar');
+    assert.deepEqual(res.body.user.roles, ['admin', 'reviewer', 'blog']);
+    assert.equal(res.body.user.authMode, 'session');
+  } finally {
+    config.devAuth = previousDevAuth;
+  }
+});
+
+test('role expansion keeps reviewer as blog plus review and admin as everything', () => {
+  assert.deepEqual(expandRoles(['blog']), ['blog']);
+  assert.deepEqual(expandRoles(['reviewer']), ['reviewer', 'blog']);
+  assert.deepEqual(expandRoles(['admin']), ['admin', 'reviewer', 'blog']);
+});
+
+test('role assignments allow primary-domain and configured external Gmail emails', () => {
+  assert.deepEqual(sanitizeAssignedRoles(['ADMIN', 'reviewer', 'blog', 'owner', 'admin']), ['admin', 'reviewer', 'blog']);
+  assert.equal(isAllowedRoleEmail('persona@politeia.ar'), true);
+  assert.equal(isAllowedRoleEmail('persona@gmail.com'), true);
+  assert.equal(isAllowedRoleEmail('persona@example.com'), false);
+});
+
+test('env parser ignores inline comments outside quotes', () => {
+  assert.equal(parseEnvValue('admin # admin, reviewer, blog'), 'admin');
+  assert.equal(parseEnvValue('"admin # literal"'), 'admin # literal');
+  assert.equal(parseEnvValue('reviewer,blog'), 'reviewer,blog');
+});
+
+test('dev auth overrides a stale local session while testing roles', async () => {
+  const previousDevAuth = config.devAuth;
+  const previousNodeEnv = config.nodeEnv;
+  const previousEmail = config.devAuthEmail;
+  const previousRoles = config.devAuthRoles;
+  config.devAuth = true;
+  config.nodeEnv = 'development';
+  config.devAuthEmail = 'local-admin@politeia.ar';
+  config.devAuthRoles = ['admin'];
+
+  const session = buildSessionCookie({
+    email: 'stale-blog@politeia.ar',
+    name: 'Stale Blog',
+    roles: ['blog'],
+  });
+
+  try {
+    const res = await request(createApp())
+      .get('/v1/me')
+      .set('Cookie', `${config.sessionCookieName}=${encodeURIComponent(session)}`)
+      .expect(200);
+
+    assert.equal(res.body.user.email, 'local-admin@politeia.ar');
+    assert.deepEqual(res.body.user.roles, ['admin', 'reviewer', 'blog']);
+    assert.equal(res.body.user.authMode, 'dev');
+  } finally {
+    config.devAuth = previousDevAuth;
+    config.nodeEnv = previousNodeEnv;
+    config.devAuthEmail = previousEmail;
+    config.devAuthRoles = previousRoles;
+  }
+});
+
+test('post ownership scope is limited for blog and global for reviewer/admin', () => {
+  assert.equal(canManageAllPosts({ roles: ['blog'] }), false);
+  assert.equal(canManageAllPosts({ roles: ['reviewer', 'blog'] }), true);
+  assert.equal(canManageAllPosts({ roles: ['admin', 'reviewer', 'blog'] }), true);
+});
+
+test('blog author view does not expose archived status', () => {
+  assert.equal(toBlogAuthorView({ status: 'archived' }).status, 'published');
+  assert.equal(toBlogAuthorView({ status: 'review' }).status, 'review');
+});
+
+test('session cookies reject emails outside the allowed domain', () => {
+  const session = buildSessionCookie({
+    email: 'person@example.com',
+    name: 'External User',
+    roles: ['blog'],
+  });
+
+  assert.equal(verifySessionCookie(session), null);
+});
+
+test('session cookies can carry assigned gmail.com users', () => {
+  const session = buildSessionCookie({
+    email: 'partner@gmail.com',
+    name: 'Gmail Partner',
+    roles: ['blog'],
+  });
+
+  const user = verifySessionCookie(session);
+  assert.equal(user.email, 'partner@gmail.com');
+  assert.deepEqual(user.roles, ['blog']);
+});
+
+test('POST /v1/auth/google requires a credential', async () => {
+  const res = await request(createApp())
+    .post('/v1/auth/google')
+    .send({})
+    .expect(400);
+
+  assert.equal(res.body.error.message, 'credential is required');
+});
+
+test('POST /v1/auth/logout clears the session cookie', async () => {
+  const res = await request(createApp())
+    .post('/v1/auth/logout')
+    .expect(200);
+
+  assert.equal(res.body.ok, true);
+  assert.match(res.header['set-cookie'][0], new RegExp(`${config.sessionCookieName}=`));
+  assert.match(res.header['set-cookie'][0], /Expires=Thu, 01 Jan 1970/);
+});
+
+test('local admin origins can preflight protected blog routes', async () => {
+  const routes = [
+    ['/v1/posts/manage', 'GET'],
+    ['/v1/categories', 'GET'],
+    ['/v1/media', 'POST'],
+    ['/v1/import/docx', 'POST'],
+  ];
+
+  for (const [path, method] of routes) {
+    const res = await request(createApp())
+      .options(path)
+      .set('Origin', 'http://admin.localhost:3001')
+      .set('Access-Control-Request-Method', method)
+      .expect(204);
+
+    assert.equal(res.header['access-control-allow-origin'], 'http://admin.localhost:3001');
+    assert.equal(res.header['access-control-allow-credentials'], 'true');
+  }
+});
+
+test('dev auth keeps local admin origins enabled even if NODE_ENV is production', async () => {
+  const previousNodeEnv = config.nodeEnv;
+  const previousDevAuth = config.devAuth;
+  config.nodeEnv = 'production';
+  config.devAuth = true;
+
+  try {
+    const res = await request(createApp())
+      .options('/v1/media')
+      .set('Origin', 'http://admin.localhost:3000')
+      .set('Access-Control-Request-Method', 'POST')
+      .set('Access-Control-Request-Headers', 'content-type')
+      .expect(204);
+
+    assert.equal(res.header['access-control-allow-origin'], 'http://admin.localhost:3000');
+    assert.equal(res.header['access-control-allow-credentials'], 'true');
+  } finally {
+    config.nodeEnv = previousNodeEnv;
+    config.devAuth = previousDevAuth;
+  }
+});
+
+test('media upload failures still include CORS headers for local admin origin', async () => {
+  const res = await request(createApp())
+    .post('/v1/media')
+    .set('Origin', 'http://admin.localhost:3000');
+
+  assert.ok([401, 503].includes(res.status));
+  assert.equal(res.header['access-control-allow-origin'], 'http://admin.localhost:3000');
+  assert.equal(res.header['access-control-allow-credentials'], 'true');
+});
+
+test('protected cloud routes fail clearly when local ADC is missing', async () => {
+  const res = await request(createApp())
+    .get('/v1/posts/manage')
+    .set('Origin', 'http://admin.localhost:3000');
+
+  if (res.status === 503) {
+    assert.match(res.body.error.message, /credenciales locales/i);
+    assert.equal(res.header['access-control-allow-origin'], 'http://admin.localhost:3000');
+    return;
+  }
+
+  assert.equal(res.status, 200);
+});

@@ -6,11 +6,39 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "blog-api:dev": "npm --prefix services/blog-api run dev",
+    "blog-api:start": "npm --prefix services/blog-api start",
+    "blog-api:test": "npm --prefix services/blog-api test",
+    "blog-api:check": "npm --prefix services/blog-api run check",
+    "blog-api:cloud:build": "gcloud builds submit services/blog-api --tag us-central1-docker.pkg.dev/quick-function-500420-v6/politeia/blog-api:latest",
+    "blog-api:cloud:deploy": "gcloud run deploy politeia-blog-api --image us-central1-docker.pkg.dev/quick-function-500420-v6/politeia/blog-api:latest --region us-central1 --allow-unauthenticated",
+    "blog-api:cloud:redeploy": "npm run blog-api:cloud:deploy",
+    "blog-api:cloud:restart": "npm run blog-api:cloud:deploy",
+    "blog-api:cloud:logs": "gcloud run services logs read politeia-blog-api --region us-central1 --limit=100",
+    "blog-api:cloud:url": "gcloud run services describe politeia-blog-api --region us-central1 --format=\"value(status.url)\"",
+    "blog-api:cloud:describe": "gcloud run services describe politeia-blog-api --region us-central1",
+    "blog-api:cloud:auth": "gcloud auth application-default login",
+    "blog-api:cloud:project": "gcloud config set project quick-function-500420-v6",
+    "blog-api:cloud:quota-project": "gcloud auth application-default set-quota-project quick-function-500420-v6"
   },
   "dependencies": {
+    "@tiptap/extension-bubble-menu": "^3.27.1",
+    "@tiptap/extension-image": "^3.27.1",
+    "@tiptap/extension-link": "^3.27.1",
+    "@tiptap/extension-placeholder": "^3.27.1",
+    "@tiptap/extension-table": "^3.27.1",
+    "@tiptap/extension-table-cell": "^3.27.1",
+    "@tiptap/extension-table-header": "^3.27.1",
+    "@tiptap/extension-table-row": "^3.27.1",
+    "@tiptap/pm": "^3.27.1",
+    "@tiptap/react": "^3.27.1",
+    "@tiptap/starter-kit": "^3.27.1",
+    "marked": "^18.0.5",
     "next": "15.5.7",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "turndown": "^7.2.4",
+    "turndown-plugin-gfm": "^1.0.2"
   }
 }

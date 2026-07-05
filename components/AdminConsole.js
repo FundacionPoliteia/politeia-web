@@ -1,0 +1,2137 @@
+'use client';
+
+import { useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
+import { marked } from 'marked';
+import RichTextEditor from './RichTextEditor';
+import { parseTagsText, sanitizeCategory, sanitizeTags, taxonomyKey } from '../lib/taxonomy';
+
+const API_BASE = process.env.NEXT_PUBLIC_BLOG_API_BASE_URL || '';
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
+const ALLOWED_EMAIL_DOMAIN = 'politeia.ar';
+const ASSIGNED_EMAIL_DOMAIN = 'gmail.com';
+
+const EMPTY_FORM = {
+  id: '',
+  title: '',
+  slug: '',
+  excerpt: '',
+  contentMarkdown: '',
+  coverImage: '',
+  authorName: '',
+  category: '',
+  tagsText: '',
+};
+
+const FORM_STRING_FIELDS = Object.keys(EMPTY_FORM);
+
+const STATUS_LABELS = {
+  draft: 'Borrador',
+  review: 'En revisión',
+  published: 'Publicado',
+  archived: 'Archivado',
+};
+
+const REVIEW_STATUS_FILTERS = [
+  { value: 'review', label: 'En revisión' },
+  { value: 'archived', label: 'Archivados' },
+  { value: 'published', label: 'Publicados' },
+];
+
+const BLOG_STATUS_FILTERS = [
+  { value: '', label: 'Todos' },
+  { value: 'review', label: 'En revisión' },
+  { value: 'published', label: 'Publicados' },
+];
+
+const ASSIGNABLE_ROLES = [
+  { value: 'admin', label: 'Admin' },
+  { value: 'reviewer', label: 'Reviewer' },
+  { value: 'blog', label: 'Blog' },
+];
+
+const NOTIFICATION_EVENT_LABELS = [
+  { value: 'postSubmittedReview', label: 'Posts enviados a revision', roles: ['admin', 'reviewer'] },
+  { value: 'commentCreated', label: 'Comentarios nuevos en mis posts', roles: ['blog'] },
+  { value: 'commentResolved', label: 'Comentarios resueltos', roles: ['blog'] },
+  { value: 'commentReopened', label: 'Comentarios reabiertos', roles: ['blog'] },
+  { value: 'postPublished', label: 'Mis posts publicados', roles: ['blog'] },
+  { value: 'roleChanged', label: 'Cambios de roles y accesos', roles: ['admin', 'reviewer', 'blog'] },
+];
+
+const DEFAULT_NOTIFICATION_EVENTS = Object.fromEntries(
+  NOTIFICATION_EVENT_LABELS.map((event) => [event.value, true])
+);
+
+export default function AdminConsole() {
+  const [checkingSession, setCheckingSession] = useState(true);
+  const [user, setUser] = useState(null);
+  const [posts, setPosts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [savedForm, setSavedForm] = useState(EMPTY_FORM);
+  const [statusFilter, setStatusFilter] = useState('');
+  const [postSearch, setPostSearch] = useState('');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [googleButtonStatus, setGoogleButtonStatus] = useState(GOOGLE_CLIENT_ID ? 'loading' : 'disabled');
+  const [isLocalPanelHost, setIsLocalPanelHost] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewCardOpen, setPreviewCardOpen] = useState(true);
+  const [pendingAction, setPendingAction] = useState(null);
+  const [categoryDeleteTarget, setCategoryDeleteTarget] = useState(null);
+  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
+  const [categorySearchTerm, setCategorySearchTerm] = useState('');
+  const [coverMode, setCoverMode] = useState('url');
+  const [adminUsersOpen, setAdminUsersOpen] = useState(false);
+  const [adminUsers, setAdminUsers] = useState([]);
+  const [adminUserDrafts, setAdminUserDrafts] = useState({});
+  const [adminUserEmail, setAdminUserEmail] = useState('');
+  const [adminUserNewRoles, setAdminUserNewRoles] = useState(['blog']);
+  const [adminUserSearch, setAdminUserSearch] = useState('');
+  const [adminManagerOpen, setAdminManagerOpen] = useState(false);
+  const [selectedAdminPostIds, setSelectedAdminPostIds] = useState([]);
+  const [notificationPreferences, setNotificationPreferences] = useState(null);
+  const [notificationPreferencesOpen, setNotificationPreferencesOpen] = useState(false);
+  const [savingNotificationPreferences, setSavingNotificationPreferences] = useState(false);
+  const [reviewComments, setReviewComments] = useState([]);
+  const [reviewCommentFilter, setReviewCommentFilter] = useState('open');
+  const [activeReviewCommentId, setActiveReviewCommentId] = useState('');
+  const [activeReviewCommentNonce, setActiveReviewCommentNonce] = useState(0);
+  const [editingReviewComment, setEditingReviewComment] = useState(null);
+  const signInRef = useRef(null);
+  const docxInputRef = useRef(null);
+
+  const roles = user?.roles || [];
+  const isAdmin = roles.includes('admin');
+  const isPrimaryDomainUser = isPrimaryDomainEmail(user?.email);
+  const isReviewer = roles.includes('reviewer');
+  const isBlogAuthor = roles.includes('blog') || isReviewer || isAdmin;
+  const canAccessPanel = isBlogAuthor || isReviewer || isAdmin;
+  const canCreatePosts = isBlogAuthor;
+  const canEditPosts = canAccessPanel;
+  const canChooseSlug = isAdmin || isReviewer;
+  const canManageCategories = isAdmin || isReviewer;
+  const canSubmitReview = isBlogAuthor;
+  const canPublishPosts = isAdmin || isReviewer;
+  const canDeletePosts = isAdmin;
+  const canUseReviewFilters = isAdmin || isReviewer;
+  const canManageUsers = isAdmin && isPrimaryDomainUser;
+  const activeStatusFilter = statusFilter;
+  const roleLabel = isAdmin ? 'Panel admin' : isReviewer ? 'Panel de revision' : 'Panel de blog';
+  const isLocalApiBase = isLocalApiUrl(API_BASE);
+  const hasUnsavedChanges = useMemo(
+    () => serializeForm(form) !== serializeForm(savedForm),
+    [form, savedForm]
+  );
+
+  useEffect(() => {
+    setIsLocalPanelHost(isLocalHostname(window.location.hostname));
+  }, []);
+
+  useEffect(() => {
+    if (!GOOGLE_CLIENT_ID) return;
+
+    const existing = document.querySelector('script[data-google-identity]');
+    if (existing) {
+      initializeGoogle();
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.dataset.googleIdentity = 'true';
+    script.onload = initializeGoogle;
+    script.onerror = () => setGoogleButtonStatus('failed');
+    document.head.appendChild(script);
+  }, []);
+
+  useEffect(() => {
+    loadMe({ silent: true });
+  }, []);
+
+  useEffect(() => {
+    if (canAccessPanel) {
+      loadPosts();
+      loadCategories();
+    }
+  }, [canAccessPanel, activeStatusFilter]);
+
+  useEffect(() => {
+    if (canManageUsers) loadAdminUsers();
+  }, [canManageUsers]);
+
+  useEffect(() => {
+    if (canAccessPanel) {
+      loadNotificationPreferences();
+    } else {
+      setNotificationPreferences(null);
+    }
+  }, [canAccessPanel]);
+
+  useEffect(() => {
+    setSelectedAdminPostIds((current) => current.filter((id) => posts.some((post) => post.id === id)));
+  }, [posts]);
+
+  useEffect(() => {
+    if (form.id && canAccessPanel) {
+      setEditingReviewComment(null);
+      loadReviewComments(form.id);
+    } else {
+      setReviewComments([]);
+      setActiveReviewCommentId('');
+      setActiveReviewCommentNonce(0);
+      setEditingReviewComment(null);
+    }
+  }, [form.id, canAccessPanel]);
+
+  function initializeGoogle() {
+    if (!window.google || !signInRef.current || !GOOGLE_CLIENT_ID) {
+      setGoogleButtonStatus(GOOGLE_CLIENT_ID ? 'failed' : 'disabled');
+      return;
+    }
+
+    try {
+      window.google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: ({ credential }) => loginWithGoogle(credential),
+      });
+      window.google.accounts.id.renderButton(signInRef.current, {
+        theme: 'outline',
+        size: 'large',
+        text: 'signin_with',
+        shape: 'pill',
+        width: 260,
+      });
+      window.setTimeout(() => {
+        setGoogleButtonStatus(signInRef.current?.childElementCount ? 'ready' : 'failed');
+      }, 1200);
+    } catch (_err) {
+      setGoogleButtonStatus('failed');
+    }
+  }
+
+  async function api(path, options = {}) {
+    if (!API_BASE) throw new Error('Falta NEXT_PUBLIC_BLOG_API_BASE_URL');
+    const res = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      credentials: 'include',
+      headers: {
+        ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
+        ...(options.headers || {}),
+      },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data?.error?.message || `Error ${res.status}`);
+    }
+    return data;
+  }
+
+  async function loadMe({ silent = false } = {}) {
+    if (!API_BASE) {
+      setCheckingSession(false);
+      return;
+    }
+
+    try {
+      if (!silent) setMessage('');
+      const res = await fetch(`${API_BASE}/v1/me`, {
+        credentials: 'include',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error?.message || 'No pudimos validar tu perfil');
+      if (!isAllowedEmail(data.user?.email)) {
+        throw new Error(`Solo pueden ingresar cuentas @${ALLOWED_EMAIL_DOMAIN} o @${ASSIGNED_EMAIL_DOMAIN} habilitadas.`);
+      }
+      setUser(data.user);
+    } catch (err) {
+      setUser(null);
+      if (!silent) setMessage(authErrorMessage(err));
+    } finally {
+      setCheckingSession(false);
+    }
+  }
+
+  async function loginWithGoogle(credential) {
+    try {
+      setMessage('');
+      const res = await fetch(`${API_BASE}/v1/auth/google`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error?.message || 'No pudimos iniciar sesion');
+      if (!isAllowedEmail(data.user?.email)) {
+        throw new Error(`Solo pueden ingresar cuentas @${ALLOWED_EMAIL_DOMAIN} o @${ASSIGNED_EMAIL_DOMAIN} habilitadas.`);
+      }
+      setUser(data.user);
+    } catch (err) {
+      setUser(null);
+      setMessage(authErrorMessage(err));
+    }
+  }
+
+  async function logout() {
+    try {
+      await fetch(`${API_BASE}/v1/auth/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } finally {
+      setUser(null);
+      setPosts([]);
+      setCategories([]);
+      setPostSearch('');
+      setForm(EMPTY_FORM);
+      setSavedForm(EMPTY_FORM);
+      setPendingAction(null);
+      setCategoryDeleteTarget(null);
+      setCategoryDropdownOpen(false);
+      setCategorySearchTerm('');
+      setAdminUsersOpen(false);
+      setAdminUsers([]);
+      setAdminUserDrafts({});
+      setAdminUserEmail('');
+      setAdminUserNewRoles(['blog']);
+      setAdminUserSearch('');
+      setAdminManagerOpen(false);
+      setSelectedAdminPostIds([]);
+      setNotificationPreferences(null);
+      setNotificationPreferencesOpen(false);
+      setReviewComments([]);
+      setActiveReviewCommentId('');
+      setActiveReviewCommentNonce(0);
+      setEditingReviewComment(null);
+      setMessage('');
+    }
+  }
+
+  async function loadPosts() {
+    try {
+      setBusy(true);
+      const query = activeStatusFilter ? `?status=${activeStatusFilter}` : '';
+      const data = await api(`/v1/posts/manage${query}`);
+      setPosts(data.items || []);
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function loadCategories() {
+    try {
+      const data = await api('/v1/categories');
+      setCategories(data.items || []);
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function loadAdminUsers() {
+    try {
+      const data = await api('/v1/users');
+      const items = data.items || [];
+      setAdminUsers(items);
+      setAdminUserDrafts((current) => {
+        const next = { ...current };
+        items.forEach((item) => {
+          if (!next[item.email]) next[item.email] = item.roles || [];
+        });
+        return next;
+      });
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function loadReviewComments(postId) {
+    try {
+      const data = await api(`/v1/posts/${postId}/comments`);
+      const items = data.items || [];
+      setReviewComments(items);
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function loadNotificationPreferences() {
+    try {
+      const data = await api('/v1/notifications/preferences');
+      setNotificationPreferences(normalizeNotificationPreferences(data.item));
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function saveNotificationPreferences() {
+    if (!notificationPreferences) return;
+    try {
+      setSavingNotificationPreferences(true);
+      setMessage('');
+      const data = await api('/v1/notifications/preferences', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          enabled: notificationPreferences.enabled,
+          events: notificationPreferences.events,
+        }),
+      });
+      setNotificationPreferences(normalizeNotificationPreferences(data.item));
+      setMessage('Preferencias de email actualizadas.');
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setSavingNotificationPreferences(false);
+    }
+  }
+
+  function updateNotificationPreference(field, value) {
+    setNotificationPreferences((current) => normalizeNotificationPreferences({
+      ...current,
+      [field]: value,
+    }));
+  }
+
+  function toggleNotificationEvent(eventKey) {
+    setNotificationPreferences((current) => {
+      const next = normalizeNotificationPreferences(current);
+      return {
+        ...next,
+        events: {
+          ...next.events,
+          [eventKey]: !next.events[eventKey],
+        },
+      };
+    });
+  }
+
+  async function savePost(e) {
+    e.preventDefault();
+    const isEditing = Boolean(form.id);
+
+    try {
+      setBusy(true);
+      setMessage('');
+      await persistCurrentPost();
+      setMessage(isEditing ? 'Post actualizado.' : 'Borrador creado.');
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function persistCurrentPost({ refresh = true } = {}) {
+    if (!canEditPosts || (!form.id && !canCreatePosts)) {
+      throw new Error('Tu rol no permite crear nuevos posts.');
+    }
+
+    const payload = buildPayload(form, canChooseSlug);
+    const isEditing = Boolean(form.id);
+    const data = await api(isEditing ? `/v1/posts/${form.id}` : '/v1/posts', {
+      method: isEditing ? 'PATCH' : 'POST',
+      body: JSON.stringify(payload),
+    });
+    const nextForm = postToForm(data.item);
+    setForm(nextForm);
+    setSavedForm(nextForm);
+    if (refresh) {
+      await Promise.all([loadPosts(), loadCategories()]);
+    }
+    return data.item;
+  }
+
+  async function uploadMedia(file) {
+    if (!file) return null;
+    const body = new FormData();
+    body.append('file', file);
+    const data = await api('/v1/media', { method: 'POST', body });
+    return data.item;
+  }
+
+  async function uploadCoverImage(file) {
+    if (!file) return;
+    try {
+      setUploading(true);
+      setMessage('');
+      const media = await uploadMedia(file);
+      setForm((current) => normalizeForm({ ...current, coverImage: media?.url }));
+      setCoverMode('upload');
+      setMessage('Imagen cargada.');
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function uploadInlineImage(file) {
+    try {
+      setMessage('');
+      const media = await uploadMedia(file);
+      setMessage('Imagen interna cargada.');
+      return media.url;
+    } catch (err) {
+      setMessage(err.message);
+      return '';
+    }
+  }
+
+  async function createReviewComment({ body, selectedText, commentId, contentMarkdown }) {
+    if (!form.id) {
+      setMessage('Guarda el post antes de agregar comentarios de revision.');
+      return null;
+    }
+    if (!canPublishPosts) {
+      setMessage('Solo reviewer o admin pueden crear comentarios de revision.');
+      return null;
+    }
+
+    try {
+      setMessage('');
+      const data = await api(`/v1/posts/${form.id}/comments`, {
+        method: 'POST',
+        body: JSON.stringify({ body, selectedText, commentId, contentMarkdown }),
+      });
+      if (data.post?.contentMarkdown) {
+        setForm((current) => normalizeForm({ ...current, contentMarkdown: data.post.contentMarkdown }));
+        setSavedForm((current) => normalizeForm({ ...current, contentMarkdown: data.post.contentMarkdown }));
+      }
+      setReviewComments((current) => [...current, data.item]);
+      focusReviewComment(data.item.id);
+      setReviewCommentFilter('open');
+      await loadPosts();
+      setMessage('Comentario de revision agregado.');
+      return data.item;
+    } catch (err) {
+      setMessage(err.message);
+      return null;
+    }
+  }
+
+  function focusReviewComment(commentId) {
+    setActiveReviewCommentId(commentId);
+    setActiveReviewCommentNonce((current) => current + 1);
+  }
+
+  async function updateReviewCommentStatus(commentId, status) {
+    if (!form.id) return;
+    const nextMarkdown = status === 'resolved'
+      ? stripReviewCommentMarkupById(form.contentMarkdown, commentId)
+      : form.contentMarkdown;
+    try {
+      setBusy(true);
+      setMessage('');
+      const data = await api(`/v1/posts/${form.id}/comments/${commentId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status, contentMarkdown: nextMarkdown }),
+      });
+      if (status === 'resolved') {
+        setForm((current) => normalizeForm({ ...current, contentMarkdown: nextMarkdown }));
+        setSavedForm((current) => normalizeForm({ ...current, contentMarkdown: nextMarkdown }));
+        if (activeReviewCommentId === commentId) {
+          setActiveReviewCommentId('');
+          setActiveReviewCommentNonce((current) => current + 1);
+        }
+      }
+      setReviewComments((current) => current.map((comment) => comment.id === commentId ? data.item : comment));
+      await loadPosts();
+      setMessage(status === 'resolved' ? 'Comentario resuelto.' : 'Comentario reabierto.');
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveEditedReviewComment() {
+    if (!form.id || !editingReviewComment) return;
+    const body = normalizeInlineInput(editingReviewComment.body);
+    if (!body) {
+      setMessage('Escribi un comentario para guardar.');
+      return;
+    }
+    try {
+      setBusy(true);
+      setMessage('');
+      const data = await api(`/v1/posts/${form.id}/comments/${editingReviewComment.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ body }),
+      });
+      setReviewComments((current) => current.map((comment) => comment.id === editingReviewComment.id ? data.item : comment));
+      setEditingReviewComment(null);
+      setMessage('Comentario actualizado.');
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteReviewComment(commentId) {
+    if (!form.id || !confirm('Eliminar este comentario de revision?')) return;
+    const nextMarkdown = stripReviewCommentMarkupById(form.contentMarkdown, commentId);
+    try {
+      setBusy(true);
+      setMessage('');
+      await api(`/v1/posts/${form.id}/comments/${commentId}`, {
+        method: 'DELETE',
+        body: JSON.stringify({ contentMarkdown: nextMarkdown }),
+      });
+      setForm((current) => normalizeForm({ ...current, contentMarkdown: nextMarkdown }));
+      setSavedForm((current) => normalizeForm({ ...current, contentMarkdown: nextMarkdown }));
+      setReviewComments((current) => current.filter((comment) => comment.id !== commentId));
+      if (activeReviewCommentId === commentId) {
+        setActiveReviewCommentId('');
+        setActiveReviewCommentNonce((current) => current + 1);
+      }
+      await loadPosts();
+      setMessage('Comentario eliminado.');
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function importDocx(file) {
+    if (!file) return;
+    if (form.contentMarkdown && !confirm('Importar el .docx va a reemplazar el contenido actual. Continuar?')) {
+      if (docxInputRef.current) docxInputRef.current.value = '';
+      return;
+    }
+
+    try {
+      setImporting(true);
+      setMessage('');
+      const body = new FormData();
+      body.append('file', file);
+      const data = await api('/v1/import/docx', { method: 'POST', body });
+      updateForm('contentMarkdown', data.contentMarkdown || '');
+      const warningText = data.warnings?.length ? ` Advertencias: ${data.warnings.join(' | ')}` : '';
+      setMessage(`Documento importado. Revisalo antes de guardar.${warningText}`);
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setImporting(false);
+      if (docxInputRef.current) docxInputRef.current.value = '';
+    }
+  }
+
+  async function action(path, success) {
+    try {
+      setBusy(true);
+      setMessage('');
+      await api(path, { method: 'POST' });
+      setMessage(success);
+      await loadPosts();
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function requestAction(path, success, label) {
+    if (hasUnsavedChanges) {
+      setPendingAction({ path, success, label });
+      return;
+    }
+    action(path, success);
+  }
+
+  function confirmPendingAction() {
+    if (!pendingAction) return;
+    const nextAction = pendingAction;
+    setPendingAction(null);
+    action(nextAction.path, nextAction.success);
+  }
+
+  async function saveAndConfirmPendingAction() {
+    if (!pendingAction) return;
+    const nextAction = pendingAction;
+
+    try {
+      setBusy(true);
+      setMessage('');
+      await persistCurrentPost({ refresh: false });
+      setPendingAction(null);
+      await api(nextAction.path, { method: 'POST' });
+      setMessage(nextAction.success);
+      await Promise.all([loadPosts(), loadCategories()]);
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function selectPostForEdit(post) {
+    const nextForm = postToForm(post);
+    setForm(nextForm);
+    setSavedForm(nextForm);
+    setCategorySearchTerm('');
+  }
+
+  function toggleAdminPostSelection(id) {
+    setSelectedAdminPostIds((current) => (
+      current.includes(id) ? current.filter((postId) => postId !== id) : [...current, id]
+    ));
+  }
+
+  function toggleAllAdminPosts() {
+    setSelectedAdminPostIds((current) => {
+      const visibleIds = sortedPosts.map((post) => post.id);
+      const visibleIdSet = new Set(visibleIds);
+      const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => current.includes(id));
+      if (allVisibleSelected) return current.filter((id) => !visibleIdSet.has(id));
+      return [...new Set([...current, ...visibleIds])];
+    });
+  }
+
+  async function runBatchPostAction(kind) {
+    const config = {
+      publish: {
+        verb: 'publicar',
+        success: 'Posts publicados.',
+        skip: (post) => post.status === 'published',
+        run: (post) => api(`/v1/posts/${post.id}/publish`, { method: 'POST' }),
+      },
+      archive: {
+        verb: 'archivar',
+        success: 'Posts archivados.',
+        skip: (post) => post.status === 'archived',
+        run: (post) => api(`/v1/posts/${post.id}/archive`, { method: 'POST' }),
+      },
+      delete: {
+        verb: 'eliminar',
+        success: 'Posts eliminados.',
+        skip: () => false,
+        run: (post) => api(`/v1/posts/${post.id}`, { method: 'DELETE' }),
+      },
+    }[kind];
+
+    if (!config) return;
+    const targetPosts = selectedAdminPosts.filter((post) => !config.skip(post));
+    if (!targetPosts.length) {
+      setMessage('No hay posts seleccionados con cambios pendientes.');
+      return;
+    }
+    if (!confirm(`Vas a ${config.verb} ${targetPosts.length} post(s). Continuar?`)) return;
+
+    try {
+      setBusy(true);
+      setMessage('');
+      for (const post of targetPosts) {
+        await config.run(post);
+      }
+      if (kind === 'delete' && targetPosts.some((post) => post.id === form.id)) {
+        setForm(EMPTY_FORM);
+        setSavedForm(EMPTY_FORM);
+        setCategorySearchTerm('');
+      }
+      setSelectedAdminPostIds([]);
+      setMessage(config.success);
+      await loadPosts();
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deletePost(id) {
+    if (!confirm('¿Eliminar este post?')) return;
+    try {
+      setBusy(true);
+      setMessage('');
+      await api(`/v1/posts/${id}`, { method: 'DELETE' });
+      setMessage('Post eliminado.');
+      if (form.id === id) {
+        setForm(EMPTY_FORM);
+        setSavedForm(EMPTY_FORM);
+        setCategorySearchTerm('');
+      }
+      await loadPosts();
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function createCategoryFromForm() {
+    const name = sanitizeCategory(form.category);
+    if (!name) {
+      setMessage('Escribi una categoria para agregarla a la lista.');
+      return;
+    }
+
+    try {
+      setBusy(true);
+      setMessage('');
+      const data = await api('/v1/categories', {
+        method: 'POST',
+        body: JSON.stringify({ name }),
+      });
+      updateForm('category', data.item?.name || name);
+      setCategoryDropdownOpen(false);
+      setCategorySearchTerm('');
+      setMessage('Categoria agregada a la lista.');
+      await loadCategories();
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteCategory(target) {
+    if (!target) return;
+    try {
+      setBusy(true);
+      setMessage('');
+      await api(`/v1/categories/${encodeURIComponent(target.id)}`, { method: 'DELETE' });
+      setMessage('Categoria eliminada de la lista.');
+      setCategoryDeleteTarget(null);
+      await loadCategories();
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function addAdminUserDraft() {
+    const email = normalizeRoleEmail(adminUserEmail);
+    if (!isAllowedRoleEmail(email)) {
+      setMessage(`Usa un email @${ALLOWED_EMAIL_DOMAIN} o @${ASSIGNED_EMAIL_DOMAIN}.`);
+      return;
+    }
+    if (!adminUserNewRoles.length) {
+      setMessage('Elegí al menos un rol para aplicar.');
+      return;
+    }
+
+    setAdminUsers((current) => (
+      current.some((item) => item.email === email)
+        ? current
+        : [{ email, roles: [], active: true, isDraft: true }, ...current]
+    ));
+    setAdminUserDrafts((current) => ({ ...current, [email]: current[email] || adminUserNewRoles }));
+    setAdminUserEmail('');
+    setAdminUserSearch(email);
+    setAdminUsersOpen(true);
+  }
+
+  function toggleNewAdminUserRole(role) {
+    setAdminUserNewRoles((current) => {
+      const nextRoles = current.includes(role)
+        ? current.filter((item) => item !== role)
+        : [...current, role];
+      return ASSIGNABLE_ROLES.map((item) => item.value).filter((item) => nextRoles.includes(item));
+    });
+  }
+
+  function toggleAdminUserRole(email, role) {
+    setAdminUserDrafts((current) => {
+      const roles = current[email] || [];
+      const nextRoles = roles.includes(role)
+        ? roles.filter((item) => item !== role)
+        : [...roles, role];
+      return { ...current, [email]: ASSIGNABLE_ROLES.map((item) => item.value).filter((item) => nextRoles.includes(item)) };
+    });
+  }
+
+  async function saveAdminUserRoles(email) {
+    try {
+      setBusy(true);
+      setMessage('');
+      const data = await api(`/v1/users/${encodeURIComponent(email)}/roles`, {
+        method: 'PUT',
+        body: JSON.stringify({ roles: adminUserDrafts[email] || [] }),
+      });
+      setMessage(`Roles actualizados para ${email}.`);
+      setAdminUsers((current) => upsertAdminUserItem(current, data.item));
+      setAdminUserDrafts((current) => ({ ...current, [email]: data.item?.roles || [] }));
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteAdminUserRoles(email) {
+    if (!confirm(`Quitar todos los roles asignados a ${email}?`)) return;
+    try {
+      setBusy(true);
+      setMessage('');
+      await api(`/v1/users/${encodeURIComponent(email)}`, { method: 'DELETE' });
+      setMessage(`Roles eliminados para ${email}.`);
+      setAdminUsers((current) => current.filter((item) => item.email !== email));
+      setAdminUserDrafts((current) => {
+        const next = { ...current };
+        delete next[email];
+        return next;
+      });
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const sortedPosts = useMemo(() => {
+    const query = taxonomyKey(postSearch);
+    if (!query) return posts;
+
+    return posts.filter((post) => {
+      const haystack = [
+        post.title,
+        post.category,
+        ...(Array.isArray(post.tags) ? post.tags : []),
+      ].map((value) => taxonomyKey(value)).join(' ');
+
+      return haystack.includes(query);
+    });
+  }, [posts, postSearch]);
+  const selectedAdminPostIdsSet = useMemo(() => new Set(selectedAdminPostIds), [selectedAdminPostIds]);
+  const selectedAdminPosts = useMemo(
+    () => posts.filter((post) => selectedAdminPostIdsSet.has(post.id)),
+    [posts, selectedAdminPostIdsSet]
+  );
+  const allAdminVisibleSelected = sortedPosts.length > 0 && sortedPosts.every((post) => selectedAdminPostIdsSet.has(post.id));
+  const filteredAdminUsers = useMemo(() => {
+    const query = taxonomyKey(adminUserSearch);
+    const items = [...adminUsers].sort((a, b) => a.email.localeCompare(b.email));
+    if (!query) return items;
+    return items.filter((item) => {
+      const haystack = [item.email, ...(adminUserDrafts[item.email] || item.roles || [])]
+        .map((value) => taxonomyKey(value))
+        .join(' ');
+      return haystack.includes(query);
+    });
+  }, [adminUsers, adminUserDrafts, adminUserSearch]);
+  const categoryOptions = useMemo(() => {
+    const values = new Map();
+    categories.forEach((category) => {
+      if (category.name) {
+        const key = taxonomyKey(category.name);
+        if (key && !values.has(key)) values.set(key, category.name.trim());
+      }
+    });
+    posts.forEach((post) => {
+      if (post.category) {
+        const key = taxonomyKey(post.category);
+        if (key && !values.has(key)) values.set(key, post.category.trim());
+      }
+    });
+    return [...values.values()].sort((a, b) => a.localeCompare(b, 'es'));
+  }, [categories, posts]);
+  const tagOptions = useMemo(() => {
+    const values = new Map();
+    posts.forEach((post) => {
+      sanitizeTags(post.tags || []).forEach((tag) => {
+        const key = taxonomyKey(tag);
+        if (key && !values.has(key)) values.set(key, tag);
+      });
+    });
+    return [...values.values()].sort((a, b) => a.localeCompare(b, 'es'));
+  }, [posts]);
+  const selectedSharedCategory = useMemo(() => {
+    const key = taxonomyKey(form.category);
+    return categories.find((category) => taxonomyKey(category.name) === key) || null;
+  }, [categories, form.category]);
+  const filteredCategoryOptions = useMemo(() => {
+    const key = taxonomyKey(categorySearchTerm);
+    if (!key) return categoryOptions;
+    return categoryOptions.filter((option) => taxonomyKey(option).includes(key));
+  }, [categoryOptions, categorySearchTerm]);
+  const canAddCurrentCategory = useMemo(() => {
+    const name = sanitizeCategory(form.category);
+    if (!name) return false;
+    return !selectedSharedCategory;
+  }, [form.category, selectedSharedCategory]);
+  const previewHtml = useMemo(
+    () => marked.parse(stripReviewCommentMarkup(form.contentMarkdown || ''), { async: false, gfm: true }),
+    [form.contentMarkdown]
+  );
+  const previewDate = useMemo(
+    () => new Intl.DateTimeFormat('es-AR', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date()),
+    []
+  );
+  const previewTags = useMemo(() => {
+    const tags = parseTagsText(form.tagsText);
+    return tags.length ? tags : ['Nota'];
+  }, [form.tagsText]);
+  const openReviewCommentCount = reviewComments.filter((comment) => comment.status !== 'resolved').length;
+  const filteredReviewComments = useMemo(() => {
+    if (reviewCommentFilter === 'all') return reviewComments;
+    return reviewComments.filter((comment) => comment.status === reviewCommentFilter || (reviewCommentFilter === 'open' && comment.status !== 'resolved'));
+  }, [reviewComments, reviewCommentFilter]);
+  const messageKind = message ? adminMessageKind(message) : 'info';
+
+  return (
+    <main className="admin-page">
+      {message && (
+        <div className={`admin-toast ${messageKind}`} role="alert" aria-live="polite">
+          <span aria-hidden="true" className="material-symbols-outlined">
+            {messageKind === 'error' ? 'error' : 'check_circle'}
+          </span>
+          <p>{message}</p>
+          <button aria-label="Cerrar mensaje" onClick={() => setMessage('')} type="button">
+            <span aria-hidden="true" className="material-symbols-outlined">close</span>
+          </button>
+        </div>
+      )}
+      <section className="admin-hero">
+        <div className="wrap admin-hero-in">
+          <div>
+            <span className="eyebrow">Panel interno</span>
+            <h1>Gestor de contenido</h1>
+            <p>Crea borradores, prepara notas para revision y publica contenido editorial. Ante cambios de acceso o dudas del flujo, contacta al equipo responsable del panel.</p>
+          </div>
+          <Link href="https://politeia.ar/blog" className="btn btn-ghost">Ver blog publico</Link>
+        </div>
+      </section>
+
+      <section className="sec">
+        <div className="wrap">
+          {!API_BASE || !GOOGLE_CLIENT_ID ? (
+            <div className="admin-empty">
+              Falta configurar `NEXT_PUBLIC_BLOG_API_BASE_URL` y `NEXT_PUBLIC_GOOGLE_CLIENT_ID`.
+            </div>
+          ) : checkingSession ? (
+            <div className="admin-login">
+              <h2>Validando sesion</h2>
+              <p>Estamos revisando si ya tenes una sesion activa @{ALLOWED_EMAIL_DOMAIN}.</p>
+            </div>
+          ) : !user ? (
+            <div className="admin-login">
+              <h2>Ingresa con Google</h2>
+              <p>Usa una cuenta @{ALLOWED_EMAIL_DOMAIN} o una cuenta @{ASSIGNED_EMAIL_DOMAIN} habilitada por un admin. Tu perfil se determina por grupos y asignaciones internas.</p>
+              <div ref={signInRef}></div>
+              {googleButtonStatus === 'failed' && (
+                <p className="admin-login-help">
+                  Google no pudo mostrar el boton en este origen. Para usar Google en local, agrega `http://admin.localhost:3000` como Authorized JavaScript Origin y permitilo en CORS del backend.
+                </p>
+              )}
+              {isLocalPanelHost && isLocalApiBase && (
+                <div className="admin-login-actions">
+                  <button className="btn btn-primary" onClick={() => loadMe()} type="button">
+                    Usar sesion local
+                  </button>
+                </div>
+              )}
+              {isLocalPanelHost && !isLocalApiBase && (
+                <p className="admin-login-help">
+                  Para probar la sesion local, cambia `NEXT_PUBLIC_BLOG_API_BASE_URL` a `http://localhost:8080` y levanta el backend con `DEV_AUTH=true`.
+                </p>
+              )}
+            </div>
+          ) : !canAccessPanel ? (
+            <div className="admin-empty">
+              <h2>Sin permisos de edición</h2>
+              <p>{user.email} no pertenece a los grupos `blog`, `reviewer` o `admin`.</p>
+            </div>
+          ) : (
+            <>
+              <div className="admin-session">
+                <div>
+                  <strong>{user.name || user.email}</strong>
+                  <span>{user.email} · {roleLabel} · {roles.join(', ')}</span>
+                </div>
+                <button className="btn btn-ghost" onClick={logout}>
+                  Salir
+                </button>
+              </div>
+              {notificationPreferences && (
+                <section className="admin-manager admin-notifications">
+                  <div className="admin-manager-head">
+                    <div>
+                      <span>Email</span>
+                      <h2>Notificaciones</h2>
+                      <p>Activa avisos transaccionales del flujo editorial. Nadie recibe emails si no habilita esta opcion.</p>
+                    </div>
+                    <button
+                      aria-expanded={notificationPreferencesOpen}
+                      className="btn btn-ghost"
+                      onClick={() => setNotificationPreferencesOpen((open) => !open)}
+                      type="button"
+                    >
+                      {notificationPreferencesOpen ? 'Ocultar email' : 'Configurar email'}
+                    </button>
+                  </div>
+                  {notificationPreferencesOpen && (
+                    <div className="admin-notification-body">
+                      <label className="admin-switch-row">
+                        <input
+                          checked={notificationPreferences.enabled}
+                          onChange={(event) => updateNotificationPreference('enabled', event.target.checked)}
+                          type="checkbox"
+                        />
+                        <span>
+                          <strong>Recibir emails del panel</strong>
+                          <small>El opt-in se guarda para {notificationPreferences.email || user.email}.</small>
+                        </span>
+                      </label>
+                      <div className="admin-notification-options">
+                        {NOTIFICATION_EVENT_LABELS
+                          .filter((event) => event.roles.some((role) => roles.includes(role)))
+                          .map((event) => (
+                            <label key={event.value}>
+                              <input
+                                checked={notificationPreferences.events[event.value] !== false}
+                                disabled={!notificationPreferences.enabled}
+                                onChange={() => toggleNotificationEvent(event.value)}
+                                type="checkbox"
+                              />
+                              {event.label}
+                            </label>
+                          ))}
+                      </div>
+                      <div className="admin-manager-actions">
+                        <span>{notificationPreferences.enabled ? 'Emails activos para eventos seleccionados.' : 'Emails desactivados.'}</span>
+                        <button
+                          className="btn btn-primary"
+                          disabled={savingNotificationPreferences}
+                          onClick={saveNotificationPreferences}
+                          type="button"
+                        >
+                          Guardar preferencias
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </section>
+              )}
+              {canManageUsers && (
+                <section className="admin-manager admin-users">
+                  <div className="admin-manager-head">
+                    <div>
+                      <span>Usuarios</span>
+                      <h2>Roles y accesos</h2>
+                      <p>Agrega emails @{ALLOWED_EMAIL_DOMAIN} o @{ASSIGNED_EMAIL_DOMAIN}, asigna roles y guarda los cambios. Solo admins @{ALLOWED_EMAIL_DOMAIN} pueden habilitar usuarios.</p>
+                    </div>
+                    <button
+                      aria-expanded={adminUsersOpen}
+                      className="btn btn-ghost"
+                      onClick={() => setAdminUsersOpen((open) => !open)}
+                      type="button"
+                    >
+                      {adminUsersOpen ? 'Ocultar usuarios' : 'Mostrar usuarios'}
+                    </button>
+                  </div>
+
+                  {adminUsersOpen && (
+                    <div className="admin-manager-body">
+                      <div className="admin-user-tools">
+                        <label>
+                          Buscar usuario
+                          <input
+                            onChange={(e) => setAdminUserSearch(e.target.value)}
+                            placeholder="email o rol"
+                            type="search"
+                            value={adminUserSearch}
+                          />
+                        </label>
+                        <label>
+                          Agregar email
+                          <div className="admin-user-add">
+                            <input
+                              onChange={(e) => setAdminUserEmail(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  addAdminUserDraft();
+                                }
+                              }}
+                              placeholder={`persona@${ALLOWED_EMAIL_DOMAIN} o persona@${ASSIGNED_EMAIL_DOMAIN}`}
+                              type="email"
+                              value={adminUserEmail}
+                            />
+                            <button className="btn btn-primary" disabled={busy || !adminUserNewRoles.length} onClick={addAdminUserDraft} type="button">
+                              Agregar
+                            </button>
+                          </div>
+                        </label>
+                        <div className="admin-user-role-tool">
+                          <span>Rol inicial</span>
+                          <div className="admin-role-checks admin-role-checks-inline">
+                            {ASSIGNABLE_ROLES.map((role) => (
+                              <label key={role.value}>
+                                <input
+                                  checked={adminUserNewRoles.includes(role.value)}
+                                  disabled={busy}
+                                  onChange={() => toggleNewAdminUserRole(role.value)}
+                                  type="checkbox"
+                                />
+                                {role.label}
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="admin-table-wrap">
+                        <table className="admin-table admin-users-table">
+                          <thead>
+                            <tr>
+                              <th>Usuario</th>
+                              <th>Roles asignados</th>
+                              <th>Actualizado</th>
+                              <th>Acciones</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filteredAdminUsers.length === 0 ? (
+                              <tr>
+                                <td colSpan="4">No hay usuarios para esta busqueda.</td>
+                              </tr>
+                            ) : filteredAdminUsers.map((item) => {
+                              const draftRoles = adminUserDrafts[item.email] || item.roles || [];
+                              const changed = !sameRoleSet(draftRoles, item.roles || []);
+                              return (
+                                <tr className={changed ? 'selected' : ''} key={item.email}>
+                                  <td>
+                                    <strong>{item.email}</strong>
+                                    {item.isDraft && <small>Nuevo usuario sin guardar</small>}
+                                    {!item.isDraft && item.updatedBy && <small>Ultimo cambio: {item.updatedBy}</small>}
+                                  </td>
+                                  <td>
+                                    <div className="admin-role-checks">
+                                      {ASSIGNABLE_ROLES.map((role) => (
+                                        <label key={role.value}>
+                                          <input
+                                            checked={draftRoles.includes(role.value)}
+                                            disabled={busy}
+                                            onChange={() => toggleAdminUserRole(item.email, role.value)}
+                                            type="checkbox"
+                                          />
+                                          {role.label}
+                                        </label>
+                                      ))}
+                                    </div>
+                                  </td>
+                                  <td>{formatAdminDate(item.updatedAt || item.createdAt)}</td>
+                                  <td>
+                                    <div className="admin-table-actions">
+                                      <button
+                                        className="btn btn-ghost"
+                                        disabled={busy || (!changed && !item.isDraft)}
+                                        onClick={() => saveAdminUserRoles(item.email)}
+                                        type="button"
+                                      >
+                                        Guardar
+                                      </button>
+                                      <button
+                                        className="btn btn-ghost danger"
+                                        disabled={busy || item.isDraft}
+                                        onClick={() => deleteAdminUserRoles(item.email)}
+                                        type="button"
+                                      >
+                                        Quitar roles
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </section>
+              )}
+
+              {isAdmin && (
+                <section className="admin-manager">
+                  <div className="admin-manager-head">
+                    <div>
+                      <span>Gestion admin</span>
+                      <h2>Tabla de blogs y acciones masivas</h2>
+                      <p>Usa los filtros de posts para acotar la vista antes de seleccionar publicaciones.</p>
+                    </div>
+                    <button
+                      aria-expanded={adminManagerOpen}
+                      className="btn btn-ghost"
+                      onClick={() => setAdminManagerOpen((open) => !open)}
+                      type="button"
+                    >
+                      {adminManagerOpen ? 'Ocultar tabla' : 'Mostrar tabla'}
+                    </button>
+                  </div>
+
+                  {adminManagerOpen && (
+                    <div className="admin-manager-body">
+                      <div className="admin-manager-actions">
+                        <span>{selectedAdminPosts.length} seleccionados</span>
+                        <button
+                          className="btn btn-ghost"
+                          disabled={busy || selectedAdminPosts.length === 0}
+                          onClick={() => runBatchPostAction('publish')}
+                          type="button"
+                        >
+                          Publicar seleccionados
+                        </button>
+                        <button
+                          className="btn btn-ghost"
+                          disabled={busy || selectedAdminPosts.length === 0}
+                          onClick={() => runBatchPostAction('archive')}
+                          type="button"
+                        >
+                          Archivar seleccionados
+                        </button>
+                        <button
+                          className="btn btn-ghost danger"
+                          disabled={busy || selectedAdminPosts.length === 0}
+                          onClick={() => runBatchPostAction('delete')}
+                          type="button"
+                        >
+                          Eliminar seleccionados
+                        </button>
+                        <button
+                          className="btn btn-ghost"
+                          disabled={busy || selectedAdminPosts.length === 0}
+                          onClick={() => setSelectedAdminPostIds([])}
+                          type="button"
+                        >
+                          Limpiar seleccion
+                        </button>
+                      </div>
+
+                      <div className="admin-table-wrap">
+                        <table className="admin-table">
+                          <thead>
+                            <tr>
+                              <th>
+                                <input
+                                  aria-label="Seleccionar todos los posts visibles"
+                                  checked={allAdminVisibleSelected}
+                                  disabled={sortedPosts.length === 0}
+                                  onChange={toggleAllAdminPosts}
+                                  type="checkbox"
+                                />
+                              </th>
+                              <th>Estado</th>
+                              <th>Titulo</th>
+                              <th>Autor</th>
+                              <th>Categoria y tags</th>
+                              <th>Fecha</th>
+                              <th>Acciones</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {sortedPosts.length === 0 ? (
+                              <tr>
+                                <td colSpan="7">No hay posts para esta vista.</td>
+                              </tr>
+                            ) : sortedPosts.map((post) => (
+                              <tr className={selectedAdminPostIdsSet.has(post.id) ? 'selected' : ''} key={post.id}>
+                                <td>
+                                  <input
+                                    aria-label={`Seleccionar ${post.title || post.id}`}
+                                    checked={selectedAdminPostIdsSet.has(post.id)}
+                                    onChange={() => toggleAdminPostSelection(post.id)}
+                                    type="checkbox"
+                                  />
+                                </td>
+                                <td>
+                                  <span className={`admin-status status-${post.status || 'draft'}`}>
+                                    {STATUS_LABELS[post.status] || post.status || 'Borrador'}
+                                  </span>
+                                </td>
+                                <td>
+                                  <button className="admin-table-title" onClick={() => selectPostForEdit(post)} type="button">
+                                    {post.title || 'Sin titulo'}
+                                  </button>
+                                  <small>{post.excerpt || 'Sin extracto'}</small>
+                                </td>
+                                <td>
+                                  {post.authorName || post.authorEmail || 'Sin autor'}
+                                  {post.authorName && post.authorEmail && <small>{post.authorEmail}</small>}
+                                </td>
+                                <td>
+                                  {post.category || 'Sin categoria'}
+                                  {Array.isArray(post.tags) && post.tags.length > 0 && <small>{post.tags.join(', ')}</small>}
+                                </td>
+                                <td>{formatAdminDate(post.updatedAt || post.publishedAt || post.createdAt)}</td>
+                                <td>
+                                  <div className="admin-table-actions">
+                                    <button className="btn btn-ghost" onClick={() => selectPostForEdit(post)} type="button">
+                                      Editar
+                                    </button>
+                                    <button
+                                      className="btn btn-ghost"
+                                      disabled={busy || post.status === 'published'}
+                                      onClick={() => requestAction(`/v1/posts/${post.id}/publish`, 'Post publicado.', 'publicar')}
+                                      type="button"
+                                    >
+                                      Publicar
+                                    </button>
+                                    <button
+                                      className="btn btn-ghost"
+                                      disabled={busy || post.status === 'archived'}
+                                      onClick={() => requestAction(`/v1/posts/${post.id}/archive`, 'Post archivado.', 'archivar')}
+                                      type="button"
+                                    >
+                                      Archivar
+                                    </button>
+                                    <button className="btn btn-ghost danger" disabled={busy} onClick={() => deletePost(post.id)} type="button">
+                                      Eliminar
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </section>
+              )}
+
+              <div className="admin-grid">
+                <aside className="admin-list">
+                  <div className="admin-list-head">
+                    <h2>Posts</h2>
+                    {!canUseReviewFilters && (
+                      <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                        {BLOG_STATUS_FILTERS.map((filter) => (
+                          <option key={filter.value || 'all'} value={filter.value}>{filter.label}</option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                  {canUseReviewFilters && (
+                    <div className="admin-post-filters">
+                      <div className="admin-filter-chips" aria-label="Filtrar por estado">
+                        {REVIEW_STATUS_FILTERS.map((filter) => (
+                          <button
+                            aria-pressed={activeStatusFilter === filter.value}
+                            className={activeStatusFilter === filter.value ? 'selected' : ''}
+                            key={filter.value}
+                            onClick={() => {
+                              setStatusFilter((current) => current === filter.value ? '' : filter.value);
+                            }}
+                            type="button"
+                          >
+                            {filter.label}
+                          </button>
+                        ))}
+                      </div>
+                      <input
+                        aria-label="Filtrar posts por título, categoría o tag"
+                        onChange={(e) => setPostSearch(e.target.value)}
+                        placeholder="Buscar por título, categoría o tag"
+                        type="search"
+                        value={postSearch}
+                      />
+                    </div>
+                  )}
+                  {canCreatePosts && (
+                    <button
+                      className="btn btn-primary admin-new"
+                      onClick={() => {
+                        setForm(EMPTY_FORM);
+                        setSavedForm(EMPTY_FORM);
+                        setCategorySearchTerm('');
+                      }}
+                    >
+                      Nuevo post
+                    </button>
+                  )}
+                  {busy && <p className="admin-muted">Cargando...</p>}
+                  {sortedPosts.length === 0 && !busy && <p className="admin-muted">Todavía no hay posts.</p>}
+                  {sortedPosts.map((post) => (
+                    <article
+                      className={`admin-post ${form.id === post.id ? 'selected' : ''}`}
+                      key={post.id}
+                      onClick={() => selectPostForEdit(post)}
+                    >
+                      {visibleStatusLabel(post, canUseReviewFilters) && (
+                        <span className={`admin-status status-${visibleStatusValue(post, canUseReviewFilters)}`}>
+                          {visibleStatusLabel(post, canUseReviewFilters)}
+                        </span>
+                      )}
+                      <h3>{post.title}</h3>
+                      <p>{post.excerpt || 'Sin extracto'}</p>
+                    </article>
+                  ))}
+                </aside>
+
+                <form className="admin-editor" onSubmit={savePost}>
+                  <div className="admin-editor-head">
+                    <h2>{form.id ? 'Editar post' : canCreatePosts ? 'Nuevo post' : 'Selecciona un post'}</h2>
+                    {form.id && <span className="admin-id">{form.id}</span>}
+                  </div>
+
+                  <label>
+                    Título
+                    <input value={form.title} onChange={(e) => updateForm('title', e.target.value)} required />
+                  </label>
+
+                  <div className="admin-two">
+                    <label>
+                      Slug
+                      <input
+                        disabled={!canChooseSlug}
+                        value={form.slug}
+                        onChange={(e) => updateForm('slug', e.target.value)}
+                        placeholder={canChooseSlug ? 'se-genera-si-lo-dejas-vacio' : 'lo genera el sistema'}
+                      />
+                    </label>
+                    <label>
+                      Categoría
+                      <div className="admin-category-combobox">
+                        <input
+                          aria-autocomplete="list"
+                          aria-expanded={categoryDropdownOpen}
+                          aria-label="Categoría"
+                          onBlur={() => {
+                            updateForm('category', sanitizeCategory(form.category));
+                            setCategorySearchTerm('');
+                            window.setTimeout(() => setCategoryDropdownOpen(false), 120);
+                          }}
+                          onChange={(e) => {
+                            updateForm('category', e.target.value);
+                            setCategorySearchTerm(e.target.value);
+                            setCategoryDropdownOpen(true);
+                          }}
+                          onFocus={() => {
+                            setCategorySearchTerm('');
+                            setCategoryDropdownOpen(true);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && canAddCurrentCategory) {
+                              e.preventDefault();
+                              createCategoryFromForm();
+                            }
+                            if (e.key === 'Escape') {
+                              setCategorySearchTerm('');
+                              setCategoryDropdownOpen(false);
+                            }
+                          }}
+                          placeholder="Buscar o crear categoría"
+                          role="combobox"
+                          value={form.category}
+                        />
+                        <button
+                          aria-label="Abrir categorías"
+                          className="admin-category-toggle"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            setCategorySearchTerm('');
+                            setCategoryDropdownOpen((open) => !open);
+                          }}
+                          type="button"
+                        >
+                          <span aria-hidden="true" className="material-symbols-outlined">arrow_drop_down</span>
+                        </button>
+                        {categoryDropdownOpen && (
+                          <div className="admin-category-menu" role="listbox">
+                            {filteredCategoryOptions.length > 0 ? (
+                              filteredCategoryOptions.map((option) => (
+                                <button
+                                  key={option}
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    updateForm('category', option);
+                                    setCategorySearchTerm('');
+                                    setCategoryDropdownOpen(false);
+                                  }}
+                                  role="option"
+                                  type="button"
+                                >
+                                  {option}
+                                </button>
+                              ))
+                            ) : (
+                              <span>No hay categorías con ese texto.</span>
+                            )}
+                            {canAddCurrentCategory && (
+                              <button
+                                className="admin-category-add"
+                                disabled={busy}
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  createCategoryFromForm();
+                                }}
+                                type="button"
+                              >
+                                Agregar "{sanitizeCategory(form.category)}"
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <div className="admin-category-actions">
+                        {canManageCategories && selectedSharedCategory && (
+                          <button
+                            className="btn btn-ghost danger"
+                            disabled={busy}
+                            onClick={() => setCategoryDeleteTarget(selectedSharedCategory)}
+                            type="button"
+                          >
+                            Eliminar de la lista
+                          </button>
+                        )}
+                      </div>
+                    </label>
+                  </div>
+                  <datalist id="admin-tag-options">
+                    {tagOptions.map((option) => (
+                      <option key={option} value={option} />
+                    ))}
+                  </datalist>
+
+                  <label>
+                    Extracto
+                    <textarea
+                      placeholder="El extracto se genera automaticamente si lo dejas vacio."
+                      value={form.excerpt}
+                      onChange={(e) => updateForm('excerpt', e.target.value)}
+                      rows="3"
+                    />
+                  </label>
+
+                  <label>
+                    Portada
+                    <div className="admin-radio-group">
+                      <label>
+                        <input
+                          checked={coverMode === 'url'}
+                          name="coverMode"
+                          onChange={() => setCoverMode('url')}
+                          type="radio"
+                          value="url"
+                        />
+                        URL
+                      </label>
+                      <label>
+                        <input
+                          checked={coverMode === 'upload'}
+                          name="coverMode"
+                          onChange={() => setCoverMode('upload')}
+                          type="radio"
+                          value="upload"
+                        />
+                        Subir foto
+                      </label>
+                    </div>
+                    {coverMode === 'url' ? (
+                      <input value={form.coverImage} onChange={(e) => updateForm('coverImage', e.target.value)} placeholder="https://..." />
+                    ) : (
+                      <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => uploadCoverImage(e.target.files?.[0])} disabled={uploading} />
+                    )}
+                  </label>
+
+                  <label>
+                    Tags
+                    <input
+                      list="admin-tag-options"
+                      value={form.tagsText}
+                      onBlur={() => updateForm('tagsText', parseTagsText(form.tagsText).join(', '))}
+                      onChange={(e) => updateForm('tagsText', e.target.value)}
+                      placeholder="política, democracia, análisis"
+                    />
+                  </label>
+                  {tagOptions.length > 0 && (
+                    <div className="admin-taxonomy-suggestions">
+                      {tagOptions.slice(0, 14).map((option) => (
+                        <button key={option} onClick={() => addTagSuggestion(option)} type="button">
+                          {option}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="admin-content-head">
+                    <div>
+                      <span>Contenido</span>
+                      <p>Redacta y da formato a la nota antes de guardarla.</p>
+                    </div>
+                    <div className="admin-content-actions">
+                      <button
+                        className="btn btn-ghost"
+                        disabled={!form.title && !form.contentMarkdown && !form.coverImage}
+                        onClick={() => setPreviewOpen((open) => !open)}
+                        type="button"
+                      >
+                        Previsualizar
+                      </button>
+                      <button
+                        className="btn btn-ghost"
+                        disabled={busy || importing}
+                        onClick={() => docxInputRef.current?.click()}
+                        type="button"
+                      >
+                        {importing ? 'Importando...' : 'Importar .docx'}
+                      </button>
+                    </div>
+                    <input
+                      accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                      hidden
+                      onChange={(e) => importDocx(e.target.files?.[0])}
+                      ref={docxInputRef}
+                      type="file"
+                    />
+                  </div>
+
+                  <RichTextEditor
+                    activeCommentId={activeReviewCommentId}
+                    activeCommentNonce={activeReviewCommentNonce}
+                    disabled={busy}
+                    onChange={(markdown) => updateForm('contentMarkdown', markdown)}
+                    onCreateComment={canPublishPosts && form.id ? createReviewComment : null}
+                    onUploadImage={uploadInlineImage}
+                    value={form.contentMarkdown}
+                  />
+
+
+                  <label>
+                    Autor
+                    <input value={form.authorName} onChange={(e) => updateForm('authorName', e.target.value)} placeholder={user?.name || user?.email || 'Nombre visible'} />
+                  </label>
+
+                  <div className="admin-actions">
+                    <button className="btn btn-primary" disabled={busy || uploading || importing || (!form.id && !canCreatePosts)} type="submit">
+                      {form.id ? 'Guardar cambios' : 'Crear borrador'}
+                    </button>
+                    {form.id && (
+                      <>
+                        {canSubmitReview && (
+                          <button className="btn btn-ghost" disabled={busy} type="button" onClick={() => requestAction(`/v1/posts/${form.id}/submit-review`, 'Post enviado a revisión.', 'enviar a revisión')}>
+                            Enviar a revisión
+                          </button>
+                        )}
+                        {canPublishPosts && (
+                          <>
+                            <button className="btn btn-ghost" disabled={busy} type="button" onClick={() => requestAction(`/v1/posts/${form.id}/publish`, 'Post publicado.', 'publicar')}>
+                              Publicar
+                            </button>
+                            <button className="btn btn-ghost" disabled={busy} type="button" onClick={() => requestAction(`/v1/posts/${form.id}/archive`, 'Post archivado.', 'archivar')}>
+                              Archivar
+                            </button>
+                          </>
+                        )}
+                        {canDeletePosts && (
+                          <button className="btn btn-ghost danger" disabled={busy} type="button" onClick={() => deletePost(form.id)}>
+                            Eliminar
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </form>
+                <aside className="admin-preview-sidebar">
+                  <section className="admin-preview-card-panel">
+                    <button
+                      aria-expanded={previewCardOpen}
+                      className="admin-preview-toggle"
+                      onClick={() => setPreviewCardOpen((open) => !open)}
+                      type="button"
+                    >
+                      <span>
+                        <strong>Previsualización</strong>
+                        <small>Hero-card del blog.</small>
+                      </span>
+                      <span aria-hidden="true" className="material-symbols-outlined">
+                        {previewCardOpen ? 'expand_less' : 'expand_more'}
+                      </span>
+                    </button>
+                    {previewCardOpen && (
+                      <article className="post admin-card-preview">
+                        <div
+                          className="post-img"
+                          style={form.coverImage ? { backgroundImage: `url('${form.coverImage}')` } : {}}
+                        />
+                        <div className="post-body">
+                          <div className="post-tags" aria-label="Tags">
+                            {previewTags.slice(0, 3).map((tag) => (
+                              <span className="post-cat" key={tag}>{tag}</span>
+                            ))}
+                          </div>
+                          <h4>{form.title || 'Titulo del blog'}</h4>
+                          <p>{form.excerpt || 'El extracto de la nota se vera aqui.'}</p>
+                          <div className="meta">{form.authorName ? `${form.authorName} - ` : ''}{previewDate}</div>
+                        </div>
+                      </article>
+                    )}
+                  </section>
+
+                  {reviewComments.length > 0 && (
+                    <section className="admin-review-panel">
+                      <div className="admin-preview-head">
+                        <span>Comentarios</span>
+                        <p>{openReviewCommentCount} abiertos</p>
+                      </div>
+                      <div className="admin-review-filters" aria-label="Filtrar comentarios">
+                        {[
+                          { value: 'open', label: 'Abiertos' },
+                          { value: 'resolved', label: 'Resueltos' },
+                          { value: 'all', label: 'Todos' },
+                        ].map((filter) => (
+                          <button
+                            className={reviewCommentFilter === filter.value ? 'selected' : ''}
+                            key={filter.value}
+                            onClick={() => setReviewCommentFilter(filter.value)}
+                            type="button"
+                          >
+                            {filter.label}
+                          </button>
+                        ))}
+                      </div>
+                      {filteredReviewComments.length === 0 ? (
+                        <p className="admin-muted">No hay comentarios en esta vista.</p>
+                      ) : (
+                        <div className="admin-review-list">
+                          {filteredReviewComments.map((comment) => (
+                            <article
+                              className={`admin-review-comment ${activeReviewCommentId === comment.id ? 'selected' : ''}`}
+                              key={comment.id}
+                            >
+                              <button
+                                className="admin-review-comment-main"
+                                onClick={() => focusReviewComment(comment.id)}
+                                type="button"
+                              >
+                                <span className={`admin-status status-${comment.status === 'resolved' ? 'published' : 'review'}`}>
+                                  {comment.status === 'resolved' ? 'Resuelto' : 'Abierto'}
+                                </span>
+                                {comment.selectedText && <q>{comment.selectedText}</q>}
+                                <strong>{comment.body}</strong>
+                                <small>
+                                  {comment.authorName || comment.authorEmail} - {formatAdminDate(comment.createdAt)}
+                                </small>
+                              </button>
+                              <div className="admin-review-actions">
+                                {canPublishPosts && comment.status !== 'resolved' && (
+                                  <button className="btn btn-ghost" disabled={busy} onClick={() => setEditingReviewComment({ ...comment })} type="button">
+                                    Editar
+                                  </button>
+                                )}
+                                {comment.status !== 'resolved' && (
+                                  <button className="btn btn-ghost" disabled={busy} onClick={() => updateReviewCommentStatus(comment.id, 'resolved')} type="button">
+                                    Resolver
+                                  </button>
+                                )}
+                                {canPublishPosts && (
+                                  <button className="btn btn-ghost danger" disabled={busy} onClick={() => deleteReviewComment(comment.id)} type="button">
+                                    Eliminar
+                                  </button>
+                                )}
+                              </div>
+                            </article>
+                          ))}
+                        </div>
+                      )}
+                    </section>
+                  )}
+                </aside>
+              </div>
+              {previewOpen && (
+                <div className="admin-preview-modal-backdrop" role="presentation">
+                  <div aria-modal="true" className="admin-preview-modal" role="dialog">
+                    <div className="admin-preview-modal-bar">
+                      <div>
+                        <span>Previsualizacion</span>
+                        <p>Simulacion de pagina publica.</p>
+                      </div>
+                      <button className="btn btn-ghost" onClick={() => setPreviewOpen(false)} type="button">
+                        Cerrar
+                      </button>
+                    </div>
+                    <article className="article admin-article-preview">
+                      <div className="art-tags" aria-label="Tags">
+                        {previewTags.slice(0, 4).map((tag) => (
+                          <span className="art-cat" key={tag}>{tag}</span>
+                        ))}
+                      </div>
+                      <h1>{form.title || 'Titulo del blog'}</h1>
+                      <div className="art-meta">{form.authorName ? `Por ${form.authorName} - ` : ''}{previewDate}</div>
+                      {form.coverImage && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img className="art-hero" src={form.coverImage} alt={form.title || 'Portada'} />
+                      )}
+                      <div className="art-body" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+                    </article>
+                  </div>
+                </div>
+              )}
+              {categoryDeleteTarget && (
+                <div className="admin-modal-backdrop" role="presentation">
+                  <div aria-modal="true" className="admin-modal" role="dialog">
+                    <h3>Eliminar categoría</h3>
+                    <p>
+                      Vas a quitar "{categoryDeleteTarget.name}" de la lista compartida. Los posts que ya la usan no se modifican.
+                    </p>
+                    <div className="admin-modal-actions">
+                      <button className="btn btn-ghost" onClick={() => setCategoryDeleteTarget(null)} type="button">
+                        Cancelar
+                      </button>
+                      <button className="btn btn-primary" disabled={busy} onClick={() => deleteCategory(categoryDeleteTarget)} type="button">
+                        Eliminar categoría
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {pendingAction && (
+                <div className="admin-modal-backdrop" role="presentation">
+                  <div aria-modal="true" className="admin-modal" role="dialog">
+                    <h3>Cambios sin guardar</h3>
+                    <p>
+                      Tenes cambios sin guardar. Podes cancelar, {pendingAction.label} sin guardar esos cambios, o guardar primero y despues {pendingAction.label}.
+                    </p>
+                    <div className="admin-modal-actions">
+                      <button className="btn btn-ghost" disabled={busy} onClick={() => setPendingAction(null)} type="button">
+                        Cancelar
+                      </button>
+                      <button className="btn btn-ghost" disabled={busy} onClick={confirmPendingAction} type="button">
+                        {actionButtonLabel(pendingAction.label)} sin guardar
+                      </button>
+                      <button className="btn btn-primary" disabled={busy} onClick={saveAndConfirmPendingAction} type="button">
+                        Guardar y {pendingAction.label}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {editingReviewComment && (
+                <div className="admin-modal-backdrop" role="presentation">
+                  <div aria-modal="true" className="admin-modal rich-comment-modal" role="dialog">
+                    <h3>Editar comentario</h3>
+                    {editingReviewComment.selectedText && <q>{editingReviewComment.selectedText}</q>}
+                    <label>
+                      Comentario
+                      <textarea
+                        autoFocus
+                        onChange={(event) => setEditingReviewComment((current) => ({ ...current, body: event.target.value }))}
+                        rows="5"
+                        value={editingReviewComment.body || ''}
+                      />
+                    </label>
+                    <div className="admin-modal-actions">
+                      <button className="btn btn-ghost" disabled={busy} onClick={() => setEditingReviewComment(null)} type="button">
+                        Cancelar
+                      </button>
+                      <button className="btn btn-primary" disabled={busy || !normalizeInlineInput(editingReviewComment.body)} onClick={saveEditedReviewComment} type="button">
+                        Guardar comentario
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </section>
+    </main>
+  );
+
+  function updateForm(field, value) {
+    setForm((current) => normalizeForm({ ...current, [field]: value }));
+  }
+
+  function addTagSuggestion(tag) {
+    setForm((current) => {
+      const tags = parseTagsText(current.tagsText);
+      const nextTag = sanitizeTags([tag])[0];
+      if (nextTag && !tags.some((item) => taxonomyKey(item) === taxonomyKey(nextTag))) tags.push(nextTag);
+      return normalizeForm({ ...current, tagsText: tags.join(', ') });
+    });
+  }
+}
+
+function buildPayload(form, canChooseSlug = false) {
+  return {
+    title: form.title,
+    ...(canChooseSlug ? { slug: form.slug || undefined } : {}),
+    excerpt: form.excerpt || undefined,
+    contentMarkdown: form.contentMarkdown,
+    coverImage: form.coverImage || undefined,
+    authorName: form.authorName || undefined,
+    category: sanitizeCategory(form.category) || undefined,
+    tags: parseTagsText(form.tagsText),
+  };
+}
+
+function stripReviewCommentMarkup(markdown = '') {
+  return markdown.replace(/<span\b[^>]*data-review-comment-id=["'][^"']+["'][^>]*>([\s\S]*?)<\/span>/gi, '$1');
+}
+
+function stripReviewCommentMarkupById(markdown = '', commentId = '') {
+  const escapedId = escapeRegExp(commentId);
+  if (!escapedId) return markdown;
+  const pattern = new RegExp(`<span\\b[^>]*data-review-comment-id=["']${escapedId}["'][^>]*>([\\s\\S]*?)<\\/span>`, 'gi');
+  return markdown.replace(pattern, '$1');
+}
+
+function escapeRegExp(value = '') {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function normalizeRoleEmail(email) {
+  return typeof email === 'string' ? email.trim().toLowerCase() : '';
+}
+
+function isAllowedRoleEmail(email) {
+  const cleanEmail = normalizeRoleEmail(email);
+  return isPrimaryDomainEmail(cleanEmail) || cleanEmail.endsWith(`@${ASSIGNED_EMAIL_DOMAIN}`);
+}
+
+function isPrimaryDomainEmail(email) {
+  return typeof email === 'string' && email.toLowerCase().endsWith(`@${ALLOWED_EMAIL_DOMAIN}`);
+}
+
+function sameRoleSet(left = [], right = []) {
+  const cleanLeft = ASSIGNABLE_ROLES.map((role) => role.value).filter((role) => left.includes(role));
+  const cleanRight = ASSIGNABLE_ROLES.map((role) => role.value).filter((role) => right.includes(role));
+  return cleanLeft.length === cleanRight.length && cleanLeft.every((role) => cleanRight.includes(role));
+}
+
+function upsertAdminUserItem(items, nextItem) {
+  if (!nextItem?.email) return items;
+  const next = items.map((item) => (item.email === nextItem.email ? nextItem : item));
+  if (!items.some((item) => item.email === nextItem.email)) next.unshift(nextItem);
+  return next;
+}
+
+function normalizeNotificationPreferences(value = {}) {
+  return {
+    email: value?.email || '',
+    enabled: value?.enabled === true,
+    events: {
+      ...DEFAULT_NOTIFICATION_EVENTS,
+      ...(value?.events || {}),
+    },
+  };
+}
+
+function normalizeInlineInput(value = '') {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function actionButtonLabel(label = '') {
+  const normalized = label.trim().toLowerCase();
+  const labels = {
+    archivar: 'Archivar',
+    publicar: 'Publicar',
+    'enviar a revision': 'Enviar a revision',
+    'enviar a revisión': 'Enviar a revision',
+  };
+  return labels[normalized] || `${normalized.charAt(0).toUpperCase()}${normalized.slice(1)}`;
+}
+
+function adminMessageKind(message = '') {
+  return /error|no se pudo|no pudimos|falta|missing|solo|usa un email|elegi|sin permisos|invalid|denied|rechaz|failed|credenciales/i.test(message)
+    ? 'error'
+    : 'success';
+}
+
+function visibleStatusValue(post, canUseReviewFilters) {
+  const status = post?.status || '';
+  if (canUseReviewFilters) return status;
+  if (status === 'archived') return 'published';
+  if (status === 'review' || status === 'published') return status;
+  return '';
+}
+
+function visibleStatusLabel(post, canUseReviewFilters) {
+  const status = visibleStatusValue(post, canUseReviewFilters);
+  return status ? STATUS_LABELS[status] || status : '';
+}
+
+function normalizeInputValue(value) {
+  if (value === null || value === undefined) return '';
+  return typeof value === 'string' ? value : String(value);
+}
+
+function normalizeForm(value = {}) {
+  const next = { ...EMPTY_FORM, ...value };
+  FORM_STRING_FIELDS.forEach((field) => {
+    next[field] = normalizeInputValue(next[field]);
+  });
+  return next;
+}
+
+function postToForm(post = {}) {
+  return normalizeForm({
+    id: post.id,
+    title: post.title,
+    slug: post.slug,
+    excerpt: post.excerpt,
+    contentMarkdown: post.contentMarkdown,
+    coverImage: post.coverImage,
+    authorName: post.authorName,
+    category: sanitizeCategory(post.category),
+    tagsText: sanitizeTags(post.tags || []).join(', '),
+  });
+}
+
+function serializeForm(form) {
+  return JSON.stringify({
+    id: form.id || '',
+    title: form.title || '',
+    slug: form.slug || '',
+    excerpt: form.excerpt || '',
+    contentMarkdown: form.contentMarkdown || '',
+    coverImage: form.coverImage || '',
+    authorName: form.authorName || '',
+    category: form.category || '',
+    tagsText: form.tagsText || '',
+  });
+}
+
+function formatAdminDate(value) {
+  if (!value) return 'Sin fecha';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Sin fecha';
+  return new Intl.DateTimeFormat('es-AR', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(date);
+}
+
+function isAllowedEmail(email) {
+  const cleanEmail = typeof email === 'string' ? email.toLowerCase() : '';
+  return isPrimaryDomainEmail(cleanEmail) || cleanEmail.endsWith(`@${ASSIGNED_EMAIL_DOMAIN}`);
+}
+
+function isLocalHostname(hostname) {
+  return ['localhost', '127.0.0.1', 'admin.localhost'].includes(hostname);
+}
+
+function isLocalApiUrl(url) {
+  try {
+    return isLocalHostname(new URL(url).hostname);
+  } catch (_err) {
+    return false;
+  }
+}
+
+function authErrorMessage(err) {
+  const message = err?.message || '';
+  const networkError = /networkerror|failed to fetch|load failed/i.test(message);
+
+  if (networkError && isLocalApiUrl(API_BASE)) {
+    return `El backend local no responde en ${API_BASE}. Levantalo con npm.cmd run blog-api:dev y despues volve a tocar "Usar sesion local".`;
+  }
+
+  if (networkError) {
+    return `No se pudo conectar con ${API_BASE}. Si estas en admin.localhost, usa backend local o habilita ese origen en CORS.`;
+  }
+
+  return message || 'No pudimos validar tu perfil';
+}

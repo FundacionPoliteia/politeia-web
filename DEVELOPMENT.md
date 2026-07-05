@@ -1,0 +1,236 @@
+# Desarrollo local
+
+Esta aplicacion esta hecha con Next.js 15, React 19 y npm.
+
+## Comandos rapidos
+
+Desde la raiz del proyecto:
+
+```bash
+npm run dev
+npm run blog-api:dev
+npm run blog-api:test
+npm run blog-api:check
+npm run blog-api:cloud:auth
+npm run blog-api:cloud:project
+npm run blog-api:cloud:quota-project
+```
+
+- `npm run dev`: levanta el frontend Next en `http://localhost:3000`.
+- `npm run blog-api:dev`: levanta el backend local en modo watch, usando `services/blog-api/.env`.
+- `npm run blog-api:test`: corre los tests del backend.
+- `npm run blog-api:check`: valida sintaxis del entrypoint del backend.
+- `npm run blog-api:cloud:auth`: abre el login de Application Default Credentials para usar Firestore/Cloud Storage reales desde local.
+- `npm run blog-api:cloud:project`: configura `quick-function-500420-v6` como proyecto activo de gcloud.
+- `npm run blog-api:cloud:quota-project`: asocia tus credenciales ADC al proyecto de facturacion/cuotas usado por las APIs de Google.
+
+Para reiniciar el backend local despues de cambiar `.env`, cortar el proceso con `Ctrl+C` y volver a correr:
+
+```bash
+npm run blog-api:dev
+```
+
+Para probar el panel interno local:
+
+```text
+http://admin.localhost:3000/admin
+```
+
+## Requisitos
+
+- Node.js 20 o superior.
+- npm, incluido con Node.js.
+- Acceso a internet para instalar dependencias y, si corresponde, acceder a Google Cloud.
+
+## Instalacion
+
+Desde la raiz del proyecto:
+
+```bash
+npm install
+```
+
+Si queres una instalacion mas estricta y reproducible usando `package-lock.json`:
+
+```bash
+npm ci
+```
+
+## Levantar el servidor de desarrollo
+
+```bash
+npm run dev
+```
+
+Por defecto Next.js levanta la app en:
+
+```text
+http://localhost:3000
+```
+
+Si el puerto `3000` esta ocupado, podes usar otro puerto:
+
+```bash
+npm run dev -- -p 3001
+```
+
+## Scripts disponibles
+
+- `npm run dev`: inicia Next.js en modo desarrollo.
+- `npm run build`: genera la build de produccion.
+- `npm run start`: ejecuta la build de produccion generada previamente.
+- `npm run lint`: ejecuta el linter de Next.js, si la configuracion del proyecto lo permite.
+- `npm run blog-api:dev`: inicia el backend Express de blogs.
+- `npm run blog-api:start`: inicia el backend Express sin watch.
+- `npm run blog-api:test`: ejecuta los tests del backend de blogs.
+- `npm run blog-api:check`: valida sintaxis del entrypoint del backend.
+
+## Variables de entorno
+
+Copiar `.env.example` a `.env.local` y configurar:
+
+```text
+BLOG_API_BASE_URL=https://URL_DE_CLOUD_RUN
+NEXT_PUBLIC_BLOG_API_BASE_URL=http://localhost:8080
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=tu-google-client-id
+```
+
+En desarrollo local conviene separar estos dos valores:
+
+- `BLOG_API_BASE_URL`: lo usa Next del lado servidor para el blog publico. Puede apuntar a Cloud Run para ver las notas reales.
+- `NEXT_PUBLIC_BLOG_API_BASE_URL`: lo usa el panel en el navegador. Para probar roles con `DEV_AUTH=true`, debe apuntar al backend local `http://localhost:8080`.
+
+El backend tiene su propio ejemplo en `services/blog-api/.env.example`.
+
+## Levantar el backend de blogs
+
+```bash
+cd services/blog-api
+npm install
+npm run dev
+```
+
+En desarrollo local se puede usar:
+
+```text
+DEV_AUTH=true
+DEV_AUTH_EMAIL=dev@politeia.ar
+DEV_AUTH_ROLES=admin
+ALLOWED_ORIGIN=http://localhost:3000,http://admin.localhost:3000
+ALLOWED_EMAIL_DOMAIN=politeia.ar
+SESSION_SECRET=dev-session-secret
+SESSION_COOKIE_SAME_SITE=lax
+SESSION_COOKIE_SECURE=false
+```
+
+Esto evita depender de Google Groups mientras se prueba localmente. No usar `DEV_AUTH=true` en produccion.
+
+El backend local usa el mismo codigo y los mismos endpoints que produccion. Si queres probar listados, importacion `.docx` o subida de imagenes contra Firestore/Cloud Storage reales, tambien necesitas tener credenciales locales de Google Cloud disponibles para las librerias de Google:
+
+```bash
+npm run blog-api:cloud:auth
+npm run blog-api:cloud:project
+npm run blog-api:cloud:quota-project
+```
+
+Sin esas credenciales, el panel puede iniciar sesion local, pero las rutas que leen/escriben Firestore o Cloud Storage van a fallar.
+
+## Probar emails en desarrollo
+
+El sistema de notificaciones es opt-in por usuario: cada cuenta debe activar "Recibir emails del panel" y los eventos que quiere recibir. Ademas, el mail se envia al `authorEmail` del post. Si estas probando con una cuenta `@gmail.com`, el post tambien debe tener esa cuenta como autor.
+
+Por defecto el backend local usa:
+
+```text
+MAIL_PROVIDER=console
+```
+
+Ese modo no manda emails reales. Solo deja entregas en Firestore y escribe en la consola del backend una linea `mail delivery`; el estado queda como `logged`, no `sent`.
+
+Para probar envio real, configurar un proveedor en `services/blog-api/.env` y reiniciar `npm run blog-api:dev`:
+
+```text
+MAIL_PROVIDER=resend
+MAIL_FROM="Politeia <no-reply@politeia.ar>"
+RESEND_API_KEY=tu_api_key_de_resend
+APP_BASE_URL=http://admin.localhost:3000
+```
+
+`MAIL_FROM` debe usar un dominio/remitente verificado en Resend. Si falta `RESEND_API_KEY`, la entrega queda como fallida con un error claro.
+
+## Probar una build de produccion localmente
+
+Antes de publicar cambios conviene validar que la app compile:
+
+```bash
+npm run build
+npm run start
+```
+
+Luego abrir:
+
+```text
+http://localhost:3000
+```
+
+## Datos externos
+
+El blog consume datos desde la API configurada por:
+
+```text
+BLOG_API_BASE_URL
+```
+
+El cliente publico vive en `lib/blogApi.js`. `lib/wordpress.js` queda como referencia legada y no es usado por las rutas actuales.
+
+La UI interna de carga vive en el subdominio admin. En local, usar:
+
+```text
+http://admin.localhost:3000/admin
+```
+
+Si el boton de Google no aparece en `admin.localhost`, hay dos caminos:
+
+- Para probar roles localmente, levantar el backend con `DEV_AUTH=true`, cambiar `DEV_AUTH_ROLES` a `blog`, `reviewer` o `admin`, cambiar `DEV_AUTH_EMAIL` para simular otro autor, reiniciar el backend y usar el boton "Usar sesion local" del panel. `blog` solo ve y opera posts cuyo `authorEmail` coincide con `DEV_AUTH_EMAIL`; `reviewer` incluye permisos de `blog`; `admin` incluye todo.
+- Para probar Google real desde local, agregar `http://admin.localhost:3000` como Authorized JavaScript Origin en Google OAuth y sumar `http://admin.localhost:3000` a `ALLOWED_ORIGIN` del backend que estes usando.
+
+Necesita estas variables en `.env.local`:
+
+```text
+NEXT_PUBLIC_BLOG_API_BASE_URL=https://URL_DE_CLOUD_RUN
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID
+```
+
+## Flujo recomendado de trabajo
+
+1. Crear una rama para el cambio:
+
+   ```bash
+   git checkout -b nombre-del-cambio
+   ```
+
+2. Instalar dependencias si es necesario:
+
+   ```bash
+   npm install
+   ```
+
+3. Levantar el entorno local:
+
+   ```bash
+   npm run dev
+   ```
+
+4. Validar antes de subir:
+
+   ```bash
+   npm run build
+   ```
+
+5. Commit y push:
+
+   ```bash
+   git add .
+   git commit -m "Descripcion del cambio"
+   git push origin nombre-del-cambio
+   ```
