@@ -18,6 +18,8 @@
     "blog-api:cloud:logs": "gcloud run services logs read politeia-blog-api --region us-central1 --limit=100",
     "blog-api:cloud:url": "gcloud run services describe politeia-blog-api --region us-central1 --format=\"value(status.url)\"",
     "blog-api:cloud:describe": "gcloud run services describe politeia-blog-api --region us-central1",
+    "blog-api:cloud:env": "gcloud run services describe politeia-blog-api --region us-central1 --format=\"yaml(spec.template.spec.containers[0].env)\"",
+    "blog-api:cloud:revisions": "gcloud run revisions list --service politeia-blog-api --region us-central1",
     "blog-api:cloud:auth": "gcloud auth application-default login",
     "blog-api:cloud:project": "gcloud config set project quick-function-500420-v6",
     "blog-api:cloud:quota-project": "gcloud auth application-default set-quota-project quick-function-500420-v6"

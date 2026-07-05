@@ -61,6 +61,7 @@ services/
 
 DEVELOPMENT.md           Guia para levantar desarrollo local
 DEPLOYMENT.md            Guia de publicacion en GitHub y deploy
+PRODUCTION-RUNBOOK.md    Manual paso a paso para pase a produccion y QA en vivo
 CHEAT-SHEET.md           Referencia rapida de comandos y patrones de Next.js
 ```
 

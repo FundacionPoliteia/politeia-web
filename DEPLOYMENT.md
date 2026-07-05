@@ -2,6 +2,8 @@
 
 Este documento describe como publicar el proyecto en GitHub y dejarlo listo para conectarlo a un servicio de hosting para Next.js.
 
+Para un pase completo a produccion, incluyendo DNS, subdominio admin, Resend, secretos, pruebas en vivo, notificaciones opt-in y rollback, seguir primero `PRODUCTION-RUNBOOK.md`.
+
 ## Comandos rapidos de backend
 
 Desde la raiz del proyecto:
@@ -13,6 +15,8 @@ npm run blog-api:cloud:build
 npm run blog-api:cloud:deploy
 npm run blog-api:cloud:logs
 npm run blog-api:cloud:url
+npm run blog-api:cloud:env
+npm run blog-api:cloud:revisions
 npm run blog-api:cloud:auth
 npm run blog-api:cloud:project
 npm run blog-api:cloud:quota-project
@@ -25,6 +29,8 @@ npm run blog-api:cloud:quota-project
 - `npm run blog-api:cloud:logs`: lee los ultimos logs del servicio.
 - `npm run blog-api:cloud:url`: imprime la URL actual del servicio.
 - `npm run blog-api:cloud:describe`: muestra la descripcion completa del servicio.
+- `npm run blog-api:cloud:env`: muestra las variables/secrets configuradas en la revision actual de Cloud Run.
+- `npm run blog-api:cloud:revisions`: lista revisiones de Cloud Run para auditoria o rollback.
 - `npm run blog-api:cloud:auth`: autentica Application Default Credentials para pruebas locales contra Firestore/Cloud Storage reales.
 - `npm run blog-api:cloud:project`: configura el proyecto `quick-function-500420-v6` en gcloud.
 - `npm run blog-api:cloud:quota-project`: asocia ADC al proyecto para evitar errores de cuota/facturacion en APIs locales.
