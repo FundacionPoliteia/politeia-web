@@ -29,6 +29,7 @@ export const openApiSpec = {
           contentMarkdown: { type: 'string' },
           contentHtml: { type: 'string' },
           coverImage: { type: 'string', nullable: true },
+          showCoverInPost: { type: 'boolean' },
           status: { type: 'string', enum: ['draft', 'review', 'published', 'archived'] },
           authorEmail: { type: 'string' },
           authorName: { type: 'string' },
@@ -37,6 +38,8 @@ export const openApiSpec = {
           createdAt: { type: 'string', format: 'date-time' },
           updatedAt: { type: 'string', format: 'date-time' },
           publishedAt: { type: 'string', format: 'date-time', nullable: true },
+          editRequestedAt: { type: 'string', format: 'date-time', nullable: true },
+          editRequestedBy: { type: 'string' },
           deletedAt: { type: 'string', format: 'date-time', nullable: true },
         },
       },
@@ -138,6 +141,7 @@ export const openApiSpec = {
                   excerpt: { type: 'string' },
                   contentMarkdown: { type: 'string' },
                   coverImage: { type: 'string' },
+                  showCoverInPost: { type: 'boolean' },
                   authorName: { type: 'string' },
                   authorEmail: { type: 'string' },
                   category: { type: 'string' },
@@ -188,6 +192,22 @@ export const openApiSpec = {
         security: [{ googleIdToken: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
         responses: { 200: { description: 'Post moved to review' } },
+      },
+    },
+    '/posts/{id}/request-edit': {
+      post: {
+        summary: 'Request edit access for a published post',
+        security: [{ googleIdToken: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Edit request registered' } },
+      },
+    },
+    '/posts/{id}/enable-edit': {
+      post: {
+        summary: 'Move a published post back to draft for editing',
+        security: [{ googleIdToken: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Post moved to draft' } },
       },
     },
     '/posts/{id}/publish': {

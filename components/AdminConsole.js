@@ -21,9 +21,13 @@ const EMPTY_FORM = {
   authorName: '',
   category: '',
   tagsText: '',
+  status: '',
+  editRequestedAt: '',
+  editRequestedBy: '',
+  showCoverInPost: true,
 };
 
-const FORM_STRING_FIELDS = Object.keys(EMPTY_FORM);
+const FORM_STRING_FIELDS = Object.keys(EMPTY_FORM).filter((field) => field !== 'showCoverInPost');
 
 const STATUS_LABELS = {
   draft: 'Borrador',
@@ -85,6 +89,7 @@ export default function AdminConsole() {
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
   const [categorySearchTerm, setCategorySearchTerm] = useState('');
   const [coverMode, setCoverMode] = useState('url');
+  const [coverImageError, setCoverImageError] = useState('');
   const [adminUsersOpen, setAdminUsersOpen] = useState(false);
   const [adminUsers, setAdminUsers] = useState([]);
   const [adminUserDrafts, setAdminUserDrafts] = useState({});
@@ -103,6 +108,7 @@ export default function AdminConsole() {
   const [editingReviewComment, setEditingReviewComment] = useState(null);
   const signInRef = useRef(null);
   const docxInputRef = useRef(null);
+  const coverValidationRef = useRef(0);
 
   const roles = user?.roles || [];
   const isAdmin = roles.includes('admin');
@@ -120,6 +126,9 @@ export default function AdminConsole() {
   const canUseReviewFilters = isAdmin || isReviewer;
   const canManageUsers = isAdmin && isPrimaryDomainUser;
   const activeStatusFilter = statusFilter;
+  const publishedAuthorLocked = Boolean(form.id && !canPublishPosts && ['published', 'archived'].includes(form.status));
+  const editRequestPending = Boolean(form.editRequestedAt);
+  const editorBusy = busy || publishedAuthorLocked;
   const roleLabel = isAdmin ? 'Panel admin' : isReviewer ? 'Panel de revision' : 'Panel de blog';
   const isLocalApiBase = isLocalApiUrl(API_BASE);
   const hasUnsavedChanges = useMemo(
@@ -291,6 +300,7 @@ export default function AdminConsole() {
       setPostSearch('');
       setForm(EMPTY_FORM);
       setSavedForm(EMPTY_FORM);
+      setCoverImageError('');
       setPendingAction(null);
       setCategoryDeleteTarget(null);
       setCategoryDropdownOpen(false);
@@ -432,6 +442,9 @@ export default function AdminConsole() {
     if (!canEditPosts || (!form.id && !canCreatePosts)) {
       throw new Error('Tu rol no permite crear nuevos posts.');
     }
+    if (publishedAuthorLocked) {
+      throw new Error('Solicita edicion para modificar un post publicado.');
+    }
 
     const payload = buildPayload(form, canChooseSlug);
     const isEditing = Boolean(form.id);
@@ -461,12 +474,15 @@ export default function AdminConsole() {
     try {
       setUploading(true);
       setMessage('');
+      setCoverImageError('');
       const media = await uploadMedia(file);
-      setForm((current) => normalizeForm({ ...current, coverImage: media?.url }));
+      setForm((current) => normalizeForm({ ...current, coverImage: media?.url, showCoverInPost: true }));
       setCoverMode('upload');
       setMessage('Imagen cargada.');
     } catch (err) {
-      setMessage(err.message);
+      const nextMessage = imageLoadErrorMessage(err);
+      setCoverImageError(nextMessage);
+      setMessage(nextMessage);
     } finally {
       setUploading(false);
     }
@@ -482,6 +498,36 @@ export default function AdminConsole() {
       setMessage(err.message);
       return '';
     }
+  }
+
+  function clearCoverImageError() {
+    coverValidationRef.current += 1;
+    setCoverImageError('');
+  }
+
+  function failCoverImageLoad(err) {
+    const nextMessage = imageLoadErrorMessage(err);
+    setCoverImageError((current) => current || nextMessage);
+    setMessage(nextMessage);
+  }
+
+  function validateCoverImageUrl(url) {
+    const coverImage = String(url || '').trim();
+    coverValidationRef.current += 1;
+    const validationId = coverValidationRef.current;
+    if (!coverImage) {
+      setCoverImageError('');
+      return;
+    }
+    if (typeof window === 'undefined') return;
+    const image = new window.Image();
+    image.onload = () => {
+      if (coverValidationRef.current === validationId) setCoverImageError('');
+    };
+    image.onerror = () => {
+      if (coverValidationRef.current === validationId) failCoverImageLoad();
+    };
+    image.src = coverImage;
   }
 
   async function createReviewComment({ body, selectedText, commentId, contentMarkdown }) {
@@ -629,7 +675,12 @@ export default function AdminConsole() {
     try {
       setBusy(true);
       setMessage('');
-      await api(path, { method: 'POST' });
+      const data = await api(path, { method: 'POST' });
+      if (data.item?.id && data.item.id === form.id) {
+        const nextForm = postToForm(data.item);
+        setForm(nextForm);
+        setSavedForm(nextForm);
+      }
       setMessage(success);
       await loadPosts();
     } catch (err) {
@@ -678,6 +729,7 @@ export default function AdminConsole() {
     setForm(nextForm);
     setSavedForm(nextForm);
     setCategorySearchTerm('');
+    setCoverImageError('');
   }
 
   function toggleAdminPostSelection(id) {
@@ -736,6 +788,7 @@ export default function AdminConsole() {
         setForm(EMPTY_FORM);
         setSavedForm(EMPTY_FORM);
         setCategorySearchTerm('');
+        setCoverImageError('');
       }
       setSelectedAdminPostIds([]);
       setMessage(config.success);
@@ -758,6 +811,7 @@ export default function AdminConsole() {
         setForm(EMPTY_FORM);
         setSavedForm(EMPTY_FORM);
         setCategorySearchTerm('');
+        setCoverImageError('');
       }
       await loadPosts();
     } catch (err) {
@@ -956,9 +1010,9 @@ export default function AdminConsole() {
   }, [categoryOptions, categorySearchTerm]);
   const canAddCurrentCategory = useMemo(() => {
     const name = sanitizeCategory(form.category);
-    if (!name) return false;
+    if (!name || publishedAuthorLocked) return false;
     return !selectedSharedCategory;
-  }, [form.category, selectedSharedCategory]);
+  }, [form.category, publishedAuthorLocked, selectedSharedCategory]);
   const previewHtml = useMemo(
     () => marked.parse(stripReviewCommentMarkup(form.contentMarkdown || ''), { async: false, gfm: true }),
     [form.contentMarkdown]
@@ -1348,6 +1402,7 @@ export default function AdminConsole() {
                                   <span className={`admin-status status-${post.status || 'draft'}`}>
                                     {STATUS_LABELS[post.status] || post.status || 'Borrador'}
                                   </span>
+                                  {post.editRequestedAt && <small>Solicitud de edicion</small>}
                                 </td>
                                 <td>
                                   <button className="admin-table-title" onClick={() => selectPostForEdit(post)} type="button">
@@ -1385,6 +1440,16 @@ export default function AdminConsole() {
                                     >
                                       Archivar
                                     </button>
+                                    {post.editRequestedAt && (
+                                      <button
+                                        className="btn btn-workflow"
+                                        disabled={busy}
+                                        onClick={() => requestAction(`/v1/posts/${post.id}/enable-edit`, 'Post habilitado como borrador.', 'habilitar edicion')}
+                                        type="button"
+                                      >
+                                        Habilitar edicion
+                                      </button>
+                                    )}
                                     <button className="btn btn-ghost danger" disabled={busy} onClick={() => deletePost(post.id)} type="button">
                                       Eliminar
                                     </button>
@@ -1445,6 +1510,7 @@ export default function AdminConsole() {
                         setForm(EMPTY_FORM);
                         setSavedForm(EMPTY_FORM);
                         setCategorySearchTerm('');
+                        setCoverImageError('');
                       }}
                     >
                       Nuevo post
@@ -1474,17 +1540,27 @@ export default function AdminConsole() {
                     <h2>{form.id ? 'Editar post' : canCreatePosts ? 'Nuevo post' : 'Selecciona un post'}</h2>
                     {form.id && <span className="admin-id">{form.id}</span>}
                   </div>
+                  {publishedAuthorLocked && (
+                    <div className="admin-editor-lock">
+                      <strong>Post publicado</strong>
+                      <span>
+                        {editRequestPending
+                          ? 'Tu solicitud de edicion esta pendiente de revision.'
+                          : 'Para modificarlo, solicita que un reviewer o admin lo vuelva a abrir como borrador.'}
+                      </span>
+                    </div>
+                  )}
 
                   <label>
                     Título
-                    <input value={form.title} onChange={(e) => updateForm('title', e.target.value)} required />
+                    <input disabled={publishedAuthorLocked} value={form.title} onChange={(e) => updateForm('title', e.target.value)} required />
                   </label>
 
                   <div className="admin-two">
                     <label>
                       Slug
                       <input
-                        disabled={!canChooseSlug}
+                        disabled={!canChooseSlug || publishedAuthorLocked}
                         value={form.slug}
                         onChange={(e) => updateForm('slug', e.target.value)}
                         placeholder={canChooseSlug ? 'se-genera-si-lo-dejas-vacio' : 'lo genera el sistema'}
@@ -1495,6 +1571,7 @@ export default function AdminConsole() {
                       <div className="admin-category-combobox">
                         <input
                           aria-autocomplete="list"
+                          disabled={publishedAuthorLocked}
                           aria-expanded={categoryDropdownOpen}
                           aria-label="Categoría"
                           onBlur={() => {
@@ -1528,6 +1605,7 @@ export default function AdminConsole() {
                         <button
                           aria-label="Abrir categorías"
                           className="admin-category-toggle"
+                          disabled={publishedAuthorLocked}
                           onMouseDown={(e) => {
                             e.preventDefault();
                             setCategorySearchTerm('');
@@ -1561,7 +1639,7 @@ export default function AdminConsole() {
                             {canAddCurrentCategory && (
                               <button
                                 className="admin-category-add"
-                                disabled={busy}
+                                disabled={busy || publishedAuthorLocked}
                                 onMouseDown={(e) => {
                                   e.preventDefault();
                                   createCategoryFromForm();
@@ -1598,6 +1676,7 @@ export default function AdminConsole() {
                     Extracto
                     <textarea
                       placeholder="El extracto se genera automaticamente si lo dejas vacio."
+                      disabled={publishedAuthorLocked}
                       value={form.excerpt}
                       onChange={(e) => updateForm('excerpt', e.target.value)}
                       rows="3"
@@ -1610,6 +1689,7 @@ export default function AdminConsole() {
                       <label>
                         <input
                           checked={coverMode === 'url'}
+                          disabled={publishedAuthorLocked}
                           name="coverMode"
                           onChange={() => setCoverMode('url')}
                           type="radio"
@@ -1620,6 +1700,7 @@ export default function AdminConsole() {
                       <label>
                         <input
                           checked={coverMode === 'upload'}
+                          disabled={publishedAuthorLocked}
                           name="coverMode"
                           onChange={() => setCoverMode('upload')}
                           type="radio"
@@ -1629,9 +1710,55 @@ export default function AdminConsole() {
                       </label>
                     </div>
                     {coverMode === 'url' ? (
-                      <input value={form.coverImage} onChange={(e) => updateForm('coverImage', e.target.value)} placeholder="https://..." />
+                      <input
+                        disabled={publishedAuthorLocked}
+                        aria-invalid={coverImageError ? 'true' : 'false'}
+                        aria-describedby={coverImageError ? 'cover-image-error' : undefined}
+                        className={coverImageError ? 'is-invalid' : ''}
+                        value={form.coverImage}
+                        onBlur={(e) => validateCoverImageUrl(e.target.value)}
+                        onChange={(e) => {
+                          const coverImage = e.target.value;
+                          clearCoverImageError();
+                          setForm((current) => normalizeForm({
+                            ...current,
+                            coverImage,
+                            showCoverInPost: current.coverImage ? current.showCoverInPost : true,
+                          }));
+                        }}
+                        placeholder="https://..."
+                      />
                     ) : (
-                      <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => uploadCoverImage(e.target.files?.[0])} disabled={uploading} />
+                      <input
+                        aria-invalid={coverImageError ? 'true' : 'false'}
+                        aria-describedby={coverImageError ? 'cover-image-error' : undefined}
+                        className={coverImageError ? 'is-invalid' : ''}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          clearCoverImageError();
+                          e.target.value = '';
+                          uploadCoverImage(file);
+                        }}
+                        disabled={uploading || publishedAuthorLocked}
+                      />
+                    )}
+                    {coverImageError && (
+                      <p className="admin-field-error" id="cover-image-error">
+                        {coverImageError}
+                      </p>
+                    )}
+                    {form.coverImage && (
+                      <label className="admin-cover-toggle">
+                        <input
+                          checked={form.showCoverInPost !== false}
+                          disabled={publishedAuthorLocked}
+                          onChange={(e) => updateForm('showCoverInPost', e.target.checked)}
+                          type="checkbox"
+                        />
+                        Mostrar portada al inicio de la nota
+                      </label>
                     )}
                   </label>
 
@@ -1639,6 +1766,7 @@ export default function AdminConsole() {
                     Tags
                     <input
                       list="admin-tag-options"
+                      disabled={publishedAuthorLocked}
                       value={form.tagsText}
                       onBlur={() => updateForm('tagsText', parseTagsText(form.tagsText).join(', '))}
                       onChange={(e) => updateForm('tagsText', e.target.value)}
@@ -1648,7 +1776,7 @@ export default function AdminConsole() {
                   {tagOptions.length > 0 && (
                     <div className="admin-taxonomy-suggestions">
                       {tagOptions.slice(0, 14).map((option) => (
-                        <button key={option} onClick={() => addTagSuggestion(option)} type="button">
+                        <button disabled={publishedAuthorLocked} key={option} onClick={() => addTagSuggestion(option)} type="button">
                           {option}
                         </button>
                       ))}
@@ -1671,7 +1799,7 @@ export default function AdminConsole() {
                       </button>
                       <button
                         className="btn btn-ghost"
-                        disabled={busy || importing}
+                        disabled={busy || importing || publishedAuthorLocked}
                         onClick={() => docxInputRef.current?.click()}
                         type="button"
                       >
@@ -1690,7 +1818,7 @@ export default function AdminConsole() {
                   <RichTextEditor
                     activeCommentId={activeReviewCommentId}
                     activeCommentNonce={activeReviewCommentNonce}
-                    disabled={busy}
+                    disabled={editorBusy}
                     onChange={(markdown) => updateForm('contentMarkdown', markdown)}
                     onCreateComment={canPublishPosts && form.id ? createReviewComment : null}
                     onUploadImage={uploadInlineImage}
@@ -1700,22 +1828,37 @@ export default function AdminConsole() {
 
                   <label>
                     Autor
-                    <input value={form.authorName} onChange={(e) => updateForm('authorName', e.target.value)} placeholder={user?.name || user?.email || 'Nombre visible'} />
+                    <input disabled={publishedAuthorLocked} value={form.authorName} onChange={(e) => updateForm('authorName', e.target.value)} placeholder={user?.name || user?.email || 'Nombre visible'} />
                   </label>
 
                   <div className="admin-actions">
-                    <button className="btn btn-primary" disabled={busy || uploading || importing || (!form.id && !canCreatePosts)} type="submit">
+                    <button className="btn btn-primary admin-action-save" disabled={busy || uploading || importing || publishedAuthorLocked || (!form.id && !canCreatePosts)} type="submit">
                       {form.id ? 'Guardar cambios' : 'Crear borrador'}
                     </button>
                     {form.id && (
                       <>
-                        {canSubmitReview && (
+                        {publishedAuthorLocked && (
+                          <button
+                            className="btn btn-workflow"
+                            disabled={busy || editRequestPending}
+                            type="button"
+                            onClick={() => requestAction(`/v1/posts/${form.id}/request-edit`, 'Solicitud de edicion enviada.', 'solicitar edicion')}
+                          >
+                            {editRequestPending ? 'Solicitud pendiente' : 'Solicitar edicion'}
+                          </button>
+                        )}
+                        {canSubmitReview && !publishedAuthorLocked && (
                           <button className="btn btn-ghost" disabled={busy} type="button" onClick={() => requestAction(`/v1/posts/${form.id}/submit-review`, 'Post enviado a revisión.', 'enviar a revisión')}>
                             Enviar a revisión
                           </button>
                         )}
                         {canPublishPosts && (
                           <>
+                            {form.editRequestedAt && (
+                              <button className="btn btn-workflow" disabled={busy} type="button" onClick={() => requestAction(`/v1/posts/${form.id}/enable-edit`, 'Post habilitado como borrador.', 'habilitar edicion')}>
+                                Habilitar edicion
+                              </button>
+                            )}
                             <button className="btn btn-ghost" disabled={busy} type="button" onClick={() => requestAction(`/v1/posts/${form.id}/publish`, 'Post publicado.', 'publicar')}>
                               Publicar
                             </button>
@@ -1754,7 +1897,18 @@ export default function AdminConsole() {
                         <div
                           className="post-img"
                           style={form.coverImage ? { backgroundImage: `url('${form.coverImage}')` } : {}}
-                        />
+                        >
+                          {form.coverImage && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              alt=""
+                              className="admin-cover-probe"
+                              onError={() => failCoverImageLoad()}
+                              onLoad={() => setCoverImageError('')}
+                              src={form.coverImage}
+                            />
+                          )}
+                        </div>
                         <div className="post-body">
                           <div className="post-tags" aria-label="Tags">
                             {previewTags.slice(0, 3).map((tag) => (
@@ -1859,9 +2013,15 @@ export default function AdminConsole() {
                       </div>
                       <h1>{form.title || 'Titulo del blog'}</h1>
                       <div className="art-meta">{form.authorName ? `Por ${form.authorName} - ` : ''}{previewDate}</div>
-                      {form.coverImage && (
+                      {form.coverImage && form.showCoverInPost !== false && (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img className="art-hero" src={form.coverImage} alt={form.title || 'Portada'} />
+                        <img
+                          className="art-hero"
+                          src={form.coverImage}
+                          alt={form.title || 'Portada'}
+                          onError={() => failCoverImageLoad()}
+                          onLoad={() => setCoverImageError('')}
+                        />
                       )}
                       <div className="art-body" dangerouslySetInnerHTML={{ __html: previewHtml }} />
                     </article>
@@ -1960,10 +2120,15 @@ function buildPayload(form, canChooseSlug = false) {
     excerpt: form.excerpt || undefined,
     contentMarkdown: form.contentMarkdown,
     coverImage: form.coverImage || undefined,
+    showCoverInPost: form.coverImage ? form.showCoverInPost !== false : true,
     authorName: form.authorName || undefined,
     category: sanitizeCategory(form.category) || undefined,
     tags: parseTagsText(form.tagsText),
   };
+}
+
+function imageLoadErrorMessage() {
+  return 'No pudimos cargar la imagen. Intenta nuevamente la carga.';
 }
 
 function stripReviewCommentMarkup(markdown = '') {
@@ -2062,6 +2227,7 @@ function normalizeForm(value = {}) {
   FORM_STRING_FIELDS.forEach((field) => {
     next[field] = normalizeInputValue(next[field]);
   });
+  next.showCoverInPost = next.showCoverInPost !== false;
   return next;
 }
 
@@ -2076,6 +2242,10 @@ function postToForm(post = {}) {
     authorName: post.authorName,
     category: sanitizeCategory(post.category),
     tagsText: sanitizeTags(post.tags || []).join(', '),
+    status: post.status,
+    editRequestedAt: post.editRequestedAt,
+    editRequestedBy: post.editRequestedBy,
+    showCoverInPost: post.showCoverInPost !== false,
   });
 }
 
@@ -2090,6 +2260,10 @@ function serializeForm(form) {
     authorName: form.authorName || '',
     category: form.category || '',
     tagsText: form.tagsText || '',
+    status: form.status || '',
+    editRequestedAt: form.editRequestedAt || '',
+    editRequestedBy: form.editRequestedBy || '',
+    showCoverInPost: form.showCoverInPost !== false,
   });
 }
 

@@ -9,6 +9,7 @@ import {
   assertOptionalString,
   assertStringArray,
   assertHttpsUrl,
+  assertOptionalBoolean,
 } from '../utils/validation.js';
 import {
   createPostComment,
@@ -18,9 +19,11 @@ import {
 } from '../repositories/comments.js';
 import {
   createPost,
+  enablePostEditing,
   getPublishedPostBySlug,
   listManagePosts,
   listPublishedPosts,
+  requestPostEdit,
   softDeletePost,
   transitionPost,
   updatePost,
@@ -152,6 +155,24 @@ export function postsRouter({ writeLimiter }) {
     }
   });
 
+  router.post('/:id/request-edit', writeLimiter, requireAuth, requireRole('blog'), async (req, res, next) => {
+    try {
+      const post = await requestPostEdit(req.params.id, req.user);
+      res.json({ item: post });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.post('/:id/enable-edit', writeLimiter, requireAuth, requireRole('reviewer'), async (req, res, next) => {
+    try {
+      const post = await enablePostEditing(req.params.id, req.user);
+      res.json({ item: post });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.post('/:id/publish', writeLimiter, requireAuth, requireRole('reviewer'), async (req, res, next) => {
     try {
       const post = await transitionPost(req.params.id, 'published', req.user, 'post.publish');
@@ -183,6 +204,7 @@ function buildPostPayload(body, user) {
   assertOptionalString(body.category, 'category');
   assertOptionalString(body.authorName, 'authorName');
   assertOptionalString(body.authorEmail, 'authorEmail');
+  assertOptionalBoolean(body.showCoverInPost, 'showCoverInPost');
   assertStringArray(body.tags, 'tags');
   if (body.coverImage) assertHttpsUrl(body.coverImage, 'coverImage');
   if (body.slug && !canChooseSlug(user)) {
@@ -200,6 +222,7 @@ function buildPostPayload(body, user) {
     contentMarkdown: body.contentMarkdown,
     contentHtml,
     coverImage: body.coverImage || null,
+    showCoverInPost: body.showCoverInPost !== false,
     authorEmail: canManageAllPosts(user) ? body.authorEmail || user.email : user.email,
     authorName: body.authorName || user.name || user.email,
     category: sanitizeCategory(body.category),
@@ -236,6 +259,10 @@ function buildPostPatch(body, user) {
   if (body.coverImage !== undefined) {
     if (body.coverImage) assertHttpsUrl(body.coverImage, 'coverImage');
     patch.coverImage = body.coverImage || null;
+  }
+  if (body.showCoverInPost !== undefined) {
+    assertOptionalBoolean(body.showCoverInPost, 'showCoverInPost');
+    patch.showCoverInPost = body.showCoverInPost !== false;
   }
   if (body.category !== undefined) {
     assertOptionalString(body.category, 'category');

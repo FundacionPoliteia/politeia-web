@@ -22,6 +22,12 @@ export function assertStringArray(value, field) {
   }
 }
 
+export function assertOptionalBoolean(value, field) {
+  if (value !== undefined && typeof value !== 'boolean') {
+    throw new HttpError(400, `${field} must be a boolean`);
+  }
+}
+
 export function assertHttpsUrl(value, field) {
   assertNonEmptyString(value, field);
   let url;

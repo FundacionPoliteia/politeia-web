@@ -135,6 +135,99 @@ npm run blog-api:cloud:quota-project
 
 Sin esas credenciales, el panel puede iniciar sesion local, pero las rutas que leen/escriben Firestore o Cloud Storage van a fallar.
 
+Si `npm run blog-api:cloud:quota-project` falla con:
+
+```text
+Cannot add the project "quick-function-500420-v6" to application default credentials (ADC)
+because the account in ADC does not have the "serviceusage.services.use" permission
+```
+
+el problema no es Next ni el backend: la cuenta usada en Application Default Credentials no tiene permiso para consumir cuota del proyecto. Un owner/admin del proyecto debe otorgarle:
+
+```bash
+gcloud projects add-iam-policy-binding quick-function-500420-v6 --member=user:TU_EMAIL_DE_GOOGLE --role=roles/serviceusage.serviceUsageConsumer
+```
+
+Despues volver a correr:
+
+```bash
+npm run blog-api:cloud:auth
+npm run blog-api:cloud:project
+npm run blog-api:cloud:quota-project
+```
+
+Si estabas autenticado con una cuenta incorrecta, revocar ADC y loguearte de nuevo:
+
+```bash
+gcloud auth application-default revoke
+npm run blog-api:cloud:auth
+```
+
+Si despues aparece:
+
+```text
+7 PERMISSION_DENIED: Missing or insufficient permissions.
+```
+
+ADC ya esta autenticado, pero esa cuenta no puede leer/escribir el recurso real. Para probar Firestore desde el backend local, un owner/admin del proyecto debe otorgar:
+
+```bash
+gcloud projects add-iam-policy-binding quick-function-500420-v6 --member=user:TU_EMAIL_DE_GOOGLE --role=roles/datastore.user
+```
+
+Para subir imagenes al bucket real, tambien:
+
+```bash
+gcloud storage buckets add-iam-policy-binding gs://politeia-blog-media-quick-function-500420-v6 --member=user:TU_EMAIL_DE_GOOGLE --role=roles/storage.objectAdmin
+```
+
+Resumen de permisos minimos para desarrollo local contra recursos reales:
+
+```text
+roles/serviceusage.serviceUsageConsumer  # permite usar el proyecto como quota project de ADC
+roles/datastore.user                     # permite leer/escribir Firestore
+roles/storage.objectAdmin                # permite subir/gestionar imagenes en Cloud Storage
+```
+
+### Alternativa recomendada: service account local
+
+Para evitar depender de permisos IAM de tu usuario personal, se puede usar una service account local. Es mas parecido a Cloud Run y separa permisos de infraestructura de los roles del panel.
+
+Crear una service account dedicada, por ejemplo:
+
+```bash
+gcloud iam service-accounts create politeia-blog-api-local --display-name="Politeia blog API local"
+```
+
+Darle permisos minimos:
+
+```bash
+gcloud projects add-iam-policy-binding quick-function-500420-v6 --member=serviceAccount:politeia-blog-api-local@quick-function-500420-v6.iam.gserviceaccount.com --role=roles/datastore.user
+gcloud storage buckets add-iam-policy-binding gs://politeia-blog-media-quick-function-500420-v6 --member=serviceAccount:politeia-blog-api-local@quick-function-500420-v6.iam.gserviceaccount.com --role=roles/storage.objectAdmin
+```
+
+Crear una key JSON y guardarla fuera de git. Por ejemplo:
+
+```bash
+gcloud iam service-accounts keys create D:\Juan\secrets\politeia-blog-api-local.service-account.json --iam-account=politeia-blog-api-local@quick-function-500420-v6.iam.gserviceaccount.com
+```
+
+Luego configurar `services/blog-api/.env`:
+
+```text
+GOOGLE_APPLICATION_CREDENTIALS=D:\Juan\secrets\politeia-blog-api-local.service-account.json
+GCP_PROJECT_ID=quick-function-500420-v6
+MEDIA_BUCKET=politeia-blog-media-quick-function-500420-v6
+```
+
+Reiniciar el backend:
+
+```bash
+npm run blog-api:dev
+```
+
+No pegar el JSON ni sus valores en chats, tickets o commits. Si una key se expone, eliminarla desde IAM y crear una nueva.
+
 ## Probar emails en desarrollo
 
 El sistema de notificaciones es opt-in por usuario: cada cuenta debe activar "Recibir emails del panel" y los eventos que quiere recibir. Ademas, el mail se envia al `authorEmail` del post. Si estas probando con una cuenta `@gmail.com`, el post tambien debe tener esa cuenta como autor.
@@ -157,6 +250,8 @@ APP_BASE_URL=http://admin.localhost:3000
 ```
 
 `MAIL_FROM` debe usar un dominio/remitente verificado en Resend. Si falta `RESEND_API_KEY`, la entrega queda como fallida con un error claro.
+
+No pegues keys reales en tickets, chats o capturas. Si una `RESEND_API_KEY` queda expuesta, revocarla en Resend y crear una nueva antes de seguir probando.
 
 ## Probar una build de produccion localmente
 

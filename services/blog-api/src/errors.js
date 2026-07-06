@@ -14,11 +14,12 @@ export function notFoundHandler(req, res, next) {
 
 export function errorHandler(err, req, res, _next) {
   const cloudCredentialsError = isGoogleCloudCredentialsError(err);
-  const status = err.status || 500;
+  const cloudPermissionError = isGoogleCloudPermissionError(err);
+  const status = err.status || (cloudPermissionError ? 503 : 500);
   const exposeDetails = config.nodeEnv !== 'production';
   const body = {
     error: {
-      message: errorMessage(err, status, cloudCredentialsError, exposeDetails),
+      message: errorMessage(err, status, cloudCredentialsError, cloudPermissionError, exposeDetails),
       requestId: req.requestId,
     },
   };
@@ -40,9 +41,13 @@ export function errorHandler(err, req, res, _next) {
   res.status(status).json(body);
 }
 
-function errorMessage(err, status, cloudCredentialsError, exposeDetails) {
+function errorMessage(err, status, cloudCredentialsError, cloudPermissionError, exposeDetails) {
   if (cloudCredentialsError) {
     return 'Faltan credenciales locales validas de Google Cloud. Ejecuta npm.cmd run blog-api:cloud:auth, npm.cmd run blog-api:cloud:project y npm.cmd run blog-api:cloud:quota-project para usar Firestore/Cloud Storage reales desde el backend local.';
+  }
+
+  if (cloudPermissionError) {
+    return 'La cuenta de Google Cloud configurada no tiene permisos suficientes sobre el proyecto o bucket. Para desarrollo local necesita roles/serviceusage.serviceUsageConsumer, roles/datastore.user y, si sube archivos, permisos de Storage sobre el bucket.';
   }
 
   if (exposeDetails && status === 500) return err.message || 'Internal server error';
@@ -52,4 +57,9 @@ function errorMessage(err, status, cloudCredentialsError, exposeDetails) {
 
 function isGoogleCloudCredentialsError(err) {
   return /Could not load the default credentials|NO_ADC_FOUND|Application Default Credentials|refreshing your current auth tokens|quota project|invalid_grant|invalid_rapt/i.test(err?.message || '');
+}
+
+function isGoogleCloudPermissionError(err) {
+  const message = err?.message || '';
+  return err?.code === 7 || /PERMISSION_DENIED|Missing or insufficient permissions|serviceusage\.services\.use|Permission denied on resource project/i.test(message);
 }

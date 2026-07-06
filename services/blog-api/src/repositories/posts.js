@@ -101,6 +101,7 @@ export async function updatePost(id, data, actorUser) {
   const before = serializeDoc(beforeDoc);
   if (before.deletedAt) throw new HttpError(404, 'Post not found');
   assertCanAccessPost(before, actorUser);
+  assertCanEditPost(before, actorUser);
   if (data.slug) await ensureSlugAvailable(data.slug, id);
   if (data.category) await createCategory(data.category, actorUser.email);
 
@@ -124,15 +125,81 @@ export async function transitionPost(id, status, actorUser, action) {
   const before = serializeDoc(beforeDoc);
   if (before.deletedAt) throw new HttpError(404, 'Post not found');
   assertCanAccessPost(before, actorUser);
+  if (!canManageAllPosts(actorUser) && status === 'review' && before.status !== 'draft') {
+    throw new HttpError(403, 'Solicita edicion para modificar un post publicado');
+  }
 
-  const patch = { status, updatedAt: serverTimestamp() };
+  const patch = {
+    status,
+    updatedAt: serverTimestamp(),
+    editRequestedAt: null,
+    editRequestedBy: '',
+  };
   if (status === 'published') patch.publishedAt = serverTimestamp();
+  if (status === 'draft') patch.publishedAt = null;
   await ref.update(patch);
 
   const after = serializeDoc(await ref.get());
   await writeAuditLog({
     actorEmail: actorUser.email,
     action,
+    resourceType: 'post',
+    resourceId: id,
+    before,
+    after,
+  });
+  return after;
+}
+
+export async function requestPostEdit(id, actorUser) {
+  const ref = posts().doc(id);
+  const beforeDoc = await ref.get();
+  if (!beforeDoc.exists) throw new HttpError(404, 'Post not found');
+  const before = serializeDoc(beforeDoc);
+  if (before.deletedAt) throw new HttpError(404, 'Post not found');
+  assertPostOwner(before, actorUser);
+  if (!['published', 'archived'].includes(before.status)) {
+    throw new HttpError(400, 'Solo se puede solicitar edicion sobre posts publicados');
+  }
+
+  await ref.update({
+    editRequestedAt: serverTimestamp(),
+    editRequestedBy: actorUser.email,
+    updatedAt: serverTimestamp(),
+  });
+
+  const after = serializeDoc(await ref.get());
+  await writeAuditLog({
+    actorEmail: actorUser.email,
+    action: 'post.requestEdit',
+    resourceType: 'post',
+    resourceId: id,
+    before,
+    after,
+  });
+  return after;
+}
+
+export async function enablePostEditing(id, actorUser) {
+  const ref = posts().doc(id);
+  const beforeDoc = await ref.get();
+  if (!beforeDoc.exists) throw new HttpError(404, 'Post not found');
+  const before = serializeDoc(beforeDoc);
+  if (before.deletedAt) throw new HttpError(404, 'Post not found');
+  if (!canManageAllPosts(actorUser)) throw new HttpError(403, 'Only reviewer users can enable editing');
+
+  await ref.update({
+    status: 'draft',
+    publishedAt: null,
+    editRequestedAt: null,
+    editRequestedBy: '',
+    updatedAt: serverTimestamp(),
+  });
+
+  const after = serializeDoc(await ref.get());
+  await writeAuditLog({
+    actorEmail: actorUser.email,
+    action: 'post.enableEdit',
     resourceType: 'post',
     resourceId: id,
     before,
@@ -164,8 +231,24 @@ function matchesManageStatus(post, status, managesAllPosts) {
 
 function assertCanAccessPost(post, user) {
   if (canManageAllPosts(user)) return;
-  if (normalizeEmail(post.authorEmail) === normalizeEmail(user?.email)) return;
+  if (isPostOwner(post, user)) return;
   throw new HttpError(404, 'Post not found');
+}
+
+function assertCanEditPost(post, user) {
+  if (canManageAllPosts(user)) return;
+  if (['published', 'archived'].includes(post.status)) {
+    throw new HttpError(403, 'Solicita edicion para modificar un post publicado');
+  }
+}
+
+function assertPostOwner(post, user) {
+  if (isPostOwner(post, user)) return;
+  throw new HttpError(404, 'Post not found');
+}
+
+function isPostOwner(post, user) {
+  return normalizeEmail(post.authorEmail) === normalizeEmail(user?.email);
 }
 
 function normalizeEmail(email) {

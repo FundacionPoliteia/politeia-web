@@ -38,7 +38,7 @@ export default async function NotaPage({ params }) {
         )}
         {formatearFecha(post.fecha)}
       </div>
-      {post.imagen && (
+      {post.imagen && post.mostrarPortada !== false && (
         // eslint-disable-next-line @next/next/no-img-element
         <img className="art-hero" src={post.imagen} alt={post.titulo} />
       )}
