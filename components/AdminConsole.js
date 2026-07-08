@@ -1105,8 +1105,8 @@ export default function AdminConsole() {
             </div>
           ) : !canAccessPanel ? (
             <div className="admin-empty">
-              <h2>Sin permisos de edición</h2>
-              <p>{user.email} no pertenece a los grupos `blog`, `reviewer` o `admin`.</p>
+              <h2>Sin permisos suficientes</h2>
+              <p>No tenes los permisos necesarios para acceder al panel interno. Si crees que esto es un error, escribi a dev@politeia.ar.</p>
             </div>
           ) : (
             <>

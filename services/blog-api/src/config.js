@@ -26,6 +26,10 @@ export const config = {
   blogGroupEmail: process.env.BLOG_GROUP_EMAIL || '',
   adminGroupEmail: process.env.ADMIN_GROUP_EMAIL || '',
   reviewerGroupEmail: process.env.REVIEWER_GROUP_EMAIL || '',
+  defaultAdminEmails: (process.env.DEFAULT_ADMIN_EMAILS || 'dev@politeia.ar,info@politeia.ar')
+    .split(',')
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean),
   mailProvider: process.env.MAIL_PROVIDER || 'console',
   mailFrom: process.env.MAIL_FROM || 'Politeia <no-reply@politeia.ar>',
   mailReplyTo: process.env.MAIL_REPLY_TO || '',

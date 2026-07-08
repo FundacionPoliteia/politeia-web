@@ -220,13 +220,15 @@ async function resolveRoles(email, assignedRoles = null) {
   const cached = roleCache.get(email);
   if (cached && cached.expiresAt > Date.now()) return cached.roles;
 
-  const roles = [];
-  if (isPrimaryDomainEmail(email) && config.adminGroupEmail && await isGroupMember(email, config.adminGroupEmail)) {
-    roles.push('admin');
-  } else if (isPrimaryDomainEmail(email) && config.reviewerGroupEmail && await isGroupMember(email, config.reviewerGroupEmail)) {
-    roles.push('reviewer');
-  } else if (isPrimaryDomainEmail(email) && config.blogGroupEmail && await isGroupMember(email, config.blogGroupEmail)) {
-    roles.push('blog');
+  const roles = resolveBuiltInRoles(email);
+  if (!roles.includes('admin')) {
+    if (isPrimaryDomainEmail(email) && config.adminGroupEmail && await isGroupMember(email, config.adminGroupEmail)) {
+      roles.push('admin');
+    } else if (isPrimaryDomainEmail(email) && config.reviewerGroupEmail && await isGroupMember(email, config.reviewerGroupEmail)) {
+      roles.push('reviewer');
+    } else if (isPrimaryDomainEmail(email) && config.blogGroupEmail && await isGroupMember(email, config.blogGroupEmail)) {
+      roles.push('blog');
+    }
   }
   roles.push(...(assignedRoles || await resolveAssignedRoles(email)));
 
@@ -243,6 +245,12 @@ export function expandRoles(value) {
   }
   if (roles.has('reviewer')) roles.add('blog');
   return ['admin', 'reviewer', 'blog'].filter((role) => roles.has(role));
+}
+
+export function resolveBuiltInRoles(email) {
+  const cleanEmail = normalizeEmail(email);
+  if (!cleanEmail) return [];
+  return config.defaultAdminEmails.includes(cleanEmail) ? ['admin'] : [];
 }
 
 async function isGroupMember(memberEmail, groupEmail) {
