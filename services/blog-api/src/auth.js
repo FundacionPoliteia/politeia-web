@@ -143,6 +143,13 @@ async function readSessionUser(req) {
   if (!token) return null;
   const user = verifySessionCookie(token);
   if (!user) return null;
+  const builtInRoles = resolveBuiltInRoles(user.email);
+  if (builtInRoles.length) {
+    return {
+      ...user,
+      roles: expandRoles([...(user.roles || []), ...builtInRoles]),
+    };
+  }
   if (isPrimaryDomainEmail(user.email)) return user;
 
   const assignedRoles = await resolveAssignedRoles(user.email);

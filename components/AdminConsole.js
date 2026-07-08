@@ -1107,6 +1107,11 @@ export default function AdminConsole() {
             <div className="admin-empty">
               <h2>Sin permisos suficientes</h2>
               <p>No tenes los permisos necesarios para acceder al panel interno. Si crees que esto es un error, escribi a dev@politeia.ar.</p>
+              <div className="admin-login-actions">
+                <button className="btn btn-ghost" onClick={logout} type="button">
+                  Salir e intentar con otra cuenta
+                </button>
+              </div>
             </div>
           ) : (
             <>
