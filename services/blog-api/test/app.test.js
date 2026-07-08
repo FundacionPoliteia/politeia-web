@@ -190,7 +190,12 @@ test('media upload failures still include CORS headers for local admin origin', 
     .post('/v1/media')
     .set('Origin', 'http://admin.localhost:3000');
 
-  assert.ok([401, 503].includes(res.status));
+  assert.ok([400, 503].includes(res.status));
+  if (res.status === 400) {
+    assert.equal(res.body.error.message, 'file or url is required');
+  } else {
+    assert.match(res.body.error.message, /credenciales locales/i);
+  }
   assert.equal(res.header['access-control-allow-origin'], 'http://admin.localhost:3000');
   assert.equal(res.header['access-control-allow-credentials'], 'true');
 });
