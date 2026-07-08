@@ -17,6 +17,8 @@ import { openApiSpec } from './openapi.js';
 
 export function createApp() {
   const app = express();
+  app.set('trust proxy', 1);
+
   const corsOptions = {
     origin: corsOrigin,
     credentials: true,
