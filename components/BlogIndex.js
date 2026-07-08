@@ -33,11 +33,11 @@ export default function BlogIndex({ posts = [], autorFiltro = '' }) {
       <section className="page-hero">
         <div className="wrap">
           <span className="eyebrow">Blog</span>
-          <h1>{filtrandoAutor ? `Notas escritas por ${autorFiltro}.` : ''}</h1>
+          <h1>{filtrandoAutor ? `Notas escritas por ${autorFiltro}.` : 'Ideas para entender mejor lo publico.'}</h1>
           <p className="lead">
             {filtrandoAutor
-              ? 'Publicaciones del autor.'
-              : 'Investigacion y opinion sobre politica.'}
+              ? 'Publicaciones del autor, reunidas en un mismo lugar.'
+              : 'Investigacion, analisis y opinion sobre politica, instituciones y participacion ciudadana.'}
           </p>
           {filtrandoAutor && (
             <Link href="/blog" className="btn btn-ghost blog-filter-clear">Ver todos</Link>

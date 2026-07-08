@@ -3,9 +3,10 @@ import { getPosts } from '../lib/blogApi';
 import BlogNavLink from './BlogNavLink';
 
 const LOGO = 'Politeia';
+const SHOW_PUBLIC_NAV_LINKS = process.env.NEXT_PUBLIC_SITE_LAUNCHED === 'true';
 
 export default async function Nav() {
-  const posts = await getPosts(1);
+  const posts = SHOW_PUBLIC_NAV_LINKS ? await getPosts(1) : [];
   const latestPostAt = posts[0]?.fecha || '';
 
   return (
@@ -21,13 +22,15 @@ export default async function Nav() {
             ))}
           </span>
         </Link>
-        <div className="nav-links">
-          <Link href="/origen">Origen</Link>
-          <Link href="/proyectos">Proyectos</Link>
-          <BlogNavLink latestPostAt={latestPostAt} />
-          <Link href="/equipo">Equipo</Link>
-          <Link href="/#news" className="nav-cta">Suscribirse</Link>
-        </div>
+        {SHOW_PUBLIC_NAV_LINKS && (
+          <div className="nav-links">
+            <Link href="/origen">Origen</Link>
+            <Link href="/proyectos">Proyectos</Link>
+            <BlogNavLink latestPostAt={latestPostAt} />
+            <Link href="/equipo">Equipo</Link>
+            <Link href="/#news" className="nav-cta">Suscribirse</Link>
+          </div>
+        )}
       </div>
     </nav>
   );

@@ -272,7 +272,10 @@ En el hosting del frontend:
 BLOG_API_BASE_URL=https://URL_DE_CLOUD_RUN
 NEXT_PUBLIC_BLOG_API_BASE_URL=https://URL_DE_CLOUD_RUN
 NEXT_PUBLIC_GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID_REAL
+NEXT_PUBLIC_SITE_LAUNCHED=false
 ```
+
+Mantener `NEXT_PUBLIC_SITE_LAUNCHED=false` durante el pre-lanzamiento. Con ese valor, la home puede mostrarse como coming soon y el navbar publico no renderiza enlaces superiores. Cuando se apruebe el lanzamiento completo, cambiarlo a `true` y hacer redeploy del frontend.
 
 Dominios del frontend:
 
@@ -541,4 +544,3 @@ Revisar en orden:
 2. Archivar no dispara email.
 3. El post debe tener `authorEmail`.
 4. El autor debe tener opt-in de `postPublished`.
-
