@@ -278,6 +278,35 @@ NEXT_PUBLIC_SITE_LAUNCHED=false
 
 Mantener `NEXT_PUBLIC_SITE_LAUNCHED=false` durante el pre-lanzamiento. Con ese valor, la home puede mostrarse como coming soon y el navbar publico no renderiza enlaces superiores. Cuando se apruebe el lanzamiento completo, cambiarlo a `true` y hacer redeploy del frontend.
 
+### Preview branch en Vercel
+
+Para probar una rama no productiva en Vercel, usar la URL real del deployment preview, por ejemplo:
+
+```text
+https://politeia-web-git-feature-mvp-fundacion-politeia-s-projects.vercel.app
+```
+
+No usar `admin.` delante de esa URL. Vercel no emite automaticamente certificado para `admin.<preview>.vercel.app`, por eso el navegador puede fallar con error TLS.
+
+Variables recomendadas para el entorno `Preview` de Vercel:
+
+```text
+BLOG_API_BASE_URL=https://URL_DE_CLOUD_RUN
+NEXT_PUBLIC_BLOG_API_BASE_URL=https://URL_DE_CLOUD_RUN
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID_REAL
+NEXT_PUBLIC_SITE_URL=https://politeia-web-git-feature-mvp-fundacion-politeia-s-projects.vercel.app
+NEXT_PUBLIC_SITE_LAUNCHED=true
+ENABLE_PREVIEW_ADMIN=true
+```
+
+Con `ENABLE_PREVIEW_ADMIN=true`, el panel interno se prueba en:
+
+```text
+https://politeia-web-git-feature-mvp-fundacion-politeia-s-projects.vercel.app/admin
+```
+
+Ese flag debe existir solo en `Preview`, no en `Production`.
+
 Dominios del frontend:
 
 ```text
