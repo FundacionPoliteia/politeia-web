@@ -81,6 +81,7 @@ export default function AdminConsole() {
   const [importing, setImporting] = useState(false);
   const [googleButtonStatus, setGoogleButtonStatus] = useState(GOOGLE_CLIENT_ID ? 'loading' : 'disabled');
   const [isLocalPanelHost, setIsLocalPanelHost] = useState(false);
+  const [currentOrigin, setCurrentOrigin] = useState('');
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewCardOpen, setPreviewCardOpen] = useState(true);
   const [pendingAction, setPendingAction] = useState(null);
@@ -136,6 +137,7 @@ export default function AdminConsole() {
   );
 
   useEffect(() => {
+    setCurrentOrigin(window.location.origin);
     setIsLocalPanelHost(isLocalHostname(window.location.hostname));
   }, []);
 
@@ -1073,7 +1075,7 @@ export default function AdminConsole() {
               <div ref={signInRef}></div>
               {googleButtonStatus === 'failed' && (
                 <p className="admin-login-help">
-                  Google no pudo mostrar el boton en este origen. Para usar Google en local, agrega `http://admin.localhost:3000` como Authorized JavaScript Origin y permitilo en CORS del backend.
+                  Google no pudo mostrar el boton en este origen. Agrega `{currentOrigin || 'este origin'}` como Authorized JavaScript Origin y revisa que el navegador no este bloqueando `accounts.google.com`.
                 </p>
               )}
               {isLocalPanelHost && isLocalApiBase && (
