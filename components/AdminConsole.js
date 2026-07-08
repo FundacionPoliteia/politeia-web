@@ -161,6 +161,16 @@ export default function AdminConsole() {
   }, []);
 
   useEffect(() => {
+    if (!GOOGLE_CLIENT_ID || checkingSession || user) return;
+
+    const timeoutId = window.setTimeout(() => {
+      initializeGoogle();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [checkingSession, user]);
+
+  useEffect(() => {
     loadMe({ silent: true });
   }, []);
 
@@ -206,6 +216,8 @@ export default function AdminConsole() {
     }
 
     try {
+      signInRef.current.innerHTML = '';
+      setGoogleButtonStatus('loading');
       window.google.accounts.id.initialize({
         client_id: GOOGLE_CLIENT_ID,
         callback: ({ credential }) => loginWithGoogle(credential),
