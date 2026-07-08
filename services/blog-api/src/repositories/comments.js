@@ -3,6 +3,7 @@ import { db, serializeDoc, serverTimestamp } from '../firestore.js';
 import { HttpError } from '../errors.js';
 import { writeAuditLog } from './audit.js';
 import { buildExcerpt, markdownToSafeHtml } from '../utils/content.js';
+import { resolveUserDisplayName } from './profiles.js';
 
 const comments = () => db().collection('reviewComments');
 const commentLocks = () => db().collection('reviewCommentLocks');
@@ -40,6 +41,7 @@ export async function createPostComment(postId, data, user) {
   const postRef = posts().doc(postId);
   const key = duplicateKey(postId, data.selectedText);
   const lockRef = commentLocks().doc(duplicateLockId(key));
+  const authorName = await resolveUserDisplayName(user);
   const comment = {
     postId,
     body,
@@ -47,7 +49,7 @@ export async function createPostComment(postId, data, user) {
     duplicateKey: key,
     status: 'open',
     authorEmail: user.email,
-    authorName: user.name || user.email,
+    authorName: authorName || user.name || user.email,
     deletedAt: null,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),

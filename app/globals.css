@@ -377,6 +377,16 @@ a{color:inherit;text-decoration:none}
 .admin-notification-options label{display:flex;align-items:center;gap:9px;border:1px solid var(--linea);border-radius:999px;background:var(--hueso);padding:9px 12px;color:var(--tinta);font-size:.84rem;font-weight:800;cursor:pointer}
 .admin-notification-options input{width:15px;height:15px;accent-color:var(--azul);cursor:pointer}
 .admin-notification-options label:has(input:disabled){opacity:.55;cursor:default}
+.admin-profile-body{display:grid;grid-template-columns:220px minmax(0,1fr);gap:18px;margin-top:18px;align-items:start}
+.admin-profile-photo{display:grid;gap:10px;justify-items:center;border:1px solid var(--linea);border-radius:14px;background:var(--hueso);padding:18px}
+.admin-profile-photo img,.admin-profile-photo > .material-symbols-outlined{width:112px;height:112px;border-radius:999px;background:var(--blanco);border:1px solid var(--linea);object-fit:cover}
+.admin-profile-photo > .material-symbols-outlined{display:flex;align-items:center;justify-content:center;color:rgba(26,26,55,.34);font-size:96px}
+.admin-profile-photo .btn{width:100%;justify-content:center}
+.admin-profile-fields{display:grid;gap:14px}
+.admin-profile-fields label{display:block;color:var(--tinta);font-weight:800;font-size:.75rem;letter-spacing:.05em;text-transform:uppercase}
+.admin-profile-fields input,.admin-profile-fields textarea{width:100%;margin-top:8px;border:1px solid var(--linea);border-radius:12px;background:var(--hueso);padding:12px 14px;font-family:var(--texto);font-size:.95rem;color:var(--tinta);outline:none;transition:border-color .2s,box-shadow .2s}
+.admin-profile-fields textarea{resize:vertical;min-height:110px;line-height:1.45;text-transform:none}
+.admin-profile-fields input:focus,.admin-profile-fields textarea:focus{border-color:rgba(19,122,159,.45);box-shadow:0 0 0 3px rgba(19,122,159,.1)}
 .admin-table-wrap{overflow:auto;border:1px solid var(--linea);border-radius:12px}
 .admin-table{width:100%;min-width:980px;border-collapse:collapse;background:var(--blanco)}
 .admin-table th,.admin-table td{border-bottom:1px solid var(--linea);padding:12px 14px;text-align:left;vertical-align:top;font-size:.86rem}
@@ -569,6 +579,8 @@ a{color:inherit;text-decoration:none}
   .admin-list{position:static;max-height:none}
   .admin-preview-sidebar{position:static;max-height:none;order:2}
   .admin-preview-panel{grid-template-columns:1fr}
+  .admin-profile-body{grid-template-columns:1fr}
+  .admin-profile-photo{justify-items:start}
 }
 @media(max-width:620px){
   .admin-session{align-items:flex-start;flex-direction:column}

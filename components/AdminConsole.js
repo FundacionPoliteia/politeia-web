@@ -66,6 +66,14 @@ const DEFAULT_NOTIFICATION_EVENTS = Object.fromEntries(
   NOTIFICATION_EVENT_LABELS.map((event) => [event.value, true])
 );
 
+const EMPTY_PROFILE = {
+  firstName: '',
+  lastName: '',
+  description: '',
+  photoUrl: '',
+  fullName: '',
+};
+
 export default function AdminConsole() {
   const [checkingSession, setCheckingSession] = useState(true);
   const [user, setUser] = useState(null);
@@ -102,6 +110,10 @@ export default function AdminConsole() {
   const [notificationPreferencesOpen, setNotificationPreferencesOpen] = useState(false);
   const [savingNotificationPreferences, setSavingNotificationPreferences] = useState(false);
   const [activePanelTab, setActivePanelTab] = useState('blogs');
+  const [userProfile, setUserProfile] = useState(EMPTY_PROFILE);
+  const [profileDraft, setProfileDraft] = useState(EMPTY_PROFILE);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profilePhotoUploading, setProfilePhotoUploading] = useState(false);
   const [reviewComments, setReviewComments] = useState([]);
   const [reviewCommentFilter, setReviewCommentFilter] = useState('open');
   const [activeReviewCommentId, setActiveReviewCommentId] = useState('');
@@ -109,6 +121,7 @@ export default function AdminConsole() {
   const [editingReviewComment, setEditingReviewComment] = useState(null);
   const signInRef = useRef(null);
   const docxInputRef = useRef(null);
+  const profilePhotoInputRef = useRef(null);
   const coverValidationRef = useRef(0);
 
   const roles = user?.roles || [];
@@ -127,6 +140,8 @@ export default function AdminConsole() {
   const canUseReviewFilters = isAdmin || isReviewer;
   const canManageUsers = isAdmin && isPrimaryDomainUser;
   const canAccessRolesMailPanel = canAccessPanel;
+  const canAccessProfilePanel = canAccessPanel;
+  const profileAuthorName = profileDraft.fullName || userProfile.fullName || user?.name || user?.email || '';
   const activeStatusFilter = statusFilter;
   const publishedAuthorLocked = Boolean(form.id && !canPublishPosts && ['published', 'archived'].includes(form.status));
   const editRequestPending = Boolean(form.editRequestedAt);
@@ -190,8 +205,11 @@ export default function AdminConsole() {
   useEffect(() => {
     if (canAccessPanel) {
       loadNotificationPreferences();
+      loadUserProfile();
     } else {
       setNotificationPreferences(null);
+      setUserProfile(EMPTY_PROFILE);
+      setProfileDraft(EMPTY_PROFILE);
     }
   }, [canAccessPanel]);
 
@@ -212,10 +230,20 @@ export default function AdminConsole() {
   }, [form.id, canAccessPanel]);
 
   useEffect(() => {
+    if (!form.id && !form.authorName && profileAuthorName) {
+      setForm((current) => normalizeForm({ ...current, authorName: profileAuthorName }));
+      setSavedForm((current) => normalizeForm({ ...current, authorName: profileAuthorName }));
+    }
+  }, [form.authorName, form.id, profileAuthorName]);
+
+  useEffect(() => {
     if (!canAccessRolesMailPanel && activePanelTab === 'access') {
       setActivePanelTab('blogs');
     }
-  }, [activePanelTab, canAccessRolesMailPanel]);
+    if (!canAccessProfilePanel && activePanelTab === 'profile') {
+      setActivePanelTab('blogs');
+    }
+  }, [activePanelTab, canAccessProfilePanel, canAccessRolesMailPanel]);
 
   function initializeGoogle() {
     if (!window.google || !signInRef.current || !GOOGLE_CLIENT_ID) {
@@ -336,6 +364,11 @@ export default function AdminConsole() {
       setSelectedAdminPostIds([]);
       setNotificationPreferences(null);
       setNotificationPreferencesOpen(false);
+      setUserProfile(EMPTY_PROFILE);
+      setProfileDraft(EMPTY_PROFILE);
+      setSavingProfile(false);
+      setProfilePhotoUploading(false);
+      setActivePanelTab('blogs');
       setReviewComments([]);
       setActiveReviewCommentId('');
       setActiveReviewCommentNonce(0);
@@ -441,6 +474,66 @@ export default function AdminConsole() {
         },
       };
     });
+  }
+
+  async function loadUserProfile() {
+    try {
+      const data = await api('/v1/profile');
+      const nextProfile = normalizeProfile(data.item);
+      setUserProfile(nextProfile);
+      setProfileDraft(nextProfile);
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function saveUserProfile() {
+    try {
+      setSavingProfile(true);
+      setMessage('');
+      const data = await api('/v1/profile', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          firstName: profileDraft.firstName,
+          lastName: profileDraft.lastName,
+          description: profileDraft.description,
+          photoUrl: profileDraft.photoUrl,
+        }),
+      });
+      const nextProfile = normalizeProfile(data.item);
+      setUserProfile(nextProfile);
+      setProfileDraft(nextProfile);
+      if (!form.id && !form.authorName && nextProfile.fullName) {
+        setForm((current) => normalizeForm({ ...current, authorName: nextProfile.fullName }));
+      }
+      setMessage('Perfil actualizado.');
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
+  function updateProfileDraft(field, value) {
+    setProfileDraft((current) => normalizeProfile({
+      ...current,
+      [field]: value,
+    }));
+  }
+
+  async function uploadProfilePhoto(file) {
+    if (!file) return;
+    try {
+      setProfilePhotoUploading(true);
+      setMessage('');
+      const media = await uploadMedia(file);
+      updateProfileDraft('photoUrl', media?.url || '');
+      setMessage('Foto de perfil cargada. Guarda el perfil para conservar el cambio.');
+    } catch (err) {
+      setMessage(imageLoadErrorMessage(err));
+    } finally {
+      setProfilePhotoUploading(false);
+    }
   }
 
   async function savePost(e) {
@@ -1151,7 +1244,91 @@ export default function AdminConsole() {
                     Roles y mails
                   </button>
                 )}
+                {canAccessProfilePanel && (
+                  <button
+                    aria-pressed={activePanelTab === 'profile'}
+                    className={activePanelTab === 'profile' ? 'selected' : ''}
+                    onClick={() => setActivePanelTab('profile')}
+                    type="button"
+                  >
+                    Usuario y perfil
+                  </button>
+                )}
               </nav>
+
+              {activePanelTab === 'profile' && (
+                <section className="admin-manager admin-profile">
+                  <div className="admin-manager-head">
+                    <div>
+                      <span>Perfil</span>
+                      <h2>Usuario y perfil</h2>
+                      <p>Estos datos se guardan separados de los roles. Se usan para firmar comentarios y prellenar el autor de nuevos blogs.</p>
+                    </div>
+                  </div>
+                  <div className="admin-profile-body">
+                    <div className="admin-profile-photo">
+                      {profileDraft.photoUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img alt="" src={profileDraft.photoUrl} />
+                      ) : (
+                        <span aria-hidden="true" className="material-symbols-outlined">account_circle</span>
+                      )}
+                      <input
+                        accept="image/jpeg,image/png,image/webp"
+                        hidden
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          event.target.value = '';
+                          uploadProfilePhoto(file);
+                        }}
+                        ref={profilePhotoInputRef}
+                        type="file"
+                      />
+                      <button
+                        className="btn btn-ghost"
+                        disabled={profilePhotoUploading}
+                        onClick={() => profilePhotoInputRef.current?.click()}
+                        type="button"
+                      >
+                        {profilePhotoUploading ? 'Subiendo foto...' : 'Subir foto'}
+                      </button>
+                      {profileDraft.photoUrl && (
+                        <button className="btn btn-ghost danger" onClick={() => updateProfileDraft('photoUrl', '')} type="button">
+                          Quitar foto
+                        </button>
+                      )}
+                    </div>
+                    <div className="admin-profile-fields">
+                      <div className="admin-two">
+                        <label>
+                          Nombre
+                          <input value={profileDraft.firstName} onChange={(e) => updateProfileDraft('firstName', e.target.value)} />
+                        </label>
+                        <label>
+                          Apellido
+                          <input value={profileDraft.lastName} onChange={(e) => updateProfileDraft('lastName', e.target.value)} />
+                        </label>
+                      </div>
+                      <label>
+                        Descripcion breve
+                        <textarea
+                          maxLength="500"
+                          onChange={(e) => updateProfileDraft('description', e.target.value)}
+                          placeholder="Una bio corta para futuros perfiles de autor."
+                          rows="4"
+                          value={profileDraft.description}
+                        />
+                      </label>
+                      <div className="admin-manager-actions">
+                        <span>{profileDraft.fullName ? `Nombre visible: ${profileDraft.fullName}` : 'Si no cargas nombre, se usa tu cuenta.'}</span>
+                        <button className="btn btn-primary" disabled={savingProfile || profilePhotoUploading} onClick={saveUserProfile} type="button">
+                          Guardar perfil
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              )}
 
               {activePanelTab === 'access' && (
                 <>
@@ -1565,8 +1742,9 @@ export default function AdminConsole() {
                     <button
                       className="btn btn-primary admin-new"
                       onClick={() => {
-                        setForm(EMPTY_FORM);
-                        setSavedForm(EMPTY_FORM);
+                        const nextForm = normalizeForm({ ...EMPTY_FORM, authorName: profileAuthorName });
+                        setForm(nextForm);
+                        setSavedForm(nextForm);
                         setCategorySearchTerm('');
                         setCoverImageError('');
                       }}
@@ -2295,6 +2473,19 @@ function normalizeForm(value = {}) {
   });
   next.showCoverInPost = next.showCoverInPost !== false;
   return next;
+}
+
+function normalizeProfile(value = {}) {
+  const firstName = normalizeInputValue(value.firstName).trimStart();
+  const lastName = normalizeInputValue(value.lastName).trimStart();
+  const fullName = [firstName.trim(), lastName.trim()].filter(Boolean).join(' ');
+  return {
+    firstName,
+    lastName,
+    description: normalizeInputValue(value.description),
+    photoUrl: normalizeInputValue(value.photoUrl),
+    fullName,
+  };
 }
 
 function postToForm(post = {}) {

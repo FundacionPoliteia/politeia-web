@@ -5,6 +5,7 @@ import { createApp } from '../src/app.js';
 import { buildSessionCookie, expandRoles, resolveBuiltInRoles, verifySessionCookie } from '../src/auth.js';
 import { config, parseEnvValue } from '../src/config.js';
 import { canManageAllPosts, toBlogAuthorView } from '../src/repositories/posts.js';
+import { buildFullName, sanitizeProfile } from '../src/repositories/profiles.js';
 import { isAllowedRoleEmail, sanitizeAssignedRoles } from '../src/repositories/users.js';
 
 test('GET /healthz returns service health', async () => {
@@ -56,6 +57,22 @@ test('role assignments allow primary-domain and configured external Gmail emails
   assert.equal(isAllowedRoleEmail('persona@politeia.ar'), true);
   assert.equal(isAllowedRoleEmail('persona@gmail.com'), true);
   assert.equal(isAllowedRoleEmail('persona@example.com'), false);
+});
+
+test('user profiles normalize personal fields separately from roles', () => {
+  assert.equal(buildFullName('  Juan  ', '  Perez  '), 'Juan Perez');
+  assert.deepEqual(sanitizeProfile({
+    firstName: '  Juan  ',
+    lastName: '  Perez  ',
+    description: '  Editor   politico  ',
+    photoUrl: 'https://example.com/foto.png',
+  }), {
+    firstName: 'Juan',
+    lastName: 'Perez',
+    description: 'Editor politico',
+    photoUrl: 'https://example.com/foto.png',
+  });
+  assert.throws(() => sanitizeProfile({ photoUrl: 'http://example.com/foto.png' }), /photoUrl/);
 });
 
 test('env parser ignores inline comments outside quotes', () => {
