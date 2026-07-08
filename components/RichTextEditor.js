@@ -117,7 +117,7 @@ export default function RichTextEditor({
       TableCell,
       ReviewComment,
       Placeholder.configure({
-        placeholder: 'Escribi o importa el contenido de la nota...',
+        placeholder: 'Escribi o importá el contenido de la nota...',
       }),
     ],
     content: markdownToHtml(value),
@@ -367,7 +367,7 @@ export default function RichTextEditor({
         <div className="admin-modal-backdrop" role="presentation">
           <div aria-modal="true" className="admin-modal rich-comment-modal" role="dialog">
             <h3>Comentario de revision</h3>
-            <p>Este comentario queda asociado al texto seleccionado dentro del editor.</p>
+            <p>Este comentario quedará asociado al texto seleccionado.</p>
             {commentDraft.selectedText && <q>{commentDraft.selectedText}</q>}
             <label>
               Comentario

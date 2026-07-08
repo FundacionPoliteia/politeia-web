@@ -60,7 +60,6 @@ const NOTIFICATION_EVENT_LABELS = [
   { value: 'commentResolved', label: 'Comentarios resueltos', roles: ['blog'] },
   { value: 'commentReopened', label: 'Comentarios reabiertos', roles: ['blog'] },
   { value: 'postPublished', label: 'Mis posts publicados', roles: ['blog'] },
-  { value: 'roleChanged', label: 'Cambios de roles y accesos', roles: ['admin', 'reviewer', 'blog'] },
 ];
 
 const DEFAULT_NOTIFICATION_EVENTS = Object.fromEntries(
@@ -129,7 +128,7 @@ export default function AdminConsole() {
   const publishedAuthorLocked = Boolean(form.id && !canPublishPosts && ['published', 'archived'].includes(form.status));
   const editRequestPending = Boolean(form.editRequestedAt);
   const editorBusy = busy || publishedAuthorLocked;
-  const roleLabel = isAdmin ? 'Panel admin' : isReviewer ? 'Panel de revision' : 'Panel de blog';
+  const roleLabel = isAdmin ? 'Panel' : isReviewer ? 'Panel de revision' : 'Panel de blog';
   const isLocalApiBase = isLocalApiUrl(API_BASE);
   const hasUnsavedChanges = useMemo(
     () => serializeForm(form) !== serializeForm(savedForm),
@@ -255,7 +254,7 @@ export default function AdminConsole() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error?.message || 'No pudimos validar tu perfil');
       if (!isAllowedEmail(data.user?.email)) {
-        throw new Error(`Solo pueden ingresar cuentas @${ALLOWED_EMAIL_DOMAIN} o @${ASSIGNED_EMAIL_DOMAIN} habilitadas.`);
+        throw new Error(`Solo pueden ingresar cuentas habilitadas.`);
       }
       setUser(data.user);
     } catch (err) {
@@ -278,7 +277,7 @@ export default function AdminConsole() {
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error?.message || 'No pudimos iniciar sesion');
       if (!isAllowedEmail(data.user?.email)) {
-        throw new Error(`Solo pueden ingresar cuentas @${ALLOWED_EMAIL_DOMAIN} o @${ASSIGNED_EMAIL_DOMAIN} habilitadas.`);
+        throw new Error(`Solo pueden ingresar cuentas habilitadas.`);
       }
       setUser(data.user);
     } catch (err) {
@@ -536,7 +535,7 @@ export default function AdminConsole() {
       return null;
     }
     if (!canPublishPosts) {
-      setMessage('Solo reviewer o admin pueden crear comentarios de revision.');
+      setMessage('Solo los reviewer pueden crear comentarios de revision.');
       return null;
     }
 
@@ -824,7 +823,7 @@ export default function AdminConsole() {
   async function createCategoryFromForm() {
     const name = sanitizeCategory(form.category);
     if (!name) {
-      setMessage('Escribi una categoria para agregarla a la lista.');
+      setMessage('La categoria no existe, presiona ENTER para agregarla a la lista.');
       return;
     }
 
