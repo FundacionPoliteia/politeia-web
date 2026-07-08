@@ -101,6 +101,7 @@ export default function AdminConsole() {
   const [notificationPreferences, setNotificationPreferences] = useState(null);
   const [notificationPreferencesOpen, setNotificationPreferencesOpen] = useState(false);
   const [savingNotificationPreferences, setSavingNotificationPreferences] = useState(false);
+  const [activePanelTab, setActivePanelTab] = useState('blogs');
   const [reviewComments, setReviewComments] = useState([]);
   const [reviewCommentFilter, setReviewCommentFilter] = useState('open');
   const [activeReviewCommentId, setActiveReviewCommentId] = useState('');
@@ -125,6 +126,7 @@ export default function AdminConsole() {
   const canDeletePosts = isAdmin;
   const canUseReviewFilters = isAdmin || isReviewer;
   const canManageUsers = isAdmin && isPrimaryDomainUser;
+  const canAccessRolesMailPanel = canAccessPanel;
   const activeStatusFilter = statusFilter;
   const publishedAuthorLocked = Boolean(form.id && !canPublishPosts && ['published', 'archived'].includes(form.status));
   const editRequestPending = Boolean(form.editRequestedAt);
@@ -208,6 +210,12 @@ export default function AdminConsole() {
       setEditingReviewComment(null);
     }
   }, [form.id, canAccessPanel]);
+
+  useEffect(() => {
+    if (!canAccessRolesMailPanel && activePanelTab === 'access') {
+      setActivePanelTab('blogs');
+    }
+  }, [activePanelTab, canAccessRolesMailPanel]);
 
   function initializeGoogle() {
     if (!window.google || !signInRef.current || !GOOGLE_CLIENT_ID) {
@@ -1124,6 +1132,29 @@ export default function AdminConsole() {
                   Salir
                 </button>
               </div>
+              <nav className="admin-tabs" aria-label="Secciones del panel">
+                <button
+                  aria-pressed={activePanelTab === 'blogs'}
+                  className={activePanelTab === 'blogs' ? 'selected' : ''}
+                  onClick={() => setActivePanelTab('blogs')}
+                  type="button"
+                >
+                  Gestor de blogs
+                </button>
+                {canAccessRolesMailPanel && (
+                  <button
+                    aria-pressed={activePanelTab === 'access'}
+                    className={activePanelTab === 'access' ? 'selected' : ''}
+                    onClick={() => setActivePanelTab('access')}
+                    type="button"
+                  >
+                    Roles y mails
+                  </button>
+                )}
+              </nav>
+
+              {activePanelTab === 'access' && (
+                <>
               {notificationPreferences && (
                 <section className="admin-manager admin-notifications">
                   <div className="admin-manager-head">
@@ -1323,7 +1354,16 @@ export default function AdminConsole() {
                   )}
                 </section>
               )}
+              {!notificationPreferences && !canManageUsers && (
+                <div className="admin-empty">
+                  Cargando configuracion de mails.
+                </div>
+              )}
+                </>
+              )}
 
+              {activePanelTab === 'blogs' && (
+                <>
               {isAdmin && (
                 <section className="admin-manager">
                   <div className="admin-manager-head">
@@ -1576,13 +1616,8 @@ export default function AdminConsole() {
 
                   <div className="admin-two">
                     <label>
-                      Slug
-                      <input
-                        disabled={!canChooseSlug || publishedAuthorLocked}
-                        value={form.slug}
-                        onChange={(e) => updateForm('slug', e.target.value)}
-                        placeholder={canChooseSlug ? 'se-genera-si-lo-dejas-vacio' : 'lo genera el sistema'}
-                      />
+                      Autor
+                      <input disabled={publishedAuthorLocked} value={form.authorName} onChange={(e) => updateForm('authorName', e.target.value)} placeholder={user?.name || user?.email || 'Nombre visible'} />
                     </label>
                     <label>
                       Categoría
@@ -1844,10 +1879,21 @@ export default function AdminConsole() {
                   />
 
 
-                  <label>
-                    Autor
-                    <input disabled={publishedAuthorLocked} value={form.authorName} onChange={(e) => updateForm('authorName', e.target.value)} placeholder={user?.name || user?.email || 'Nombre visible'} />
-                  </label>
+                  <details className="admin-advanced-options">
+                    <summary>
+                      <span>Opciones avanzadas</span>
+                      <span aria-hidden="true" className="material-symbols-outlined">expand_more</span>
+                    </summary>
+                    <label>
+                      Slug
+                      <input
+                        disabled={!canChooseSlug || publishedAuthorLocked}
+                        value={form.slug}
+                        onChange={(e) => updateForm('slug', e.target.value)}
+                        placeholder={canChooseSlug ? 'se-genera-si-lo-dejas-vacio' : 'lo genera el sistema'}
+                      />
+                    </label>
+                  </details>
 
                   <div className="admin-actions">
                     <button className="btn btn-primary admin-action-save" disabled={busy || uploading || importing || publishedAuthorLocked || (!form.id && !canCreatePosts)} type="submit">
@@ -2011,6 +2057,8 @@ export default function AdminConsole() {
                   )}
                 </aside>
               </div>
+                </>
+              )}
               {previewOpen && (
                 <div className="admin-preview-modal-backdrop" role="presentation">
                   <div aria-modal="true" className="admin-preview-modal" role="dialog">

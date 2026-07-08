@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import request from 'supertest';
 import { createApp } from '../src/app.js';
-import { buildSessionCookie, expandRoles, verifySessionCookie } from '../src/auth.js';
+import { buildSessionCookie, expandRoles, resolveBuiltInRoles, verifySessionCookie } from '../src/auth.js';
 import { config, parseEnvValue } from '../src/config.js';
 import { canManageAllPosts, toBlogAuthorView } from '../src/repositories/posts.js';
 import { isAllowedRoleEmail, sanitizeAssignedRoles } from '../src/repositories/users.js';
@@ -43,6 +43,12 @@ test('role expansion keeps reviewer as blog plus review and admin as everything'
   assert.deepEqual(expandRoles(['blog']), ['blog']);
   assert.deepEqual(expandRoles(['reviewer']), ['reviewer', 'blog']);
   assert.deepEqual(expandRoles(['admin']), ['admin', 'reviewer', 'blog']);
+});
+
+test('built-in admins do not require role assignments', () => {
+  assert.deepEqual(resolveBuiltInRoles('dev@politeia.ar'), ['admin']);
+  assert.deepEqual(resolveBuiltInRoles('info@politeia.ar'), ['admin']);
+  assert.deepEqual(resolveBuiltInRoles('blog@politeia.ar'), []);
 });
 
 test('role assignments allow primary-domain and configured external Gmail emails', () => {
