@@ -1,6 +1,10 @@
 import Link from 'next/link';
 
+const SHOW_PUBLIC_FOOTER = process.env.NEXT_PUBLIC_SITE_LAUNCHED === 'true';
+
 export default function Footer() {
+  if (!SHOW_PUBLIC_FOOTER) return null;
+
   return (
     <footer className="footer">
       <div className="wrap">

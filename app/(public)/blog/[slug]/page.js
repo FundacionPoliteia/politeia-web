@@ -4,15 +4,41 @@ import { getPost, formatearFecha, etiquetasPost, hrefAutorBlog } from '../../../
 
 export const dynamic = 'force-dynamic';
 
-// Genera una página por cada nota existente
-// Permite que notas nuevas (que aún no existían al compilar) también funcionen
+// Genera una pagina por cada nota existente.
+// Permite que notas nuevas tambien funcionen si no existian al compilar.
 export const dynamicParams = true;
 
 export async function generateMetadata({ params }) {
   const { slug } = await params;
   const post = await getPost(slug);
-  if (!post) return { title: 'Nota no encontrada — Politeia' };
-  return { title: `${post.titulo} — Politeia` };
+  if (!post) return { title: 'Nota no encontrada - Politeia' };
+
+  const title = `${post.titulo} - Politeia`;
+  const description = buildShareDescription(post.extracto || post.contenido);
+  const url = `${siteUrl()}/blog/${post.slug || slug}`;
+
+  return {
+    title,
+    description,
+    alternates: { canonical: url },
+    openGraph: {
+      title,
+      description,
+      url,
+      siteName: 'Politeia',
+      type: 'article',
+      publishedTime: post.fecha || undefined,
+      authors: post.autor ? [post.autor] : undefined,
+      tags: post.tags || undefined,
+      images: post.imagen ? [{ url: post.imagen, alt: post.titulo }] : undefined,
+    },
+    twitter: {
+      card: post.imagen ? 'summary_large_image' : 'summary',
+      title,
+      description,
+      images: post.imagen ? [post.imagen] : undefined,
+    },
+  };
 }
 
 export default async function NotaPage({ params }) {
@@ -22,7 +48,7 @@ export default async function NotaPage({ params }) {
 
   return (
     <article className="article">
-      <Link href="/blog" className="back">← Volver al blog</Link>
+      <Link href="/blog" className="back">&larr; Volver al blog</Link>
       <div className="art-tags" aria-label="Tags">
         {etiquetasPost(post).slice(0, 4).map((tag) => (
           <span className="art-cat" key={tag}>{tag}</span>
@@ -48,4 +74,17 @@ export default async function NotaPage({ params }) {
       />
     </article>
   );
+}
+
+function siteUrl() {
+  return (process.env.NEXT_PUBLIC_SITE_URL || 'https://politeia.ar').replace(/\/$/, '');
+}
+
+function buildShareDescription(value = '') {
+  const plain = String(value)
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!plain) return 'Investigacion, analisis y opinion de Politeia.';
+  return plain.length > 170 ? `${plain.slice(0, 167).trim()}...` : plain;
 }
