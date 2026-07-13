@@ -8,6 +8,8 @@ import { setFirestoreForTests } from '../src/firestore.js';
 import { canManageAllPosts, toBlogAuthorView } from '../src/repositories/posts.js';
 import {
   buildFullName,
+  createManagedAuthorProfile,
+  deleteManagedAuthorProfile,
   getPublicAuthorProfileBySlug,
   getUserProfile,
   sanitizeProfile,
@@ -90,6 +92,11 @@ test('user profile public opt-in persists after save and reload', async () => {
 
   try {
     const user = { email: 'juan@politeia.ar', name: 'Juan' };
+    await firestore.collection('posts').doc('post-1').set({
+      authorName: 'Juan Cruz Galarza',
+      title: 'Nota de prueba',
+    });
+
     const saved = await updateUserProfile(user, {
       firstName: 'Juan Cruz',
       lastName: 'Galarza',
@@ -111,6 +118,38 @@ test('user profile public opt-in persists after save and reload', async () => {
     const publicProfile = await getPublicAuthorProfileBySlug('juan-cruz-galarza');
     assert.equal(publicProfile.fullName, 'Juan Cruz Galarza');
     assert.equal(publicProfile.description, 'Bio actualizada.');
+  } finally {
+    setFirestoreForTests(null);
+  }
+});
+
+test('admin managed author profiles can be created and deleted', async () => {
+  const firestore = createMemoryFirestore();
+  setFirestoreForTests(firestore);
+
+  try {
+    await firestore.collection('posts').doc('post-1').set({
+      authorName: 'Autora Invitada',
+      title: 'Nota invitada',
+    });
+
+    const created = await createManagedAuthorProfile({
+      firstName: 'Autora',
+      lastName: 'Invitada',
+      description: 'Perfil creado por admin.',
+      publicProfileEnabled: true,
+    }, 'dev@politeia.ar');
+
+    assert.equal(created.id, 'managed-author-autora-invitada');
+    assert.equal(created.managedAuthor, true);
+    assert.equal(created.publicProfileEnabled, true);
+
+    const deleted = await deleteManagedAuthorProfile(created.id, 'dev@politeia.ar');
+    assert.equal(deleted.id, created.id);
+    assert.equal(deleted.managedAuthor, true);
+
+    const publicProfile = await getPublicAuthorProfileBySlug('autora-invitada');
+    assert.equal(publicProfile, null);
   } finally {
     setFirestoreForTests(null);
   }
@@ -329,11 +368,16 @@ class MemoryDoc {
       ...resolveMemoryData(data),
     });
   }
+
+  async delete() {
+    this.store.delete(this.id);
+  }
 }
 
 class MemoryQuery {
   constructor(docs) {
     this.docs = docs;
+    this.empty = docs.length === 0;
   }
 
   limit() {

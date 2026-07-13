@@ -1,9 +1,12 @@
 import { Router } from 'express';
-import { requireAuth } from '../auth.js';
+import { requireAuth, requireRole } from '../auth.js';
 import { HttpError } from '../errors.js';
 import {
+  createManagedAuthorProfile,
+  deleteManagedAuthorProfile,
   getPublicAuthorProfileBySlug,
   getUserProfile,
+  listUserProfiles,
   updateUserProfile,
 } from '../repositories/profiles.js';
 
@@ -14,6 +17,33 @@ export function profileRouter({ writeLimiter }) {
     try {
       const item = await getPublicAuthorProfileBySlug(req.params.slug);
       if (!item) throw new HttpError(404, 'Author profile not found');
+      res.json({ item });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.get('/manage', requireAuth, requireRole('admin'), async (_req, res, next) => {
+    try {
+      const result = await listUserProfiles();
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.post('/manage', writeLimiter, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const item = await createManagedAuthorProfile(req.body || {}, req.user.email);
+      res.status(201).json({ item });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.delete('/manage/:id', writeLimiter, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const item = await deleteManagedAuthorProfile(req.params.id, req.user.email);
       res.json({ item });
     } catch (err) {
       next(err);

@@ -118,9 +118,8 @@ a{color:inherit;text-decoration:none}
 .post-author:hover,.art-author:hover{text-decoration:underline;text-underline-offset:3px}
 .blog-filter-clear{margin-top:24px}
 .blog-author-hero{display:grid;grid-template-columns:minmax(0,1fr) 240px;gap:42px;align-items:center}
-.blog-author-card{border:1px solid var(--linea);border-radius:16px;background:var(--hueso);padding:18px;display:grid;gap:12px;justify-items:center;text-align:center}
+.blog-author-card{border:0;border-radius:999px;background:transparent;padding:0;display:grid;justify-items:center;text-align:center}
 .blog-author-card img{width:142px;height:142px;border-radius:999px;border:1px solid var(--linea);background:var(--blanco);object-fit:cover}
-.blog-author-card strong{font-family:var(--display);font-size:1.18rem;font-weight:600;line-height:1.15;color:var(--tinta)}
 .blog-index-section{padding-top:64px}
 .blog-search-panel{margin-bottom:34px;max-width:760px}
 .blog-search-panel label{display:block;color:var(--azul);font-size:.76rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px}
@@ -141,7 +140,7 @@ a{color:inherit;text-decoration:none}
 .blog-toc small{min-width:26px;border-radius:999px;background:var(--blanco);color:var(--gris);font-size:.72rem;font-weight:800;text-align:center;padding:3px 7px}
 .blog-category-section{scroll-margin-top:96px}
 @media(max-width:1080px){.blog-index-layout{grid-template-columns:1fr}.blog-toc{position:static;max-height:none;order:-1}.blog-toc nav{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:860px){.posts{grid-template-columns:1fr}.blog-sections{gap:46px}.blog-category-head h2{white-space:normal}.blog-toc nav{grid-template-columns:1fr}.blog-author-hero{grid-template-columns:1fr}.blog-author-card{max-width:260px;justify-items:start;text-align:left}.blog-author-card img{width:116px;height:116px}}
+@media(max-width:860px){.posts{grid-template-columns:1fr}.blog-sections{gap:46px}.blog-category-head h2{white-space:normal}.blog-toc nav{grid-template-columns:1fr}.blog-author-hero{grid-template-columns:1fr}.blog-author-card{justify-items:start;text-align:left}.blog-author-card img{width:116px;height:116px}}
 
 .empty{grid-column:1/-1;text-align:center;color:var(--gris);padding:40px;font-size:.95rem}
 
@@ -397,6 +396,18 @@ a{color:inherit;text-decoration:none}
 .admin-profile-share input{width:auto!important;margin:3px 0 0!important}
 .admin-profile-share strong{display:block;color:var(--tinta);font-size:.92rem;letter-spacing:0;text-transform:none}
 .admin-profile-share small{display:block;color:var(--gris);font-size:.86rem;font-weight:600;line-height:1.4;letter-spacing:0;text-transform:none;margin-top:3px}
+.admin-profile-warning{border:1px solid rgba(185,128,40,.28);border-radius:12px;background:rgba(252,196,72,.12);padding:12px 14px;color:var(--tinta)}
+.admin-profile-warning strong{display:block;font-size:.92rem;line-height:1.3}
+.admin-profile-warning span{display:block;color:var(--gris);font-size:.86rem;font-weight:600;line-height:1.4;margin-top:4px}
+.admin-profile-row{display:flex;align-items:center;gap:10px;min-width:220px}
+.admin-profile-row img{width:42px;height:42px;border-radius:999px;border:1px solid var(--linea);background:var(--hueso);object-fit:cover;flex:0 0 auto}
+.admin-profile-row strong{display:block;font-weight:800;color:var(--tinta)}
+.admin-managed-profile-form{display:grid;gap:14px;border:1px solid var(--linea);border-radius:14px;background:var(--hueso);padding:16px;margin:16px 0}
+.admin-managed-profile-form .compact{margin-bottom:0}
+.admin-managed-profile-form h3{font-family:var(--display);font-size:1.22rem;font-weight:600;line-height:1.15}
+.admin-managed-profile-form label{display:block;color:var(--tinta);font-weight:800;font-size:.75rem;letter-spacing:.05em;text-transform:uppercase}
+.admin-managed-profile-form input,.admin-managed-profile-form textarea{width:100%;margin-top:8px;border:1px solid var(--linea);border-radius:12px;background:var(--blanco);padding:12px 14px;font-family:var(--texto);font-size:.95rem;color:var(--tinta);outline:none}
+.admin-managed-profile-form textarea{resize:vertical;line-height:1.45;text-transform:none}
 .admin-table-wrap{overflow:auto;border:1px solid var(--linea);border-radius:12px}
 .admin-table{width:100%;min-width:980px;border-collapse:collapse;background:var(--blanco)}
 .admin-table th,.admin-table td{border-bottom:1px solid var(--linea);padding:12px 14px;text-align:left;vertical-align:top;font-size:.86rem}

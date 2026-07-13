@@ -74,10 +74,19 @@ const EMPTY_PROFILE = {
   description: '',
   photoUrl: '',
   publicProfileEnabled: false,
+  canSharePublicProfile: false,
   authorSlug: '',
   fullName: '',
   createdAt: '',
   updatedAt: '',
+};
+
+const EMPTY_MANAGED_AUTHOR_PROFILE = {
+  firstName: '',
+  lastName: '',
+  description: '',
+  photoUrl: '',
+  publicProfileEnabled: false,
 };
 
 function ActionSpinner({ active }) {
@@ -123,6 +132,9 @@ export default function AdminConsole() {
   const [activePanelTab, setActivePanelTab] = useState('blogs');
   const [userProfile, setUserProfile] = useState(EMPTY_PROFILE);
   const [profileDraft, setProfileDraft] = useState(EMPTY_PROFILE);
+  const [adminProfiles, setAdminProfiles] = useState([]);
+  const [adminProfileDraft, setAdminProfileDraft] = useState(EMPTY_MANAGED_AUTHOR_PROFILE);
+  const [adminProfileDeleteTarget, setAdminProfileDeleteTarget] = useState(null);
   const [savingProfile, setSavingProfile] = useState(false);
   const [profilePhotoUploading, setProfilePhotoUploading] = useState(false);
   const [reviewComments, setReviewComments] = useState([]);
@@ -150,10 +162,17 @@ export default function AdminConsole() {
   const canDeletePosts = isAdmin;
   const canUseReviewFilters = isAdmin || isReviewer;
   const canManageUsers = isAdmin && isPrimaryDomainUser;
+  const canReviewProfiles = isAdmin;
   const canAccessRolesMailPanel = canAccessPanel;
   const canAccessProfilePanel = canAccessPanel;
   const accountAuthorName = user?.name || user?.email || '';
   const profileAuthorName = profileDraft.fullName || userProfile.fullName || accountAuthorName;
+  const profileNameMatchesLoadedAuthor = useMemo(() => {
+    const key = taxonomyKey(profileDraft.fullName);
+    if (!key) return false;
+    return posts.some((post) => taxonomyKey(post.authorName) === key);
+  }, [posts, profileDraft.fullName]);
+  const canShowProfileOptIn = Boolean(profileDraft.canSharePublicProfile || profileNameMatchesLoadedAuthor);
   const activeStatusFilter = statusFilter;
   const publishedAuthorLocked = Boolean(form.id && !canPublishPosts && ['published', 'archived'].includes(form.status));
   const editRequestPending = Boolean(form.editRequestedAt);
@@ -215,6 +234,14 @@ export default function AdminConsole() {
   }, [canManageUsers]);
 
   useEffect(() => {
+    if (canReviewProfiles) {
+      loadAdminProfiles();
+    } else {
+      setAdminProfiles([]);
+    }
+  }, [canReviewProfiles]);
+
+  useEffect(() => {
     if (canAccessPanel) {
       loadNotificationPreferences();
       loadUserProfile();
@@ -256,7 +283,10 @@ export default function AdminConsole() {
     if (!canAccessProfilePanel && activePanelTab === 'profile') {
       setActivePanelTab('blogs');
     }
-  }, [activePanelTab, canAccessProfilePanel, canAccessRolesMailPanel]);
+    if (!canReviewProfiles && activePanelTab === 'profiles') {
+      setActivePanelTab('blogs');
+    }
+  }, [activePanelTab, canAccessProfilePanel, canAccessRolesMailPanel, canReviewProfiles]);
 
   function initializeGoogle() {
     if (!window.google || !signInRef.current || !GOOGLE_CLIENT_ID) {
@@ -529,6 +559,60 @@ export default function AdminConsole() {
     }
   }
 
+  async function loadAdminProfiles() {
+    try {
+      const data = await api('/v1/profile/manage');
+      setAdminProfiles((data.items || []).map(normalizeAdminProfile));
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  function updateAdminProfileDraft(field, value) {
+    setAdminProfileDraft((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
+
+  async function createAdminAuthorProfile(event) {
+    event.preventDefault();
+    try {
+      setMessage('');
+      const payload = {
+        firstName: adminProfileDraft.firstName,
+        lastName: adminProfileDraft.lastName,
+        description: adminProfileDraft.description,
+        photoUrl: adminProfileDraft.photoUrl,
+        publicProfileEnabled: adminProfileDraft.publicProfileEnabled,
+      };
+      await withActionLoading('admin-profile-create', () => api('/v1/profile/manage', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }));
+      setAdminProfileDraft(EMPTY_MANAGED_AUTHOR_PROFILE);
+      await loadAdminProfiles();
+      setMessage('Perfil de autor creado.');
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function deleteAdminAuthorProfile(target) {
+    if (!target?.id) return;
+    try {
+      setMessage('');
+      await withActionLoading(`admin-profile-delete:${target.id}`, () => api(`/v1/profile/manage/${encodeURIComponent(target.id)}`, {
+        method: 'DELETE',
+      }));
+      setAdminProfileDeleteTarget(null);
+      await loadAdminProfiles();
+      setMessage('Perfil de autor eliminado.');
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
   async function saveUserProfile() {
     try {
       setSavingProfile(true);
@@ -538,7 +622,7 @@ export default function AdminConsole() {
         lastName: profileDraft.lastName,
         description: profileDraft.description,
         photoUrl: profileDraft.photoUrl,
-        publicProfileEnabled: profileDraft.publicProfileEnabled,
+        publicProfileEnabled: canShowProfileOptIn && profileDraft.publicProfileEnabled,
       };
       const data = await withActionLoading('profile-save', () => api('/v1/profile', {
         method: 'PATCH',
@@ -1304,6 +1388,16 @@ export default function AdminConsole() {
                     Usuario y perfil
                   </button>
                 )}
+                {canReviewProfiles && (
+                  <button
+                    aria-pressed={activePanelTab === 'profiles'}
+                    className={activePanelTab === 'profiles' ? 'selected' : ''}
+                    onClick={() => setActivePanelTab('profiles')}
+                    type="button"
+                  >
+                    Perfiles
+                  </button>
+                )}
               </nav>
 
               {activePanelTab === 'profile' && (
@@ -1371,17 +1465,24 @@ export default function AdminConsole() {
                           value={profileDraft.description}
                         />
                       </label>
-                      <label className="admin-profile-share">
-                        <input
-                          checked={profileDraft.publicProfileEnabled}
-                          onChange={(e) => updateProfileDraft('publicProfileEnabled', e.target.checked)}
-                          type="checkbox"
-                        />
-                        <span>
-                          <strong>Mostrar mi perfil junto a mis notas</strong>
-                          <small>Permito que mi nombre, descripcion y foto se usen para armar una pagina publica de autor en el blog.</small>
-                        </span>
-                      </label>
+                      {canShowProfileOptIn ? (
+                        <label className="admin-profile-share">
+                          <input
+                            checked={profileDraft.publicProfileEnabled}
+                            onChange={(e) => updateProfileDraft('publicProfileEnabled', e.target.checked)}
+                            type="checkbox"
+                          />
+                          <span>
+                            <strong>Mostrar mi perfil junto a mis notas</strong>
+                            <small>Permito que mi nombre, descripcion y foto se usen para armar una pagina publica de autor en el blog.</small>
+                          </span>
+                        </label>
+                      ) : (
+                        <div className="admin-profile-warning">
+                          <strong>Perfil publico no disponible todavia</strong>
+                          <span>Para mostrarlo en el blog, el nombre y apellido deben coincidir con el autor usado en alguna nota existente.</span>
+                        </div>
+                      )}
                       <div className="admin-manager-actions">
                         <span>{profileDraft.fullName ? `Nombre visible: ${profileDraft.fullName}` : 'Si no cargas nombre, se usa tu cuenta.'}</span>
                         <button className="btn btn-primary" disabled={savingProfile || profilePhotoUploading || isActionLoading('profile-save')} onClick={saveUserProfile} type="button">
@@ -1390,6 +1491,150 @@ export default function AdminConsole() {
                         </button>
                       </div>
                     </div>
+                  </div>
+                </section>
+              )}
+
+              {activePanelTab === 'profiles' && canReviewProfiles && (
+                <section className="admin-manager">
+                  <div className="admin-manager-head">
+                    <div>
+                      <span>Perfiles</span>
+                      <h2>Revision de perfiles publicos</h2>
+                      <p>Revisa los datos que los usuarios cargan para las paginas de autor.</p>
+                    </div>
+                    <button className="btn btn-ghost" onClick={loadAdminProfiles} type="button">
+                      Actualizar
+                    </button>
+                  </div>
+                  <div className="admin-profile-notice">
+                    Si el nombre visible no coincide con el autor usado en una nota, el perfil no se va a mostrar correctamente y el usuario no podra activar la publicacion del perfil.
+                  </div>
+                  <form className="admin-managed-profile-form" onSubmit={createAdminAuthorProfile}>
+                    <div className="admin-manager-head compact">
+                      <div>
+                        <span>Nuevo autor</span>
+                        <h3>Crear perfil sin cuenta</h3>
+                        <p>Usalo para autores que no ingresan al panel, pero necesitan tener perfil en el blog.</p>
+                      </div>
+                    </div>
+                    <div className="admin-two">
+                      <label>
+                        Nombre
+                        <input
+                          value={adminProfileDraft.firstName}
+                          onChange={(event) => updateAdminProfileDraft('firstName', event.target.value)}
+                          required
+                        />
+                      </label>
+                      <label>
+                        Apellido
+                        <input
+                          value={adminProfileDraft.lastName}
+                          onChange={(event) => updateAdminProfileDraft('lastName', event.target.value)}
+                          required
+                        />
+                      </label>
+                    </div>
+                    <label>
+                      Descripcion breve
+                      <textarea
+                        maxLength="500"
+                        onChange={(event) => updateAdminProfileDraft('description', event.target.value)}
+                        placeholder="Bio corta del autor."
+                        rows="3"
+                        value={adminProfileDraft.description}
+                      />
+                    </label>
+                    <label>
+                      Foto por URL
+                      <input
+                        onChange={(event) => updateAdminProfileDraft('photoUrl', event.target.value)}
+                        placeholder="https://..."
+                        value={adminProfileDraft.photoUrl}
+                      />
+                    </label>
+                    <label className="admin-profile-share">
+                      <input
+                        checked={adminProfileDraft.publicProfileEnabled}
+                        onChange={(event) => updateAdminProfileDraft('publicProfileEnabled', event.target.checked)}
+                        type="checkbox"
+                      />
+                      <span>
+                        <strong>Publicar perfil si coincide con un autor existente</strong>
+                        <small>Si todavia no hay una nota con este autor exacto, el perfil se crea pero queda sin publicar.</small>
+                      </span>
+                    </label>
+                    <div className="admin-manager-actions">
+                      <button className="btn btn-primary" disabled={isActionLoading('admin-profile-create')} type="submit">
+                        {isActionLoading('admin-profile-create') ? 'Creando perfil...' : 'Crear perfil de autor'}
+                        <ActionSpinner active={isActionLoading('admin-profile-create')} />
+                      </button>
+                    </div>
+                  </form>
+                  <div className="admin-table-wrap">
+                    <table className="admin-table">
+                      <thead>
+                        <tr>
+                          <th>Perfil</th>
+                          <th>Estado</th>
+                          <th>Descripcion</th>
+                          <th>Slug</th>
+                          <th>Actualizado</th>
+                          <th>Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {adminProfiles.length === 0 ? (
+                          <tr>
+                            <td colSpan="6">Todavia no hay perfiles cargados.</td>
+                          </tr>
+                        ) : adminProfiles.map((profile) => (
+                          <tr key={profile.email || profile.id}>
+                            <td>
+                              <div className="admin-profile-row">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img alt="" src={profile.photoUrl || DEFAULT_PROFILE_PHOTO} />
+                                <div>
+                                  <strong>{profile.fullName || 'Sin nombre'}</strong>
+                                  <small>{profile.email}</small>
+                                </div>
+                              </div>
+                            </td>
+                            <td>
+                              <span className={`status ${profile.publicProfileEnabled ? 'published' : profile.canSharePublicProfile ? 'draft' : 'archived'}`}>
+                                {profile.publicProfileEnabled ? 'Publico' : profile.canSharePublicProfile ? 'Listo para activar' : 'Nombre sin coincidencia'}
+                              </span>
+                            </td>
+                            <td>{profile.description || 'Sin descripcion'}</td>
+                            <td>
+                              {profile.authorSlug || 'Sin slug'}
+                              {profile.publicProfileEnabled && profile.fullName && (
+                                <small>
+                                  <Link href={`/blog?autor=${encodeURIComponent(profile.fullName)}`} target="_blank">Ver pagina</Link>
+                                </small>
+                              )}
+                            </td>
+                            <td>{formatAdminDate(profile.updatedAt)}</td>
+                            <td>
+                              {profile.managedAuthor ? (
+                                <button
+                                  className="btn btn-ghost danger"
+                                  disabled={isActionLoading(`admin-profile-delete:${profile.id}`)}
+                                  onClick={() => setAdminProfileDeleteTarget(profile)}
+                                  type="button"
+                                >
+                                  {isActionLoading(`admin-profile-delete:${profile.id}`) ? 'Eliminando...' : 'Eliminar'}
+                                  <ActionSpinner active={isActionLoading(`admin-profile-delete:${profile.id}`)} />
+                                </button>
+                              ) : (
+                                <small>Cuenta de usuario</small>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </section>
               )}
@@ -2382,6 +2627,30 @@ export default function AdminConsole() {
                   </div>
                 </div>
               )}
+              {adminProfileDeleteTarget && (
+                <div className="admin-modal-backdrop" role="presentation">
+                  <div aria-modal="true" className="admin-modal" role="dialog">
+                    <h3>Eliminar perfil de autor</h3>
+                    <p>
+                      Vas a eliminar el perfil gestionado de "{adminProfileDeleteTarget.fullName || 'este autor'}". Esta accion no borra posts ni cambia sus autores.
+                    </p>
+                    <div className="admin-modal-actions">
+                      <button className="btn btn-ghost" onClick={() => setAdminProfileDeleteTarget(null)} type="button">
+                        Cancelar
+                      </button>
+                      <button
+                        className="btn btn-primary"
+                        disabled={isActionLoading(`admin-profile-delete:${adminProfileDeleteTarget.id}`)}
+                        onClick={() => deleteAdminAuthorProfile(adminProfileDeleteTarget)}
+                        type="button"
+                      >
+                        {isActionLoading(`admin-profile-delete:${adminProfileDeleteTarget.id}`) ? 'Eliminando...' : 'Eliminar perfil'}
+                        <ActionSpinner active={isActionLoading(`admin-profile-delete:${adminProfileDeleteTarget.id}`)} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
               {pendingAction && (
                 <div className="admin-modal-backdrop" role="presentation">
                   <div aria-modal="true" className="admin-modal" role="dialog">
@@ -2598,10 +2867,21 @@ function normalizeProfile(value = {}) {
     description: normalizeInputValue(value.description),
     photoUrl: normalizeInputValue(value.photoUrl),
     publicProfileEnabled: normalizeBoolean(value.publicProfileEnabled),
+    canSharePublicProfile: normalizeBoolean(value.canSharePublicProfile),
     authorSlug: normalizeInputValue(value.authorSlug),
     fullName,
     createdAt: normalizeInputValue(value.createdAt),
     updatedAt: normalizeInputValue(value.updatedAt),
+  };
+}
+
+function normalizeAdminProfile(value = {}) {
+  const profile = normalizeProfile(value);
+  return {
+    ...profile,
+    id: normalizeInputValue(value.id),
+    email: normalizeInputValue(value.email),
+    managedAuthor: normalizeBoolean(value.managedAuthor),
   };
 }
 

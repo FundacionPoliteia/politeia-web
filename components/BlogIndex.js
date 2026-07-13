@@ -50,7 +50,6 @@ export default function BlogIndex({ posts = [], autorFiltro = '', authorProfile 
             <aside className="blog-author-card" aria-label={`Perfil de ${authorName}`}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={authorProfile.photoUrl} alt="" />
-              <strong>{authorName}</strong>
             </aside>
           )}
         </div>
