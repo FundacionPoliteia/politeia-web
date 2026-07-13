@@ -361,7 +361,7 @@ export default function RichTextEditor({
         </BubbleMenu>
       )}
 
-      <EditorContent editor={editor} />
+      <EditorContent className="rich-editor-content" editor={editor} />
 
       {commentDraft && (
         <div className="admin-modal-backdrop" role="presentation">
