@@ -66,11 +66,13 @@ test('user profiles normalize personal fields separately from roles', () => {
     lastName: '  Perez  ',
     description: '  Editor   politico  ',
     photoUrl: 'https://example.com/foto.png',
+    publicProfileEnabled: true,
   }), {
     firstName: 'Juan',
     lastName: 'Perez',
     description: 'Editor politico',
     photoUrl: 'https://example.com/foto.png',
+    publicProfileEnabled: true,
   });
   assert.throws(() => sanitizeProfile({ photoUrl: 'http://example.com/foto.png' }), /photoUrl/);
 });

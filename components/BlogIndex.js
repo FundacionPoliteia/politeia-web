@@ -4,10 +4,12 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { taxonomyKey } from '../lib/taxonomy';
 
-export default function BlogIndex({ posts = [], autorFiltro = '' }) {
+export default function BlogIndex({ posts = [], autorFiltro = '', authorProfile = null }) {
   const [query, setQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('');
   const filtrandoAutor = Boolean(autorFiltro);
+  const authorName = authorProfile?.fullName || autorFiltro;
+  const authorLead = authorProfile?.description || 'Publicaciones del autor, reunidas en un mismo lugar.';
 
   const postsPorAutor = useMemo(
     () => filtrarPorAutor(posts, autorFiltro),
@@ -31,16 +33,25 @@ export default function BlogIndex({ posts = [], autorFiltro = '' }) {
   return (
     <main>
       <section className="page-hero">
-        <div className="wrap">
-          <span className="eyebrow">Blog</span>
-          <h1>{filtrandoAutor ? `Notas escritas por ${autorFiltro}.` : 'Ideas para entender mejor lo publico.'}</h1>
-          <p className="lead">
-            {filtrandoAutor
-              ? 'Publicaciones del autor, reunidas en un mismo lugar.'
-              : 'Investigacion, analisis y opinion sobre politica, instituciones y participacion ciudadana.'}
-          </p>
-          {filtrandoAutor && (
-            <Link href="/blog" className="btn btn-ghost blog-filter-clear">Ver todos</Link>
+        <div className={filtrandoAutor && authorProfile?.photoUrl ? 'wrap blog-author-hero' : 'wrap'}>
+          <div>
+            <span className="eyebrow">Blog</span>
+            <h1>{filtrandoAutor ? `Notas escritas por ${authorName}.` : 'Ideas para entender mejor lo publico.'}</h1>
+            <p className="lead">
+              {filtrandoAutor
+                ? authorLead
+                : 'Investigacion, analisis y opinion sobre politica, instituciones y participacion ciudadana.'}
+            </p>
+            {filtrandoAutor && (
+              <Link href="/blog" className="btn btn-ghost blog-filter-clear">Ver todos</Link>
+            )}
+          </div>
+          {filtrandoAutor && authorProfile?.photoUrl && (
+            <aside className="blog-author-card" aria-label={`Perfil de ${authorName}`}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={authorProfile.photoUrl} alt="" />
+              <strong>{authorName}</strong>
+            </aside>
           )}
         </div>
       </section>

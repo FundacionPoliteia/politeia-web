@@ -66,13 +66,23 @@ const DEFAULT_NOTIFICATION_EVENTS = Object.fromEntries(
   NOTIFICATION_EVENT_LABELS.map((event) => [event.value, true])
 );
 
+const DEFAULT_PROFILE_PHOTO = '/default_profile.png';
+
 const EMPTY_PROFILE = {
   firstName: '',
   lastName: '',
   description: '',
   photoUrl: '',
+  publicProfileEnabled: false,
+  authorSlug: '',
   fullName: '',
+  createdAt: '',
+  updatedAt: '',
 };
+
+function ActionSpinner({ active }) {
+  return active ? <span className="admin-button-spinner" aria-hidden="true" /> : null;
+}
 
 export default function AdminConsole() {
   const [checkingSession, setCheckingSession] = useState(true);
@@ -85,6 +95,7 @@ export default function AdminConsole() {
   const [postSearch, setPostSearch] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [actionBusy, setActionBusy] = useState({});
   const [uploading, setUploading] = useState(false);
   const [importing, setImporting] = useState(false);
   const [googleButtonStatus, setGoogleButtonStatus] = useState(GOOGLE_CLIENT_ID ? 'loading' : 'disabled');
@@ -141,7 +152,8 @@ export default function AdminConsole() {
   const canManageUsers = isAdmin && isPrimaryDomainUser;
   const canAccessRolesMailPanel = canAccessPanel;
   const canAccessProfilePanel = canAccessPanel;
-  const profileAuthorName = profileDraft.fullName || userProfile.fullName || user?.name || user?.email || '';
+  const accountAuthorName = user?.name || user?.email || '';
+  const profileAuthorName = profileDraft.fullName || userProfile.fullName || accountAuthorName;
   const activeStatusFilter = statusFilter;
   const publishedAuthorLocked = Boolean(form.id && !canPublishPosts && ['published', 'archived'].includes(form.status));
   const editRequestPending = Boolean(form.editRequestedAt);
@@ -230,11 +242,12 @@ export default function AdminConsole() {
   }, [form.id, canAccessPanel]);
 
   useEffect(() => {
-    if (!form.id && !form.authorName && profileAuthorName) {
+    const canUseProfileAuthor = !form.id && profileAuthorName && (!form.authorName || form.authorName === accountAuthorName);
+    if (canUseProfileAuthor) {
       setForm((current) => normalizeForm({ ...current, authorName: profileAuthorName }));
       setSavedForm((current) => normalizeForm({ ...current, authorName: profileAuthorName }));
     }
-  }, [form.authorName, form.id, profileAuthorName]);
+  }, [accountAuthorName, form.authorName, form.id, profileAuthorName]);
 
   useEffect(() => {
     if (!canAccessRolesMailPanel && activePanelTab === 'access') {
@@ -288,6 +301,31 @@ export default function AdminConsole() {
       throw new Error(data?.error?.message || `Error ${res.status}`);
     }
     return data;
+  }
+
+  function setActionLoading(key, value) {
+    if (!key) return;
+    setActionBusy((current) => {
+      if (value) return { ...current, [key]: true };
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  }
+
+  function isActionLoading(key) {
+    if (!key) return false;
+    if (actionBusy[key]) return true;
+    return Object.keys(actionBusy).some((activeKey) => activeKey.startsWith(`${key}:`));
+  }
+
+  async function withActionLoading(key, task) {
+    setActionLoading(key, true);
+    try {
+      return await task();
+    } finally {
+      setActionLoading(key, false);
+    }
   }
 
   async function loadMe({ silent = false } = {}) {
@@ -346,6 +384,7 @@ export default function AdminConsole() {
       setUser(null);
       setPosts([]);
       setCategories([]);
+      setActionBusy({});
       setPostSearch('');
       setForm(EMPTY_FORM);
       setSavedForm(EMPTY_FORM);
@@ -440,13 +479,13 @@ export default function AdminConsole() {
     try {
       setSavingNotificationPreferences(true);
       setMessage('');
-      const data = await api('/v1/notifications/preferences', {
-        method: 'PATCH',
-        body: JSON.stringify({
-          enabled: notificationPreferences.enabled,
-          events: notificationPreferences.events,
-        }),
-      });
+      const data = await withActionLoading('notification-save', () => api('/v1/notifications/preferences', {
+          method: 'PATCH',
+          body: JSON.stringify({
+            enabled: notificationPreferences.enabled,
+            events: notificationPreferences.events,
+          }),
+        }));
       setNotificationPreferences(normalizeNotificationPreferences(data.item));
       setMessage('Preferencias de email actualizadas.');
     } catch (err) {
@@ -482,6 +521,9 @@ export default function AdminConsole() {
       const nextProfile = normalizeProfile(data.item);
       setUserProfile(nextProfile);
       setProfileDraft(nextProfile);
+      if (profileNeedsSetup(nextProfile)) {
+        setActivePanelTab('profile');
+      }
     } catch (err) {
       setMessage(err.message);
     }
@@ -491,15 +533,16 @@ export default function AdminConsole() {
     try {
       setSavingProfile(true);
       setMessage('');
-      const data = await api('/v1/profile', {
+      const data = await withActionLoading('profile-save', () => api('/v1/profile', {
         method: 'PATCH',
         body: JSON.stringify({
           firstName: profileDraft.firstName,
           lastName: profileDraft.lastName,
           description: profileDraft.description,
           photoUrl: profileDraft.photoUrl,
+          publicProfileEnabled: profileDraft.publicProfileEnabled,
         }),
-      });
+      }));
       const nextProfile = normalizeProfile(data.item);
       setUserProfile(nextProfile);
       setProfileDraft(nextProfile);
@@ -526,7 +569,7 @@ export default function AdminConsole() {
     try {
       setProfilePhotoUploading(true);
       setMessage('');
-      const media = await uploadMedia(file);
+      const media = await withActionLoading('profile-photo', () => uploadMedia(file));
       updateProfileDraft('photoUrl', media?.url || '');
       setMessage('Foto de perfil cargada. Guarda el perfil para conservar el cambio.');
     } catch (err) {
@@ -543,7 +586,7 @@ export default function AdminConsole() {
     try {
       setBusy(true);
       setMessage('');
-      await persistCurrentPost();
+      await withActionLoading('post-save', () => persistCurrentPost());
       setMessage(isEditing ? 'Post actualizado.' : 'Borrador creado.');
     } catch (err) {
       setMessage(err.message);
@@ -589,7 +632,7 @@ export default function AdminConsole() {
       setUploading(true);
       setMessage('');
       setCoverImageError('');
-      const media = await uploadMedia(file);
+      const media = await withActionLoading('cover-upload', () => uploadMedia(file));
       setForm((current) => normalizeForm({ ...current, coverImage: media?.url, showCoverInPost: true }));
       setCoverMode('upload');
       setMessage('Imagen cargada.');
@@ -605,7 +648,7 @@ export default function AdminConsole() {
   async function uploadInlineImage(file) {
     try {
       setMessage('');
-      const media = await uploadMedia(file);
+      const media = await withActionLoading('inline-image', () => uploadMedia(file));
       setMessage('Imagen interna cargada.');
       return media.url;
     } catch (err) {
@@ -656,10 +699,10 @@ export default function AdminConsole() {
 
     try {
       setMessage('');
-      const data = await api(`/v1/posts/${form.id}/comments`, {
+      const data = await withActionLoading(`comment-create:${commentId}`, () => api(`/v1/posts/${form.id}/comments`, {
         method: 'POST',
         body: JSON.stringify({ body, selectedText, commentId, contentMarkdown }),
-      });
+      }));
       if (data.post?.contentMarkdown) {
         setForm((current) => normalizeForm({ ...current, contentMarkdown: data.post.contentMarkdown }));
         setSavedForm((current) => normalizeForm({ ...current, contentMarkdown: data.post.contentMarkdown }));
@@ -689,10 +732,10 @@ export default function AdminConsole() {
     try {
       setBusy(true);
       setMessage('');
-      const data = await api(`/v1/posts/${form.id}/comments/${commentId}`, {
+      const data = await withActionLoading(`comment-status:${commentId}`, () => api(`/v1/posts/${form.id}/comments/${commentId}`, {
         method: 'PATCH',
         body: JSON.stringify({ status, contentMarkdown: nextMarkdown }),
-      });
+      }));
       if (status === 'resolved') {
         setForm((current) => normalizeForm({ ...current, contentMarkdown: nextMarkdown }));
         setSavedForm((current) => normalizeForm({ ...current, contentMarkdown: nextMarkdown }));
@@ -721,10 +764,10 @@ export default function AdminConsole() {
     try {
       setBusy(true);
       setMessage('');
-      const data = await api(`/v1/posts/${form.id}/comments/${editingReviewComment.id}`, {
+      const data = await withActionLoading(`comment-edit:${editingReviewComment.id}`, () => api(`/v1/posts/${form.id}/comments/${editingReviewComment.id}`, {
         method: 'PATCH',
         body: JSON.stringify({ body }),
-      });
+      }));
       setReviewComments((current) => current.map((comment) => comment.id === editingReviewComment.id ? data.item : comment));
       setEditingReviewComment(null);
       setMessage('Comentario actualizado.');
@@ -741,10 +784,10 @@ export default function AdminConsole() {
     try {
       setBusy(true);
       setMessage('');
-      await api(`/v1/posts/${form.id}/comments/${commentId}`, {
+      await withActionLoading(`comment-delete:${commentId}`, () => api(`/v1/posts/${form.id}/comments/${commentId}`, {
         method: 'DELETE',
         body: JSON.stringify({ contentMarkdown: nextMarkdown }),
-      });
+      }));
       setForm((current) => normalizeForm({ ...current, contentMarkdown: nextMarkdown }));
       setSavedForm((current) => normalizeForm({ ...current, contentMarkdown: nextMarkdown }));
       setReviewComments((current) => current.filter((comment) => comment.id !== commentId));
@@ -773,7 +816,7 @@ export default function AdminConsole() {
       setMessage('');
       const body = new FormData();
       body.append('file', file);
-      const data = await api('/v1/import/docx', { method: 'POST', body });
+      const data = await withActionLoading('docx-import', () => api('/v1/import/docx', { method: 'POST', body }));
       updateForm('contentMarkdown', data.contentMarkdown || '');
       const warningText = data.warnings?.length ? ` Advertencias: ${data.warnings.join(' | ')}` : '';
       setMessage(`Documento importado. Revisalo antes de guardar.${warningText}`);
@@ -785,11 +828,11 @@ export default function AdminConsole() {
     }
   }
 
-  async function action(path, success) {
+  async function action(path, success, loadingKey = path) {
     try {
       setBusy(true);
       setMessage('');
-      const data = await api(path, { method: 'POST' });
+      const data = await withActionLoading(loadingKey, () => api(path, { method: 'POST' }));
       if (data.item?.id && data.item.id === form.id) {
         const nextForm = postToForm(data.item);
         setForm(nextForm);
@@ -804,19 +847,19 @@ export default function AdminConsole() {
     }
   }
 
-  function requestAction(path, success, label) {
+  function requestAction(path, success, label, loadingKey = workflowActionKey(path)) {
     if (hasUnsavedChanges) {
-      setPendingAction({ path, success, label });
+      setPendingAction({ path, success, label, loadingKey });
       return;
     }
-    action(path, success);
+    action(path, success, loadingKey);
   }
 
   function confirmPendingAction() {
     if (!pendingAction) return;
     const nextAction = pendingAction;
     setPendingAction(null);
-    action(nextAction.path, nextAction.success);
+    action(nextAction.path, nextAction.success, nextAction.loadingKey);
   }
 
   async function saveAndConfirmPendingAction() {
@@ -826,9 +869,9 @@ export default function AdminConsole() {
     try {
       setBusy(true);
       setMessage('');
-      await persistCurrentPost({ refresh: false });
+      await withActionLoading('post-save', () => persistCurrentPost({ refresh: false }));
       setPendingAction(null);
-      await api(nextAction.path, { method: 'POST' });
+      await withActionLoading(nextAction.loadingKey, () => api(nextAction.path, { method: 'POST' }));
       setMessage(nextAction.success);
       await Promise.all([loadPosts(), loadCategories()]);
     } catch (err) {
@@ -895,9 +938,11 @@ export default function AdminConsole() {
     try {
       setBusy(true);
       setMessage('');
-      for (const post of targetPosts) {
-        await config.run(post);
-      }
+      await withActionLoading(`batch:${kind}`, async () => {
+        for (const post of targetPosts) {
+          await config.run(post);
+        }
+      });
       if (kind === 'delete' && targetPosts.some((post) => post.id === form.id)) {
         setForm(EMPTY_FORM);
         setSavedForm(EMPTY_FORM);
@@ -919,7 +964,7 @@ export default function AdminConsole() {
     try {
       setBusy(true);
       setMessage('');
-      await api(`/v1/posts/${id}`, { method: 'DELETE' });
+      await withActionLoading(`post-delete:${id}`, () => api(`/v1/posts/${id}`, { method: 'DELETE' }));
       setMessage('Post eliminado.');
       if (form.id === id) {
         setForm(EMPTY_FORM);
@@ -945,10 +990,10 @@ export default function AdminConsole() {
     try {
       setBusy(true);
       setMessage('');
-      const data = await api('/v1/categories', {
+      const data = await withActionLoading('category-create', () => api('/v1/categories', {
         method: 'POST',
         body: JSON.stringify({ name }),
-      });
+      }));
       updateForm('category', data.item?.name || name);
       setCategoryDropdownOpen(false);
       setCategorySearchTerm('');
@@ -966,7 +1011,7 @@ export default function AdminConsole() {
     try {
       setBusy(true);
       setMessage('');
-      await api(`/v1/categories/${encodeURIComponent(target.id)}`, { method: 'DELETE' });
+      await withActionLoading(`category-delete:${target.id}`, () => api(`/v1/categories/${encodeURIComponent(target.id)}`, { method: 'DELETE' }));
       setMessage('Categoria eliminada de la lista.');
       setCategoryDeleteTarget(null);
       await loadCategories();
@@ -1022,10 +1067,10 @@ export default function AdminConsole() {
     try {
       setBusy(true);
       setMessage('');
-      const data = await api(`/v1/users/${encodeURIComponent(email)}/roles`, {
+      const data = await withActionLoading(`user-save:${email}`, () => api(`/v1/users/${encodeURIComponent(email)}/roles`, {
         method: 'PUT',
         body: JSON.stringify({ roles: adminUserDrafts[email] || [] }),
-      });
+      }));
       setMessage(`Roles actualizados para ${email}.`);
       setAdminUsers((current) => upsertAdminUserItem(current, data.item));
       setAdminUserDrafts((current) => ({ ...current, [email]: data.item?.roles || [] }));
@@ -1041,7 +1086,7 @@ export default function AdminConsole() {
     try {
       setBusy(true);
       setMessage('');
-      await api(`/v1/users/${encodeURIComponent(email)}`, { method: 'DELETE' });
+      await withActionLoading(`user-delete:${email}`, () => api(`/v1/users/${encodeURIComponent(email)}`, { method: 'DELETE' }));
       setMessage(`Roles eliminados para ${email}.`);
       setAdminUsers((current) => current.filter((item) => item.email !== email));
       setAdminUserDrafts((current) => {
@@ -1266,13 +1311,14 @@ export default function AdminConsole() {
                     </div>
                   </div>
                   <div className="admin-profile-body">
+                    {profileNeedsSetup(profileDraft) && (
+                      <div className="admin-profile-notice">
+                        Completa tu nombre y apellido para seguir con el gestor de blogs.
+                      </div>
+                    )}
                     <div className="admin-profile-photo">
-                      {profileDraft.photoUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img alt="" src={profileDraft.photoUrl} />
-                      ) : (
-                        <span aria-hidden="true" className="material-symbols-outlined">account_circle</span>
-                      )}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img alt="" src={profileDraft.photoUrl || DEFAULT_PROFILE_PHOTO} />
                       <input
                         accept="image/jpeg,image/png,image/webp"
                         hidden
@@ -1286,11 +1332,12 @@ export default function AdminConsole() {
                       />
                       <button
                         className="btn btn-ghost"
-                        disabled={profilePhotoUploading}
+                        disabled={profilePhotoUploading || isActionLoading('profile-photo')}
                         onClick={() => profilePhotoInputRef.current?.click()}
                         type="button"
                       >
-                        {profilePhotoUploading ? 'Subiendo foto...' : 'Subir foto'}
+                        {isActionLoading('profile-photo') ? 'Subiendo foto...' : 'Subir foto'}
+                        <ActionSpinner active={isActionLoading('profile-photo')} />
                       </button>
                       {profileDraft.photoUrl && (
                         <button className="btn btn-ghost danger" onClick={() => updateProfileDraft('photoUrl', '')} type="button">
@@ -1319,10 +1366,22 @@ export default function AdminConsole() {
                           value={profileDraft.description}
                         />
                       </label>
+                      <label className="admin-profile-share">
+                        <input
+                          checked={profileDraft.publicProfileEnabled}
+                          onChange={(e) => updateProfileDraft('publicProfileEnabled', e.target.checked)}
+                          type="checkbox"
+                        />
+                        <span>
+                          <strong>Mostrar mi perfil junto a mis notas</strong>
+                          <small>Permito que mi nombre, descripcion y foto se usen para armar una pagina publica de autor en el blog.</small>
+                        </span>
+                      </label>
                       <div className="admin-manager-actions">
                         <span>{profileDraft.fullName ? `Nombre visible: ${profileDraft.fullName}` : 'Si no cargas nombre, se usa tu cuenta.'}</span>
-                        <button className="btn btn-primary" disabled={savingProfile || profilePhotoUploading} onClick={saveUserProfile} type="button">
-                          Guardar perfil
+                        <button className="btn btn-primary" disabled={savingProfile || profilePhotoUploading || isActionLoading('profile-save')} onClick={saveUserProfile} type="button">
+                          {isActionLoading('profile-save') ? 'Guardando perfil...' : 'Guardar perfil'}
+                          <ActionSpinner active={isActionLoading('profile-save')} />
                         </button>
                       </div>
                     </div>
@@ -1381,11 +1440,12 @@ export default function AdminConsole() {
                         <span>{notificationPreferences.enabled ? 'Emails activos para eventos seleccionados.' : 'Emails desactivados.'}</span>
                         <button
                           className="btn btn-primary"
-                          disabled={savingNotificationPreferences}
+                          disabled={savingNotificationPreferences || isActionLoading('notification-save')}
                           onClick={saveNotificationPreferences}
                           type="button"
                         >
-                          Guardar preferencias
+                          {isActionLoading('notification-save') ? 'Guardando preferencias...' : 'Guardar preferencias'}
+                          <ActionSpinner active={isActionLoading('notification-save')} />
                         </button>
                       </div>
                     </div>
@@ -1505,19 +1565,21 @@ export default function AdminConsole() {
                                     <div className="admin-table-actions">
                                       <button
                                         className="btn btn-ghost"
-                                        disabled={busy || (!changed && !item.isDraft)}
+                                        disabled={busy || isActionLoading(`user-save:${item.email}`) || (!changed && !item.isDraft)}
                                         onClick={() => saveAdminUserRoles(item.email)}
                                         type="button"
                                       >
-                                        Guardar
+                                        {isActionLoading(`user-save:${item.email}`) ? 'Guardando...' : 'Guardar'}
+                                        <ActionSpinner active={isActionLoading(`user-save:${item.email}`)} />
                                       </button>
                                       <button
                                         className="btn btn-ghost danger"
-                                        disabled={busy || item.isDraft}
+                                        disabled={busy || isActionLoading(`user-delete:${item.email}`) || item.isDraft}
                                         onClick={() => deleteAdminUserRoles(item.email)}
                                         type="button"
                                       >
-                                        Quitar roles
+                                        {isActionLoading(`user-delete:${item.email}`) ? 'Quitando...' : 'Quitar roles'}
+                                        <ActionSpinner active={isActionLoading(`user-delete:${item.email}`)} />
                                       </button>
                                     </div>
                                   </td>
@@ -1565,27 +1627,30 @@ export default function AdminConsole() {
                         <span>{selectedAdminPosts.length} seleccionados</span>
                         <button
                           className="btn btn-ghost"
-                          disabled={busy || selectedAdminPosts.length === 0}
+                          disabled={busy || isActionLoading('batch:publish') || selectedAdminPosts.length === 0}
                           onClick={() => runBatchPostAction('publish')}
                           type="button"
                         >
-                          Publicar seleccionados
+                          {isActionLoading('batch:publish') ? 'Publicando...' : 'Publicar seleccionados'}
+                          <ActionSpinner active={isActionLoading('batch:publish')} />
                         </button>
                         <button
                           className="btn btn-ghost"
-                          disabled={busy || selectedAdminPosts.length === 0}
+                          disabled={busy || isActionLoading('batch:archive') || selectedAdminPosts.length === 0}
                           onClick={() => runBatchPostAction('archive')}
                           type="button"
                         >
-                          Archivar seleccionados
+                          {isActionLoading('batch:archive') ? 'Archivando...' : 'Archivar seleccionados'}
+                          <ActionSpinner active={isActionLoading('batch:archive')} />
                         </button>
                         <button
                           className="btn btn-ghost danger"
-                          disabled={busy || selectedAdminPosts.length === 0}
+                          disabled={busy || isActionLoading('batch:delete') || selectedAdminPosts.length === 0}
                           onClick={() => runBatchPostAction('delete')}
                           type="button"
                         >
-                          Eliminar seleccionados
+                          {isActionLoading('batch:delete') ? 'Eliminando...' : 'Eliminar seleccionados'}
+                          <ActionSpinner active={isActionLoading('batch:delete')} />
                         </button>
                         <button
                           className="btn btn-ghost"
@@ -1661,32 +1726,36 @@ export default function AdminConsole() {
                                     </button>
                                     <button
                                       className="btn btn-ghost"
-                                      disabled={busy || post.status === 'published'}
-                                      onClick={() => requestAction(`/v1/posts/${post.id}/publish`, 'Post publicado.', 'publicar')}
+                                      disabled={busy || isActionLoading(`workflow:publish:${post.id}`) || post.status === 'published'}
+                                      onClick={() => requestAction(`/v1/posts/${post.id}/publish`, 'Post publicado.', 'publicar', `workflow:publish:${post.id}`)}
                                       type="button"
                                     >
-                                      Publicar
+                                      {isActionLoading(`workflow:publish:${post.id}`) ? 'Publicando...' : 'Publicar'}
+                                      <ActionSpinner active={isActionLoading(`workflow:publish:${post.id}`)} />
                                     </button>
                                     <button
                                       className="btn btn-ghost"
-                                      disabled={busy || post.status === 'archived'}
-                                      onClick={() => requestAction(`/v1/posts/${post.id}/archive`, 'Post archivado.', 'archivar')}
+                                      disabled={busy || isActionLoading(`workflow:archive:${post.id}`) || post.status === 'archived'}
+                                      onClick={() => requestAction(`/v1/posts/${post.id}/archive`, 'Post archivado.', 'archivar', `workflow:archive:${post.id}`)}
                                       type="button"
                                     >
-                                      Archivar
+                                      {isActionLoading(`workflow:archive:${post.id}`) ? 'Archivando...' : 'Archivar'}
+                                      <ActionSpinner active={isActionLoading(`workflow:archive:${post.id}`)} />
                                     </button>
                                     {post.editRequestedAt && (
                                       <button
                                         className="btn btn-workflow"
-                                        disabled={busy}
-                                        onClick={() => requestAction(`/v1/posts/${post.id}/enable-edit`, 'Post habilitado como borrador.', 'habilitar edicion')}
+                                        disabled={busy || isActionLoading(`workflow:enable-edit:${post.id}`)}
+                                        onClick={() => requestAction(`/v1/posts/${post.id}/enable-edit`, 'Post habilitado como borrador.', 'habilitar edicion', `workflow:enable-edit:${post.id}`)}
                                         type="button"
                                       >
-                                        Habilitar edicion
+                                        {isActionLoading(`workflow:enable-edit:${post.id}`) ? 'Habilitando...' : 'Habilitar edicion'}
+                                        <ActionSpinner active={isActionLoading(`workflow:enable-edit:${post.id}`)} />
                                       </button>
                                     )}
-                                    <button className="btn btn-ghost danger" disabled={busy} onClick={() => deletePost(post.id)} type="button">
-                                      Eliminar
+                                    <button className="btn btn-ghost danger" disabled={busy || isActionLoading(`post-delete:${post.id}`)} onClick={() => deletePost(post.id)} type="button">
+                                      {isActionLoading(`post-delete:${post.id}`) ? 'Eliminando...' : 'Eliminar'}
+                                      <ActionSpinner active={isActionLoading(`post-delete:${post.id}`)} />
                                     </button>
                                   </div>
                                 </td>
@@ -1773,7 +1842,7 @@ export default function AdminConsole() {
 
                 <form className="admin-editor" onSubmit={savePost}>
                   <div className="admin-editor-head">
-                    <h2>{form.id ? 'Editar post' : canCreatePosts ? 'Nuevo post' : 'Selecciona un post'}</h2>
+                    <h2>{publishedAuthorLocked ? 'Vista previa' : form.id ? 'Editar post' : canCreatePosts ? 'Nuevo post' : 'Selecciona un post'}</h2>
                     {form.id && <span className="admin-id">{form.id}</span>}
                   </div>
                   {publishedAuthorLocked && (
@@ -1870,14 +1939,15 @@ export default function AdminConsole() {
                             {canAddCurrentCategory && (
                               <button
                                 className="admin-category-add"
-                                disabled={busy || publishedAuthorLocked}
+                                disabled={busy || publishedAuthorLocked || isActionLoading('category-create')}
                                 onMouseDown={(e) => {
                                   e.preventDefault();
                                   createCategoryFromForm();
                                 }}
                                 type="button"
                               >
-                                Agregar "{sanitizeCategory(form.category)}"
+                                {isActionLoading('category-create') ? 'Agregando categoria...' : `Agregar "${sanitizeCategory(form.category)}"`}
+                                <ActionSpinner active={isActionLoading('category-create')} />
                               </button>
                             )}
                           </div>
@@ -1920,7 +1990,7 @@ export default function AdminConsole() {
                       <label>
                         <input
                           checked={coverMode === 'url'}
-                          disabled={publishedAuthorLocked}
+                          disabled={publishedAuthorLocked || isActionLoading('cover-upload')}
                           name="coverMode"
                           onChange={() => setCoverMode('url')}
                           type="radio"
@@ -1931,7 +2001,7 @@ export default function AdminConsole() {
                       <label>
                         <input
                           checked={coverMode === 'upload'}
-                          disabled={publishedAuthorLocked}
+                          disabled={publishedAuthorLocked || isActionLoading('cover-upload')}
                           name="coverMode"
                           onChange={() => setCoverMode('upload')}
                           type="radio"
@@ -1942,7 +2012,7 @@ export default function AdminConsole() {
                     </div>
                     {coverMode === 'url' ? (
                       <input
-                        disabled={publishedAuthorLocked}
+                        disabled={publishedAuthorLocked || isActionLoading('cover-upload')}
                         aria-invalid={coverImageError ? 'true' : 'false'}
                         aria-describedby={coverImageError ? 'cover-image-error' : undefined}
                         className={coverImageError ? 'is-invalid' : ''}
@@ -1972,7 +2042,7 @@ export default function AdminConsole() {
                           e.target.value = '';
                           uploadCoverImage(file);
                         }}
-                        disabled={uploading || publishedAuthorLocked}
+                        disabled={uploading || isActionLoading('cover-upload') || publishedAuthorLocked}
                       />
                     )}
                     {coverImageError && (
@@ -1980,11 +2050,17 @@ export default function AdminConsole() {
                         {coverImageError}
                       </p>
                     )}
+                    {isActionLoading('cover-upload') && (
+                      <p className="admin-field-info">
+                        Subiendo imagen de portada...
+                        <ActionSpinner active />
+                      </p>
+                    )}
                     {form.coverImage && (
                       <label className="admin-cover-toggle">
                         <input
                           checked={form.showCoverInPost !== false}
-                          disabled={publishedAuthorLocked}
+                          disabled={publishedAuthorLocked || isActionLoading('cover-upload')}
                           onChange={(e) => updateForm('showCoverInPost', e.target.checked)}
                           type="checkbox"
                         />
@@ -2030,11 +2106,12 @@ export default function AdminConsole() {
                       </button>
                       <button
                         className="btn btn-ghost"
-                        disabled={busy || importing || publishedAuthorLocked}
+                        disabled={busy || importing || isActionLoading('docx-import') || publishedAuthorLocked}
                         onClick={() => docxInputRef.current?.click()}
                         type="button"
                       >
-                        {importing ? 'Importando...' : 'Importar .docx'}
+                        {isActionLoading('docx-import') ? 'Importando...' : 'Importar .docx'}
+                        <ActionSpinner active={isActionLoading('docx-import')} />
                       </button>
                     </div>
                     <input
@@ -2074,44 +2151,51 @@ export default function AdminConsole() {
                   </details>
 
                   <div className="admin-actions">
-                    <button className="btn btn-primary admin-action-save" disabled={busy || uploading || importing || publishedAuthorLocked || (!form.id && !canCreatePosts)} type="submit">
-                      {form.id ? 'Guardar cambios' : 'Crear borrador'}
+                    <button className="btn btn-primary admin-action-save" disabled={busy || uploading || importing || isActionLoading('post-save') || publishedAuthorLocked || (!form.id && !canCreatePosts)} type="submit">
+                      {isActionLoading('post-save') ? 'Guardando...' : form.id ? 'Guardar cambios' : 'Crear borrador'}
+                      <ActionSpinner active={isActionLoading('post-save')} />
                     </button>
                     {form.id && (
                       <>
                         {publishedAuthorLocked && (
                           <button
                             className="btn btn-workflow"
-                            disabled={busy || editRequestPending}
+                            disabled={busy || editRequestPending || isActionLoading(`workflow:request-edit:${form.id}`)}
                             type="button"
-                            onClick={() => requestAction(`/v1/posts/${form.id}/request-edit`, 'Solicitud de edicion enviada.', 'solicitar edicion')}
+                            onClick={() => requestAction(`/v1/posts/${form.id}/request-edit`, 'Solicitud de edicion enviada.', 'solicitar edicion', `workflow:request-edit:${form.id}`)}
                           >
-                            {editRequestPending ? 'Solicitud pendiente' : 'Solicitar edicion'}
+                            {isActionLoading(`workflow:request-edit:${form.id}`) ? 'Enviando solicitud...' : editRequestPending ? 'Solicitud pendiente' : 'Solicitar edicion'}
+                            <ActionSpinner active={isActionLoading(`workflow:request-edit:${form.id}`)} />
                           </button>
                         )}
                         {canSubmitReview && !publishedAuthorLocked && (
-                          <button className="btn btn-ghost" disabled={busy} type="button" onClick={() => requestAction(`/v1/posts/${form.id}/submit-review`, 'Post enviado a revisión.', 'enviar a revisión')}>
-                            Enviar a revisión
+                          <button className="btn btn-ghost" disabled={busy || isActionLoading('workflow:submit-review')} type="button" onClick={() => requestAction(`/v1/posts/${form.id}/submit-review`, 'Post enviado a revisión.', 'enviar a revisión')}>
+                            {isActionLoading('workflow:submit-review') ? 'Enviando...' : 'Enviar a revisión'}
+                            <ActionSpinner active={isActionLoading('workflow:submit-review')} />
                           </button>
                         )}
                         {canPublishPosts && (
                           <>
                             {form.editRequestedAt && (
-                              <button className="btn btn-workflow" disabled={busy} type="button" onClick={() => requestAction(`/v1/posts/${form.id}/enable-edit`, 'Post habilitado como borrador.', 'habilitar edicion')}>
-                                Habilitar edicion
+                              <button className="btn btn-workflow" disabled={busy || isActionLoading('workflow:enable-edit')} type="button" onClick={() => requestAction(`/v1/posts/${form.id}/enable-edit`, 'Post habilitado como borrador.', 'habilitar edicion')}>
+                                {isActionLoading('workflow:enable-edit') ? 'Habilitando...' : 'Habilitar edicion'}
+                                <ActionSpinner active={isActionLoading('workflow:enable-edit')} />
                               </button>
                             )}
-                            <button className="btn btn-ghost" disabled={busy} type="button" onClick={() => requestAction(`/v1/posts/${form.id}/publish`, 'Post publicado.', 'publicar')}>
-                              Publicar
+                            <button className="btn btn-ghost" disabled={busy || isActionLoading('workflow:publish')} type="button" onClick={() => requestAction(`/v1/posts/${form.id}/publish`, 'Post publicado.', 'publicar')}>
+                              {isActionLoading('workflow:publish') ? 'Publicando...' : 'Publicar'}
+                              <ActionSpinner active={isActionLoading('workflow:publish')} />
                             </button>
-                            <button className="btn btn-ghost" disabled={busy} type="button" onClick={() => requestAction(`/v1/posts/${form.id}/archive`, 'Post archivado.', 'archivar')}>
-                              Archivar
+                            <button className="btn btn-ghost" disabled={busy || isActionLoading('workflow:archive')} type="button" onClick={() => requestAction(`/v1/posts/${form.id}/archive`, 'Post archivado.', 'archivar')}>
+                              {isActionLoading('workflow:archive') ? 'Archivando...' : 'Archivar'}
+                              <ActionSpinner active={isActionLoading('workflow:archive')} />
                             </button>
                           </>
                         )}
                         {canDeletePosts && (
-                          <button className="btn btn-ghost danger" disabled={busy} type="button" onClick={() => deletePost(form.id)}>
-                            Eliminar
+                          <button className="btn btn-ghost danger" disabled={busy || isActionLoading(`post-delete:${form.id}`)} type="button" onClick={() => deletePost(form.id)}>
+                            {isActionLoading(`post-delete:${form.id}`) ? 'Eliminando...' : 'Eliminar'}
+                            <ActionSpinner active={isActionLoading(`post-delete:${form.id}`)} />
                           </button>
                         )}
                       </>
@@ -2217,13 +2301,15 @@ export default function AdminConsole() {
                                   </button>
                                 )}
                                 {comment.status !== 'resolved' && (
-                                  <button className="btn btn-ghost" disabled={busy} onClick={() => updateReviewCommentStatus(comment.id, 'resolved')} type="button">
-                                    Resolver
+                                  <button className="btn btn-ghost" disabled={busy || isActionLoading(`comment-status:${comment.id}`)} onClick={() => updateReviewCommentStatus(comment.id, 'resolved')} type="button">
+                                    {isActionLoading(`comment-status:${comment.id}`) ? 'Resolviendo...' : 'Resolver'}
+                                    <ActionSpinner active={isActionLoading(`comment-status:${comment.id}`)} />
                                   </button>
                                 )}
                                 {canPublishPosts && (
-                                  <button className="btn btn-ghost danger" disabled={busy} onClick={() => deleteReviewComment(comment.id)} type="button">
-                                    Eliminar
+                                  <button className="btn btn-ghost danger" disabled={busy || isActionLoading(`comment-delete:${comment.id}`)} onClick={() => deleteReviewComment(comment.id)} type="button">
+                                    {isActionLoading(`comment-delete:${comment.id}`) ? 'Eliminando...' : 'Eliminar'}
+                                    <ActionSpinner active={isActionLoading(`comment-delete:${comment.id}`)} />
                                   </button>
                                 )}
                               </div>
@@ -2283,8 +2369,9 @@ export default function AdminConsole() {
                       <button className="btn btn-ghost" onClick={() => setCategoryDeleteTarget(null)} type="button">
                         Cancelar
                       </button>
-                      <button className="btn btn-primary" disabled={busy} onClick={() => deleteCategory(categoryDeleteTarget)} type="button">
-                        Eliminar categoría
+                      <button className="btn btn-primary" disabled={busy || isActionLoading(`category-delete:${categoryDeleteTarget.id}`)} onClick={() => deleteCategory(categoryDeleteTarget)} type="button">
+                        {isActionLoading(`category-delete:${categoryDeleteTarget.id}`) ? 'Eliminando...' : 'Eliminar categoría'}
+                        <ActionSpinner active={isActionLoading(`category-delete:${categoryDeleteTarget.id}`)} />
                       </button>
                     </div>
                   </div>
@@ -2301,11 +2388,13 @@ export default function AdminConsole() {
                       <button className="btn btn-ghost" disabled={busy} onClick={() => setPendingAction(null)} type="button">
                         Cancelar
                       </button>
-                      <button className="btn btn-ghost" disabled={busy} onClick={confirmPendingAction} type="button">
+                      <button className="btn btn-ghost" disabled={busy || isActionLoading(pendingAction.loadingKey)} onClick={confirmPendingAction} type="button">
                         {actionButtonLabel(pendingAction.label)} sin guardar
+                        <ActionSpinner active={isActionLoading(pendingAction.loadingKey)} />
                       </button>
-                      <button className="btn btn-primary" disabled={busy} onClick={saveAndConfirmPendingAction} type="button">
+                      <button className="btn btn-primary" disabled={busy || isActionLoading('post-save') || isActionLoading(pendingAction.loadingKey)} onClick={saveAndConfirmPendingAction} type="button">
                         Guardar y {pendingAction.label}
+                        <ActionSpinner active={isActionLoading('post-save') || isActionLoading(pendingAction.loadingKey)} />
                       </button>
                     </div>
                   </div>
@@ -2329,8 +2418,9 @@ export default function AdminConsole() {
                       <button className="btn btn-ghost" disabled={busy} onClick={() => setEditingReviewComment(null)} type="button">
                         Cancelar
                       </button>
-                      <button className="btn btn-primary" disabled={busy || !normalizeInlineInput(editingReviewComment.body)} onClick={saveEditedReviewComment} type="button">
-                        Guardar comentario
+                      <button className="btn btn-primary" disabled={busy || isActionLoading(`comment-edit:${editingReviewComment.id}`) || !normalizeInlineInput(editingReviewComment.body)} onClick={saveEditedReviewComment} type="button">
+                        {isActionLoading(`comment-edit:${editingReviewComment.id}`) ? 'Guardando...' : 'Guardar comentario'}
+                        <ActionSpinner active={isActionLoading(`comment-edit:${editingReviewComment.id}`)} />
                       </button>
                     </div>
                   </div>
@@ -2442,6 +2532,24 @@ function actionButtonLabel(label = '') {
   return labels[normalized] || `${normalized.charAt(0).toUpperCase()}${normalized.slice(1)}`;
 }
 
+function workflowActionKey(path = '') {
+  const cleanPath = String(path || '');
+  const postActionMatch = cleanPath.match(/\/v1\/posts\/([^/]+)\/([^/]+)/);
+  const postId = postActionMatch?.[1];
+  const postAction = postActionMatch?.[2];
+  if (postAction === 'submit-review') return postId ? `workflow:submit-review:${postId}` : 'workflow:submit-review';
+  if (postAction === 'request-edit') return postId ? `workflow:request-edit:${postId}` : 'workflow:request-edit';
+  if (postAction === 'enable-edit') return postId ? `workflow:enable-edit:${postId}` : 'workflow:enable-edit';
+  if (postAction === 'publish') return postId ? `workflow:publish:${postId}` : 'workflow:publish';
+  if (postAction === 'archive') return postId ? `workflow:archive:${postId}` : 'workflow:archive';
+  if (cleanPath.includes('/submit-review')) return 'workflow:submit-review';
+  if (cleanPath.includes('/request-edit')) return 'workflow:request-edit';
+  if (cleanPath.includes('/enable-edit')) return 'workflow:enable-edit';
+  if (cleanPath.includes('/publish')) return 'workflow:publish';
+  if (cleanPath.includes('/archive')) return 'workflow:archive';
+  return `workflow:${cleanPath}`;
+}
+
 function adminMessageKind(message = '') {
   return /error|no se pudo|no pudimos|falta|missing|solo|usa un email|elegi|sin permisos|invalid|denied|rechaz|failed|credenciales/i.test(message)
     ? 'error'
@@ -2484,8 +2592,17 @@ function normalizeProfile(value = {}) {
     lastName,
     description: normalizeInputValue(value.description),
     photoUrl: normalizeInputValue(value.photoUrl),
+    publicProfileEnabled: value.publicProfileEnabled === true,
+    authorSlug: normalizeInputValue(value.authorSlug),
     fullName,
+    createdAt: normalizeInputValue(value.createdAt),
+    updatedAt: normalizeInputValue(value.updatedAt),
   };
+}
+
+function profileNeedsSetup(profile = {}) {
+  const nextProfile = normalizeProfile(profile);
+  return !nextProfile.updatedAt || !nextProfile.fullName;
 }
 
 function postToForm(post = {}) {

@@ -1,5 +1,5 @@
 import BlogIndex from '../../../components/BlogIndex';
-import { getPosts } from '../../../lib/blogApi';
+import { getPosts, getPublicAuthorProfile } from '../../../lib/blogApi';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,9 +8,12 @@ export const metadata = { title: 'Blog - Politeia' };
 export default async function BlogPage({ searchParams }) {
   const params = await searchParams;
   const autorFiltro = normalizarParametro(params?.autor);
-  const posts = await getPosts(30);
+  const [posts, authorProfile] = await Promise.all([
+    getPosts(30),
+    autorFiltro ? getPublicAuthorProfile(autorFiltro) : null,
+  ]);
 
-  return <BlogIndex posts={posts} autorFiltro={autorFiltro} />;
+  return <BlogIndex posts={posts} autorFiltro={autorFiltro} authorProfile={authorProfile} />;
 }
 
 function normalizarParametro(value) {

@@ -2,6 +2,7 @@ import { db, serializeDoc, serverTimestamp } from '../firestore.js';
 import { HttpError } from '../errors.js';
 import { writeAuditLog } from './audit.js';
 import { normalizeEmail } from './users.js';
+import { isValidSlug, slugify } from '../utils/slug.js';
 
 const profiles = () => db().collection('userProfiles');
 
@@ -21,10 +22,12 @@ export async function updateUserProfile(user, data) {
   const beforeDoc = await ref.get();
   const before = beforeDoc.exists ? toUserProfile(serializeDoc(beforeDoc), user) : null;
   const clean = sanitizeProfile(data);
+  const fullName = buildFullName(clean.firstName, clean.lastName);
   const patch = {
     ...clean,
     email,
-    fullName: buildFullName(clean.firstName, clean.lastName),
+    fullName,
+    authorSlug: slugify(fullName),
     updatedAt: serverTimestamp(),
     updatedBy: email,
   };
@@ -47,6 +50,23 @@ export async function updateUserProfile(user, data) {
   return after;
 }
 
+export async function getPublicAuthorProfileBySlug(slug = '') {
+  const cleanSlug = slugify(slug);
+  if (!cleanSlug || !isValidSlug(cleanSlug)) return null;
+
+  const snapshot = await profiles()
+    .where('authorSlug', '==', cleanSlug)
+    .limit(10)
+    .get();
+
+  const item = snapshot.docs
+    .map((doc) => serializeDoc(doc))
+    .map(toPublicAuthorProfile)
+    .find(Boolean);
+
+  return item || null;
+}
+
 export async function resolveUserDisplayName(user) {
   const profile = await getUserProfile(user);
   return profile.fullName || user?.name || user?.email || '';
@@ -57,12 +77,14 @@ export function sanitizeProfile(data = {}) {
   const lastName = normalizeText(data.lastName).slice(0, 80);
   const description = normalizeText(data.description).slice(0, 500);
   const photoUrl = normalizeUrl(data.photoUrl);
+  const publicProfileEnabled = data.publicProfileEnabled === true;
 
   return {
     firstName,
     lastName,
     description,
     photoUrl,
+    publicProfileEnabled,
   };
 }
 
@@ -77,8 +99,22 @@ function toUserProfile(item, user) {
     email: normalizeEmail(item?.email || user?.email),
     ...clean,
     fullName: buildFullName(clean.firstName, clean.lastName),
+    authorSlug: slugify(item?.authorSlug || buildFullName(clean.firstName, clean.lastName)),
     createdAt: item?.createdAt || '',
     updatedAt: item?.updatedAt || '',
+  };
+}
+
+function toPublicAuthorProfile(item) {
+  const clean = sanitizeProfile(item || {});
+  const fullName = buildFullName(clean.firstName, clean.lastName);
+  if (!clean.publicProfileEnabled || !fullName) return null;
+
+  return {
+    fullName,
+    authorSlug: slugify(item?.authorSlug || fullName),
+    description: clean.description,
+    photoUrl: clean.photoUrl,
   };
 }
 

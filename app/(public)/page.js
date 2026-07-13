@@ -12,7 +12,7 @@ export default function Home() {
             <span className="eyebrow">Politeia</span>
             <h1 id="coming-title">Estamos preparando una nueva experiencia.</h1>
             <p>
-              El sitio esta en etapa de puesta a punto. Pronto tendremos novedades.
+              Pronto tendremos novedades.
             </p>
           </div>
           <div className="coming-panel" aria-label="Progreso">
