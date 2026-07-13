@@ -21,7 +21,7 @@ export async function updateUserProfile(user, data) {
   const ref = profiles().doc(profileId(email));
   const beforeDoc = await ref.get();
   const before = beforeDoc.exists ? toUserProfile(serializeDoc(beforeDoc), user) : null;
-  const clean = sanitizeProfile(data);
+  const clean = sanitizeProfile({ ...(before || {}), ...(data || {}) });
   const fullName = buildFullName(clean.firstName, clean.lastName);
   const patch = {
     ...clean,

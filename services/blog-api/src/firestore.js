@@ -10,6 +10,10 @@ export function db() {
   return firestore;
 }
 
+export function setFirestoreForTests(instance) {
+  firestore = instance;
+}
+
 export const serverTimestamp = FieldValue.serverTimestamp;
 export { Timestamp };
 

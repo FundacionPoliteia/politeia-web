@@ -4,8 +4,15 @@ import request from 'supertest';
 import { createApp } from '../src/app.js';
 import { buildSessionCookie, expandRoles, resolveBuiltInRoles, verifySessionCookie } from '../src/auth.js';
 import { config, parseEnvValue } from '../src/config.js';
+import { setFirestoreForTests } from '../src/firestore.js';
 import { canManageAllPosts, toBlogAuthorView } from '../src/repositories/posts.js';
-import { buildFullName, sanitizeProfile } from '../src/repositories/profiles.js';
+import {
+  buildFullName,
+  getPublicAuthorProfileBySlug,
+  getUserProfile,
+  sanitizeProfile,
+  updateUserProfile,
+} from '../src/repositories/profiles.js';
 import { isAllowedRoleEmail, sanitizeAssignedRoles } from '../src/repositories/users.js';
 
 test('GET /healthz returns service health', async () => {
@@ -75,6 +82,38 @@ test('user profiles normalize personal fields separately from roles', () => {
     publicProfileEnabled: true,
   });
   assert.throws(() => sanitizeProfile({ photoUrl: 'http://example.com/foto.png' }), /photoUrl/);
+});
+
+test('user profile public opt-in persists after save and reload', async () => {
+  const firestore = createMemoryFirestore();
+  setFirestoreForTests(firestore);
+
+  try {
+    const user = { email: 'juan@politeia.ar', name: 'Juan' };
+    const saved = await updateUserProfile(user, {
+      firstName: 'Juan Cruz',
+      lastName: 'Galarza',
+      description: 'Autor de relaciones internacionales.',
+      publicProfileEnabled: true,
+    });
+
+    assert.equal(saved.publicProfileEnabled, true);
+    assert.equal(saved.authorSlug, 'juan-cruz-galarza');
+
+    const loaded = await getUserProfile(user);
+    assert.equal(loaded.publicProfileEnabled, true);
+
+    const updated = await updateUserProfile(user, {
+      description: 'Bio actualizada.',
+    });
+    assert.equal(updated.publicProfileEnabled, true);
+
+    const publicProfile = await getPublicAuthorProfileBySlug('juan-cruz-galarza');
+    assert.equal(publicProfile.fullName, 'Juan Cruz Galarza');
+    assert.equal(publicProfile.description, 'Bio actualizada.');
+  } finally {
+    setFirestoreForTests(null);
+  }
 });
 
 test('env parser ignores inline comments outside quotes', () => {
@@ -238,3 +277,93 @@ test('protected cloud routes fail clearly when local ADC is missing', async () =
 
   assert.equal(res.status, 200);
 });
+
+function createMemoryFirestore() {
+  const collections = new Map();
+  return {
+    collection(name) {
+      if (!collections.has(name)) collections.set(name, new Map());
+      return new MemoryCollection(collections.get(name));
+    },
+  };
+}
+
+class MemoryCollection {
+  constructor(store) {
+    this.store = store;
+  }
+
+  doc(id) {
+    return new MemoryDoc(this.store, id);
+  }
+
+  async add(data) {
+    const id = `doc-${this.store.size + 1}`;
+    this.store.set(id, resolveMemoryData(data));
+    return this.doc(id);
+  }
+
+  where(field, operator, value) {
+    assert.equal(operator, '==');
+    const docs = Array.from(this.store.entries())
+      .filter(([, data]) => data?.[field] === value)
+      .map(([id, data]) => memorySnapshot(id, data));
+    return new MemoryQuery(docs);
+  }
+}
+
+class MemoryDoc {
+  constructor(store, id) {
+    this.store = store;
+    this.id = id;
+  }
+
+  async get() {
+    return memorySnapshot(this.id, this.store.get(this.id));
+  }
+
+  async set(data, options = {}) {
+    const current = options.merge ? this.store.get(this.id) || {} : {};
+    this.store.set(this.id, {
+      ...current,
+      ...resolveMemoryData(data),
+    });
+  }
+}
+
+class MemoryQuery {
+  constructor(docs) {
+    this.docs = docs;
+  }
+
+  limit() {
+    return this;
+  }
+
+  async get() {
+    return { docs: this.docs };
+  }
+}
+
+function memorySnapshot(id, data) {
+  return {
+    id,
+    exists: Boolean(data),
+    data: () => data || {},
+  };
+}
+
+function resolveMemoryData(data = {}) {
+  return Object.fromEntries(
+    Object.entries(data).map(([key, value]) => [key, resolveMemoryValue(key, value)])
+  );
+}
+
+function resolveMemoryValue(key, value) {
+  if (Array.isArray(value)) return value.map((item) => resolveMemoryValue(key, item));
+  if (value && typeof value === 'object') {
+    if (key.endsWith('At') && typeof value.toDate !== 'function') return '2026-01-01T00:00:00.000Z';
+    return resolveMemoryData(value);
+  }
+  return value;
+}
