@@ -1466,6 +1466,51 @@ export default function AdminConsole() {
           </div>
           <Link href="https://politeia.ar/blog" className="btn btn-ghost">Ver blog publico</Link>
         </div>
+        {user && canAccessPanel && notificationsOpen && (
+          <div className="wrap admin-inbox-wrap">
+            <section className="admin-inbox admin-inbox-tray" aria-label="Notificaciones internas">
+              <div className="admin-inbox-head">
+                <div>
+                  <span>Notificaciones</span>
+                  <h2>Actividad editorial</h2>
+                </div>
+                <div>
+                  <button className="btn btn-ghost" disabled={loadingNotifications} onClick={() => loadInAppNotifications()} type="button">
+                    Actualizar
+                  </button>
+                  <button className="btn btn-ghost" disabled={loadingNotifications || unreadNotificationCount === 0} onClick={markAllNotificationsRead} type="button">
+                    Marcar todas como leidas
+                  </button>
+                </div>
+              </div>
+              {loadingNotifications ? (
+                <p className="admin-muted">Cargando notificaciones...</p>
+              ) : inAppNotifications.length === 0 ? (
+                <p className="admin-muted">No hay notificaciones recientes.</p>
+              ) : (
+                <div className="admin-inbox-list">
+                  {inAppNotifications.map((notification) => (
+                    <button
+                      className={`admin-inbox-item ${notification.readAt ? '' : 'unread'}`}
+                      key={notification.id}
+                      onClick={() => openInAppNotification(notification)}
+                      type="button"
+                    >
+                      <span className={`admin-inbox-icon ${notification.readAt ? '' : 'unread'}`}>
+                        <span aria-hidden="true" className="material-symbols-outlined">{notificationIcon(notification.type)}</span>
+                      </span>
+                      <span>
+                        <strong>{notificationTitle(notification)}</strong>
+                        <small>{notification.actorName ? `${notification.actorName} - ` : ''}{formatAdminDate(notification.createdAt)}</small>
+                        {notification.commentSelectedText && <q>{notification.commentSelectedText}</q>}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
+        )}
       </section>
 
       <section className="sec">
@@ -1514,11 +1559,51 @@ export default function AdminConsole() {
             </div>
           ) : (
             <>
-              <div className="admin-session">
-                <div>
+              <div className="admin-panel-navbar">
+                <div className="admin-panel-user">
                   <strong>{user.name || user.email}</strong>
                   <span>{user.email} - {roleLabel} - {roles.join(', ')}</span>
                 </div>
+                <nav className="admin-tabs" aria-label="Secciones del panel">
+                  <button
+                    aria-pressed={activePanelTab === 'blogs'}
+                    className={activePanelTab === 'blogs' ? 'selected' : ''}
+                    onClick={() => setActivePanelTab('blogs')}
+                    type="button"
+                  >
+                    Gestor de blogs
+                  </button>
+                  {canAccessRolesMailPanel && (
+                    <button
+                      aria-pressed={activePanelTab === 'access'}
+                      className={activePanelTab === 'access' ? 'selected' : ''}
+                      onClick={() => setActivePanelTab('access')}
+                      type="button"
+                    >
+                      Roles y mails
+                    </button>
+                  )}
+                  {canAccessProfilePanel && (
+                    <button
+                      aria-pressed={activePanelTab === 'profile'}
+                      className={activePanelTab === 'profile' ? 'selected' : ''}
+                      onClick={() => setActivePanelTab('profile')}
+                      type="button"
+                    >
+                      Usuario y perfil
+                    </button>
+                  )}
+                  {canReviewProfiles && (
+                    <button
+                      aria-pressed={activePanelTab === 'profiles'}
+                      className={activePanelTab === 'profiles' ? 'selected' : ''}
+                      onClick={() => setActivePanelTab('profiles')}
+                      type="button"
+                    >
+                      Perfiles
+                    </button>
+                  )}
+                </nav>
                 <div className="admin-session-actions">
                   <button
                     aria-expanded={notificationsOpen}
@@ -1540,90 +1625,6 @@ export default function AdminConsole() {
                   </button>
                 </div>
               </div>
-              {notificationsOpen && (
-                <section className="admin-inbox" aria-label="Notificaciones internas">
-                  <div className="admin-inbox-head">
-                    <div>
-                      <span>Notificaciones</span>
-                      <h2>Actividad editorial</h2>
-                    </div>
-                    <div>
-                      <button className="btn btn-ghost" disabled={loadingNotifications} onClick={() => loadInAppNotifications()} type="button">
-                        Actualizar
-                      </button>
-                      <button className="btn btn-ghost" disabled={loadingNotifications || unreadNotificationCount === 0} onClick={markAllNotificationsRead} type="button">
-                        Marcar todas como leidas
-                      </button>
-                    </div>
-                  </div>
-                  {loadingNotifications ? (
-                    <p className="admin-muted">Cargando notificaciones...</p>
-                  ) : inAppNotifications.length === 0 ? (
-                    <p className="admin-muted">No hay notificaciones recientes.</p>
-                  ) : (
-                    <div className="admin-inbox-list">
-                      {inAppNotifications.map((notification) => (
-                        <button
-                          className={`admin-inbox-item ${notification.readAt ? '' : 'unread'}`}
-                          key={notification.id}
-                          onClick={() => openInAppNotification(notification)}
-                          type="button"
-                        >
-                          <span className={`admin-inbox-icon ${notification.readAt ? '' : 'unread'}`}>
-                            <span aria-hidden="true" className="material-symbols-outlined">{notificationIcon(notification.type)}</span>
-                          </span>
-                          <span>
-                            <strong>{notificationTitle(notification)}</strong>
-                            <small>{notification.actorName ? `${notification.actorName} - ` : ''}{formatAdminDate(notification.createdAt)}</small>
-                            {notification.commentSelectedText && <q>{notification.commentSelectedText}</q>}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </section>
-              )}
-              <nav className="admin-tabs" aria-label="Secciones del panel">
-                <button
-                  aria-pressed={activePanelTab === 'blogs'}
-                  className={activePanelTab === 'blogs' ? 'selected' : ''}
-                  onClick={() => setActivePanelTab('blogs')}
-                  type="button"
-                >
-                  Gestor de blogs
-                </button>
-                {canAccessRolesMailPanel && (
-                  <button
-                    aria-pressed={activePanelTab === 'access'}
-                    className={activePanelTab === 'access' ? 'selected' : ''}
-                    onClick={() => setActivePanelTab('access')}
-                    type="button"
-                  >
-                    Roles y mails
-                  </button>
-                )}
-                {canAccessProfilePanel && (
-                  <button
-                    aria-pressed={activePanelTab === 'profile'}
-                    className={activePanelTab === 'profile' ? 'selected' : ''}
-                    onClick={() => setActivePanelTab('profile')}
-                    type="button"
-                  >
-                    Usuario y perfil
-                  </button>
-                )}
-                {canReviewProfiles && (
-                  <button
-                    aria-pressed={activePanelTab === 'profiles'}
-                    className={activePanelTab === 'profiles' ? 'selected' : ''}
-                    onClick={() => setActivePanelTab('profiles')}
-                    type="button"
-                  >
-                    Perfiles
-                  </button>
-                )}
-              </nav>
-
               {activePanelTab === 'profile' && (
                 <section className="admin-manager admin-profile">
                   <div className="admin-manager-head">

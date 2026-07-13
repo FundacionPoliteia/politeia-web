@@ -1807,7 +1807,7 @@ a {
 }
 
 .admin-hero {
-  padding: 56px 0 32px;
+  padding: 56px 0 0;
   background: var(--blanco);
   border-bottom: 1px solid var(--linea)
 }
@@ -1816,7 +1816,8 @@ a {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 28px
+  gap: 28px;
+  margin-bottom: 32px
 }
 
 .admin-hero h1 {
@@ -1831,6 +1832,10 @@ a {
   color: var(--gris);
   max-width: 62ch;
   font-size: 1.04rem
+}
+
+.admin-inbox-wrap {
+  margin-top: 30px
 }
 
 .admin-login,
@@ -1873,25 +1878,30 @@ a {
   margin-top: 18px
 }
 
-.admin-session {
+.admin-panel-navbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: 16px;
   background: var(--blanco);
   border: 1px solid var(--linea);
-  border-radius: 14px;
-  padding: 16px 18px;
-  margin-bottom: 22px
+  border-radius: 999px;
+  padding: 8px 10px 8px 18px;
+  margin-bottom: 22px;
+  box-shadow: 0 10px 26px rgba(26, 26, 55, .04)
 }
 
-.admin-session strong {
+.admin-panel-user {
+  min-width: 220px
+}
+
+.admin-panel-user strong {
   display: block;
   font-family: var(--display);
   font-size: 1.14rem
 }
 
-.admin-session span {
+.admin-panel-user span {
   display: block;
   color: var(--gris);
   font-size: .88rem;
@@ -1952,12 +1962,11 @@ a {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: var(--blanco);
-  border: 1px solid var(--linea);
+  background: var(--hueso);
+  border: 1px solid rgba(26, 26, 55, .06);
   border-radius: 999px;
   padding: 5px;
-  margin-bottom: 22px;
-  box-shadow: 0 10px 26px rgba(26, 26, 55, .04)
+  margin: 0 auto
 }
 
 .admin-tabs button {
@@ -2145,11 +2154,16 @@ a {
 
 .admin-inbox {
   border: 1px solid var(--linea);
-  border-radius: 16px;
+  border-radius: 18px 18px 0 0;
   background: var(--blanco);
-  padding: 18px;
-  margin-bottom: 18px;
-  box-shadow: 0 18px 44px rgba(26, 26, 55, .08)
+  padding: 22px;
+  box-shadow: 0 22px 54px rgba(26, 26, 55, .1)
+}
+
+.admin-inbox-tray {
+  border-bottom: 0;
+  margin-bottom: -1px;
+  background: linear-gradient(180deg, #fff 0%, #f8fbfc 100%)
 }
 
 .admin-inbox-head {
@@ -2186,8 +2200,9 @@ a {
 
 .admin-inbox-list {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 10px;
-  max-height: 420px;
+  max-height: 360px;
   overflow: auto
 }
 
@@ -4083,6 +4098,21 @@ a {
     flex-direction: column
   }
 
+  .admin-panel-navbar {
+    align-items: stretch;
+    border-radius: 18px;
+    flex-direction: column;
+    padding: 14px
+  }
+
+  .admin-panel-user {
+    min-width: 0
+  }
+
+  .admin-session-actions {
+    justify-content: space-between
+  }
+
   .admin-grid {
     grid-template-columns: 1fr
   }
@@ -4112,11 +4142,6 @@ a {
 }
 
 @media(max-width:620px) {
-  .admin-session {
-    align-items: flex-start;
-    flex-direction: column
-  }
-
   .admin-tabs {
     display: grid;
     grid-template-columns: 1fr;
