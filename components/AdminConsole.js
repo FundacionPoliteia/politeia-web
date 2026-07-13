@@ -134,6 +134,8 @@ export default function AdminConsole() {
   const [profileDraft, setProfileDraft] = useState(EMPTY_PROFILE);
   const [adminProfiles, setAdminProfiles] = useState([]);
   const [adminProfileDraft, setAdminProfileDraft] = useState(EMPTY_MANAGED_AUTHOR_PROFILE);
+  const [adminProfileEditingId, setAdminProfileEditingId] = useState('');
+  const [adminProfilePhotoMode, setAdminProfilePhotoMode] = useState('url');
   const [adminProfileDeleteTarget, setAdminProfileDeleteTarget] = useState(null);
   const [savingProfile, setSavingProfile] = useState(false);
   const [profilePhotoUploading, setProfilePhotoUploading] = useState(false);
@@ -145,6 +147,7 @@ export default function AdminConsole() {
   const signInRef = useRef(null);
   const docxInputRef = useRef(null);
   const profilePhotoInputRef = useRef(null);
+  const adminProfilePhotoInputRef = useRef(null);
   const coverValidationRef = useRef(0);
 
   const roles = user?.roles || [];
@@ -575,7 +578,32 @@ export default function AdminConsole() {
     }));
   }
 
-  async function createAdminAuthorProfile(event) {
+  function resetAdminAuthorProfileForm() {
+    setAdminProfileDraft(EMPTY_MANAGED_AUTHOR_PROFILE);
+    setAdminProfileEditingId('');
+    setAdminProfilePhotoMode('url');
+    if (adminProfilePhotoInputRef.current) {
+      adminProfilePhotoInputRef.current.value = '';
+    }
+  }
+
+  function editAdminAuthorProfile(profile) {
+    if (!profile?.managedAuthor) return;
+    setAdminProfileEditingId(profile.id);
+    setAdminProfileDraft({
+      firstName: profile.firstName,
+      lastName: profile.lastName,
+      description: profile.description,
+      photoUrl: profile.photoUrl,
+      publicProfileEnabled: profile.publicProfileEnabled,
+    });
+    setAdminProfilePhotoMode(profile.photoUrl ? 'url' : 'upload');
+    if (adminProfilePhotoInputRef.current) {
+      adminProfilePhotoInputRef.current.value = '';
+    }
+  }
+
+  async function saveAdminAuthorProfile(event) {
     event.preventDefault();
     try {
       setMessage('');
@@ -586,15 +614,33 @@ export default function AdminConsole() {
         photoUrl: adminProfileDraft.photoUrl,
         publicProfileEnabled: adminProfileDraft.publicProfileEnabled,
       };
-      await withActionLoading('admin-profile-create', () => api('/v1/profile/manage', {
-        method: 'POST',
+      const isEditing = Boolean(adminProfileEditingId);
+      const path = isEditing ? `/v1/profile/manage/${encodeURIComponent(adminProfileEditingId)}` : '/v1/profile/manage';
+      await withActionLoading(isEditing ? 'admin-profile-update' : 'admin-profile-create', () => api(path, {
+        method: isEditing ? 'PATCH' : 'POST',
         body: JSON.stringify(payload),
       }));
-      setAdminProfileDraft(EMPTY_MANAGED_AUTHOR_PROFILE);
+      resetAdminAuthorProfileForm();
       await loadAdminProfiles();
-      setMessage('Perfil de autor creado.');
+      setMessage(isEditing ? 'Perfil de autor actualizado.' : 'Perfil de autor creado.');
     } catch (err) {
       setMessage(err.message);
+    }
+  }
+
+  async function uploadAdminProfilePhoto(file) {
+    if (!file) return;
+    try {
+      setMessage('');
+      const media = await withActionLoading('admin-profile-photo', () => uploadMedia(file));
+      updateAdminProfileDraft('photoUrl', media?.url || '');
+      setMessage('Foto de autor cargada. Guarda el perfil para conservar el cambio.');
+    } catch (err) {
+      setMessage(imageLoadErrorMessage(err));
+    } finally {
+      if (adminProfilePhotoInputRef.current) {
+        adminProfilePhotoInputRef.current.value = '';
+      }
     }
   }
 
@@ -1510,12 +1556,12 @@ export default function AdminConsole() {
                   <div className="admin-profile-notice">
                     Si el nombre visible no coincide con el autor usado en una nota, el perfil no se va a mostrar correctamente y el usuario no podra activar la publicacion del perfil.
                   </div>
-                  <form className="admin-managed-profile-form" onSubmit={createAdminAuthorProfile}>
+                  <form className="admin-managed-profile-form" onSubmit={saveAdminAuthorProfile}>
                     <div className="admin-manager-head compact">
                       <div>
-                        <span>Nuevo autor</span>
-                        <h3>Crear perfil sin cuenta</h3>
-                        <p>Usalo para autores que no ingresan al panel, pero necesitan tener perfil en el blog.</p>
+                        <span>{adminProfileEditingId ? 'Autor gestionado' : 'Nuevo autor'}</span>
+                        <h3>{adminProfileEditingId ? 'Editar perfil sin cuenta' : 'Crear perfil sin cuenta'}</h3>
+                        <p>{adminProfileEditingId ? 'Actualiza los datos publicos del perfil gestionado.' : 'Usalo para autores que no ingresan al panel, pero necesitan tener perfil en el blog.'}</p>
                       </div>
                     </div>
                     <div className="admin-two">
@@ -1547,12 +1593,67 @@ export default function AdminConsole() {
                       />
                     </label>
                     <label>
-                      Foto por URL
-                      <input
-                        onChange={(event) => updateAdminProfileDraft('photoUrl', event.target.value)}
-                        placeholder="https://..."
-                        value={adminProfileDraft.photoUrl}
-                      />
+                      Foto
+                      <div className="admin-radio-group">
+                        <label>
+                          <input
+                            checked={adminProfilePhotoMode === 'url'}
+                            disabled={isActionLoading('admin-profile-photo')}
+                            name="adminProfilePhotoMode"
+                            onChange={() => setAdminProfilePhotoMode('url')}
+                            type="radio"
+                            value="url"
+                          />
+                          URL
+                        </label>
+                        <label>
+                          <input
+                            checked={adminProfilePhotoMode === 'upload'}
+                            disabled={isActionLoading('admin-profile-photo')}
+                            name="adminProfilePhotoMode"
+                            onChange={() => setAdminProfilePhotoMode('upload')}
+                            type="radio"
+                            value="upload"
+                          />
+                          Subir foto
+                        </label>
+                      </div>
+                      {adminProfilePhotoMode === 'url' ? (
+                        <input
+                          disabled={isActionLoading('admin-profile-photo')}
+                          onChange={(event) => updateAdminProfileDraft('photoUrl', event.target.value)}
+                          placeholder="https://..."
+                          value={adminProfileDraft.photoUrl}
+                        />
+                      ) : (
+                        <input
+                          accept="image/jpeg,image/png,image/webp"
+                          disabled={isActionLoading('admin-profile-photo')}
+                          onChange={(event) => uploadAdminProfilePhoto(event.target.files?.[0])}
+                          ref={adminProfilePhotoInputRef}
+                          type="file"
+                        />
+                      )}
+                      {isActionLoading('admin-profile-photo') && (
+                        <p className="admin-field-info">
+                          Subiendo foto...
+                          <ActionSpinner active />
+                        </p>
+                      )}
+                      {adminProfileDraft.photoUrl && (
+                        <div className="admin-managed-photo-preview">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img alt="" src={adminProfileDraft.photoUrl} />
+                          <button
+                            className="btn btn-ghost"
+                            disabled={isActionLoading('admin-profile-photo')}
+                            onClick={() => updateAdminProfileDraft('photoUrl', '')}
+                            type="button"
+                          >
+                            Quitar foto
+                          </button>
+                        </div>
+                      )}
                     </label>
                     <label className="admin-profile-share">
                       <input
@@ -1566,9 +1667,23 @@ export default function AdminConsole() {
                       </span>
                     </label>
                     <div className="admin-manager-actions">
-                      <button className="btn btn-primary" disabled={isActionLoading('admin-profile-create')} type="submit">
-                        {isActionLoading('admin-profile-create') ? 'Creando perfil...' : 'Crear perfil de autor'}
-                        <ActionSpinner active={isActionLoading('admin-profile-create')} />
+                      {adminProfileEditingId && (
+                        <button
+                          className="btn btn-ghost"
+                          disabled={isActionLoading('admin-profile-update') || isActionLoading('admin-profile-photo')}
+                          onClick={resetAdminAuthorProfileForm}
+                          type="button"
+                        >
+                          Cancelar edicion
+                        </button>
+                      )}
+                      <button
+                        className="btn btn-primary"
+                        disabled={isActionLoading('admin-profile-create') || isActionLoading('admin-profile-update') || isActionLoading('admin-profile-photo')}
+                        type="submit"
+                      >
+                        {isActionLoading('admin-profile-update') ? 'Guardando perfil...' : isActionLoading('admin-profile-create') ? 'Creando perfil...' : adminProfileEditingId ? 'Guardar perfil' : 'Crear perfil de autor'}
+                        <ActionSpinner active={isActionLoading('admin-profile-create') || isActionLoading('admin-profile-update')} />
                       </button>
                     </div>
                   </form>
@@ -1618,15 +1733,25 @@ export default function AdminConsole() {
                             <td>{formatAdminDate(profile.updatedAt)}</td>
                             <td>
                               {profile.managedAuthor ? (
-                                <button
-                                  className="btn btn-ghost danger"
-                                  disabled={isActionLoading(`admin-profile-delete:${profile.id}`)}
-                                  onClick={() => setAdminProfileDeleteTarget(profile)}
-                                  type="button"
-                                >
-                                  {isActionLoading(`admin-profile-delete:${profile.id}`) ? 'Eliminando...' : 'Eliminar'}
-                                  <ActionSpinner active={isActionLoading(`admin-profile-delete:${profile.id}`)} />
-                                </button>
+                                <div className="admin-row-actions">
+                                  <button
+                                    className="btn btn-ghost"
+                                    disabled={isActionLoading(`admin-profile-delete:${profile.id}`)}
+                                    onClick={() => editAdminAuthorProfile(profile)}
+                                    type="button"
+                                  >
+                                    Editar
+                                  </button>
+                                  <button
+                                    className="btn btn-ghost danger"
+                                    disabled={isActionLoading(`admin-profile-delete:${profile.id}`)}
+                                    onClick={() => setAdminProfileDeleteTarget(profile)}
+                                    type="button"
+                                  >
+                                    {isActionLoading(`admin-profile-delete:${profile.id}`) ? 'Eliminando...' : 'Eliminar'}
+                                    <ActionSpinner active={isActionLoading(`admin-profile-delete:${profile.id}`)} />
+                                  </button>
+                                </div>
                               ) : (
                                 <small>Cuenta de usuario</small>
                               )}

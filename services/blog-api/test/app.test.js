@@ -13,6 +13,7 @@ import {
   getPublicAuthorProfileBySlug,
   getUserProfile,
   sanitizeProfile,
+  updateManagedAuthorProfile,
   updateUserProfile,
 } from '../src/repositories/profiles.js';
 import { isAllowedRoleEmail, sanitizeAssignedRoles } from '../src/repositories/users.js';
@@ -150,6 +151,46 @@ test('admin managed author profiles can be created and deleted', async () => {
 
     const publicProfile = await getPublicAuthorProfileBySlug('autora-invitada');
     assert.equal(publicProfile, null);
+  } finally {
+    setFirestoreForTests(null);
+  }
+});
+
+test('admin managed author profiles can be edited', async () => {
+  const firestore = createMemoryFirestore();
+  setFirestoreForTests(firestore);
+
+  try {
+    await firestore.collection('posts').doc('post-1').set({
+      authorName: 'Autora Editada',
+      title: 'Nota editada',
+    });
+
+    const created = await createManagedAuthorProfile({
+      firstName: 'Autora',
+      lastName: 'Invitada',
+      description: 'Perfil creado por admin.',
+      publicProfileEnabled: false,
+    }, 'dev@politeia.ar');
+
+    const updated = await updateManagedAuthorProfile(created.id, {
+      firstName: 'Autora',
+      lastName: 'Editada',
+      description: 'Perfil actualizado.',
+      photoUrl: 'https://example.com/autora.png',
+      publicProfileEnabled: true,
+    }, 'dev@politeia.ar');
+
+    assert.equal(updated.id, created.id);
+    assert.equal(updated.fullName, 'Autora Editada');
+    assert.equal(updated.authorSlug, 'autora-editada');
+    assert.equal(updated.description, 'Perfil actualizado.');
+    assert.equal(updated.photoUrl, 'https://example.com/autora.png');
+    assert.equal(updated.managedAuthor, true);
+    assert.equal(updated.publicProfileEnabled, true);
+
+    const publicProfile = await getPublicAuthorProfileBySlug('autora-editada');
+    assert.equal(publicProfile.fullName, 'Autora Editada');
   } finally {
     setFirestoreForTests(null);
   }

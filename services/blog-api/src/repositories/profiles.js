@@ -107,6 +107,59 @@ export async function createManagedAuthorProfile(data, actorEmail = '') {
   return after;
 }
 
+export async function updateManagedAuthorProfile(id = '', data, actorEmail = '') {
+  const cleanId = normalizeText(id);
+  if (!cleanId) throw new HttpError(400, 'profile id is required');
+
+  const ref = profiles().doc(cleanId);
+  const beforeDoc = await ref.get();
+  if (!beforeDoc.exists) throw new HttpError(404, 'Author profile not found');
+
+  const before = await toUserProfile(serializeDoc(beforeDoc), { email: '' });
+  if (!before.managedAuthor) {
+    throw new HttpError(403, 'Only managed author profiles can be edited');
+  }
+
+  const clean = sanitizeProfile({ ...before, ...(data || {}) });
+  const fullName = buildFullName(clean.firstName, clean.lastName);
+  const authorSlug = slugify(fullName);
+  if (!fullName || !authorSlug) throw new HttpError(400, 'firstName and lastName are required');
+
+  const existing = await profiles()
+    .where('authorSlug', '==', authorSlug)
+    .limit(10)
+    .get();
+  const duplicate = existing.docs
+    .map((doc) => serializeDoc(doc))
+    .find((item) => item?.id !== cleanId);
+  if (duplicate) throw new HttpError(409, 'Author profile already exists');
+
+  const canSharePublicProfile = await authorNameExists(fullName);
+  const patch = {
+    ...clean,
+    email: '',
+    managedAuthor: true,
+    publicProfileEnabled: canSharePublicProfile && clean.publicProfileEnabled,
+    fullName,
+    authorSlug,
+    updatedAt: serverTimestamp(),
+    updatedBy: actorEmail,
+  };
+
+  await ref.set(patch, { merge: true });
+  const after = await toUserProfile(serializeDoc(await ref.get()), { email: '' });
+  await writeAuditLog({
+    actorEmail,
+    action: 'profile.managedAuthor.update',
+    resourceType: 'userProfile',
+    resourceId: cleanId,
+    before,
+    after,
+  });
+
+  return after;
+}
+
 export async function deleteManagedAuthorProfile(id = '', actorEmail = '') {
   const cleanId = normalizeText(id);
   if (!cleanId) throw new HttpError(400, 'profile id is required');
