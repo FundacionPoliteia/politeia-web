@@ -1466,52 +1466,63 @@ export default function AdminConsole() {
           </div>
           <Link href="https://politeia.ar/blog" className="btn btn-ghost">Ver blog publico</Link>
         </div>
-        {user && canAccessPanel && notificationsOpen && (
-          <div className="wrap admin-inbox-wrap">
-            <section className="admin-inbox admin-inbox-tray" aria-label="Notificaciones internas">
-              <div className="admin-inbox-head">
-                <div>
-                  <span>Notificaciones</span>
-                  <h2>Actividad editorial</h2>
-                </div>
-                <div>
-                  <button className="btn btn-ghost" disabled={loadingNotifications} onClick={() => loadInAppNotifications()} type="button">
-                    Actualizar
-                  </button>
-                  <button className="btn btn-ghost" disabled={loadingNotifications || unreadNotificationCount === 0} onClick={markAllNotificationsRead} type="button">
-                    Marcar todas como leidas
-                  </button>
-                </div>
-              </div>
-              {loadingNotifications ? (
-                <p className="admin-muted">Cargando notificaciones...</p>
-              ) : inAppNotifications.length === 0 ? (
-                <p className="admin-muted">No hay notificaciones recientes.</p>
-              ) : (
-                <div className="admin-inbox-list">
-                  {inAppNotifications.map((notification) => (
-                    <button
-                      className={`admin-inbox-item ${notification.readAt ? '' : 'unread'}`}
-                      key={notification.id}
-                      onClick={() => openInAppNotification(notification)}
-                      type="button"
-                    >
-                      <span className={`admin-inbox-icon ${notification.readAt ? '' : 'unread'}`}>
-                        <span aria-hidden="true" className="material-symbols-outlined">{notificationIcon(notification.type)}</span>
-                      </span>
-                      <span>
-                        <strong>{notificationTitle(notification)}</strong>
-                        <small>{notification.actorName ? `${notification.actorName} - ` : ''}{formatAdminDate(notification.createdAt)}</small>
-                        {notification.commentSelectedText && <q>{notification.commentSelectedText}</q>}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </section>
-          </div>
-        )}
       </section>
+
+      {user && canAccessPanel && notificationsOpen && (
+        <div className="admin-notification-overlay" role="presentation" onMouseDown={() => setNotificationsOpen(false)}>
+          <aside
+            aria-label="Notificaciones internas"
+            aria-modal="true"
+            className="admin-inbox admin-notification-tray"
+            onMouseDown={(event) => event.stopPropagation()}
+            role="dialog"
+          >
+            <div className="admin-inbox-head">
+              <div>
+                <span>Notificaciones</span>
+                <h2>Actividad editorial</h2>
+                <p>{unreadNotificationCount ? `${unreadNotificationCount} sin leer` : 'Todo al dia'}</p>
+              </div>
+              <button aria-label="Cerrar notificaciones" className="admin-icon-button" onClick={() => setNotificationsOpen(false)} type="button">
+                <span aria-hidden="true" className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div className="admin-inbox-actions">
+              <button className="btn btn-ghost" disabled={loadingNotifications} onClick={() => loadInAppNotifications()} type="button">
+                Actualizar
+              </button>
+              <button className="btn btn-ghost" disabled={loadingNotifications || unreadNotificationCount === 0} onClick={markAllNotificationsRead} type="button">
+                Marcar todas como leidas
+              </button>
+            </div>
+            {loadingNotifications ? (
+              <p className="admin-muted">Cargando notificaciones...</p>
+            ) : inAppNotifications.length === 0 ? (
+              <p className="admin-muted">No hay notificaciones recientes.</p>
+            ) : (
+              <div className="admin-inbox-list">
+                {inAppNotifications.map((notification) => (
+                  <button
+                    className={`admin-inbox-item ${notification.readAt ? '' : 'unread'}`}
+                    key={notification.id}
+                    onClick={() => openInAppNotification(notification)}
+                    type="button"
+                  >
+                    <span className={`admin-inbox-icon ${notification.readAt ? '' : 'unread'}`}>
+                      <span aria-hidden="true" className="material-symbols-outlined">{notificationIcon(notification.type)}</span>
+                    </span>
+                    <span>
+                      <strong>{notificationTitle(notification)}</strong>
+                      <small>{notification.actorName ? `${notification.actorName} - ` : ''}{formatAdminDate(notification.createdAt)}</small>
+                      {notification.commentSelectedText && <q>{notification.commentSelectedText}</q>}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </aside>
+        </div>
+      )}
 
       <section className="sec">
         <div className="wrap">
@@ -1608,7 +1619,7 @@ export default function AdminConsole() {
                   <button
                     aria-expanded={notificationsOpen}
                     aria-label={`Notificaciones${unreadNotificationCount ? `, ${unreadNotificationCount} sin leer` : ''}`}
-                    className="admin-notification-button"
+                    className={`admin-notification-button ${notificationsOpen ? 'active' : ''} ${unreadNotificationCount ? 'has-unread' : ''}`}
                     onClick={() => {
                       setNotificationsOpen((open) => !open);
                       if (!notificationsOpen) loadInAppNotifications({ silent: true });

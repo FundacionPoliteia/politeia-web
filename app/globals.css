@@ -1807,7 +1807,7 @@ a {
 }
 
 .admin-hero {
-  padding: 56px 0 0;
+  padding: 56px 0 32px;
   background: var(--blanco);
   border-bottom: 1px solid var(--linea)
 }
@@ -1816,8 +1816,7 @@ a {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 28px;
-  margin-bottom: 32px
+  gap: 28px
 }
 
 .admin-hero h1 {
@@ -1832,10 +1831,6 @@ a {
   color: var(--gris);
   max-width: 62ch;
   font-size: 1.04rem
-}
-
-.admin-inbox-wrap {
-  margin-top: 30px
 }
 
 .admin-login,
@@ -1933,6 +1928,46 @@ a {
   border-color: rgba(19, 122, 159, .32);
   background: rgba(19, 122, 159, .08);
   color: var(--azul)
+}
+
+.admin-notification-button.has-unread {
+  border-color: rgba(185, 60, 60, .34);
+  background: #fff7f6;
+  color: #9b3030;
+  box-shadow: 0 0 0 4px rgba(185, 60, 60, .08), 0 10px 22px rgba(185, 60, 60, .12)
+}
+
+.admin-notification-button.has-unread::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border: 1px solid rgba(185, 60, 60, .3);
+  border-radius: inherit;
+  animation: admin-notification-pulse 1.8s ease-out infinite;
+  pointer-events: none
+}
+
+.admin-notification-button.active {
+  border-color: rgba(19, 122, 159, .42);
+  background: var(--azul);
+  color: var(--blanco);
+  box-shadow: 0 12px 26px rgba(19, 122, 159, .22)
+}
+
+.admin-notification-button.active::after {
+  display: none
+}
+
+@keyframes admin-notification-pulse {
+  0% {
+    opacity: .75;
+    transform: scale(.92)
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.28)
+  }
 }
 
 .admin-notification-button .material-symbols-outlined {
@@ -2154,16 +2189,54 @@ a {
 
 .admin-inbox {
   border: 1px solid var(--linea);
-  border-radius: 18px 18px 0 0;
+  border-radius: 18px;
   background: var(--blanco);
   padding: 22px;
   box-shadow: 0 22px 54px rgba(26, 26, 55, .1)
 }
 
-.admin-inbox-tray {
-  border-bottom: 0;
-  margin-bottom: -1px;
-  background: linear-gradient(180deg, #fff 0%, #f8fbfc 100%)
+.admin-notification-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 130;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(26, 26, 55, .24);
+  backdrop-filter: blur(3px);
+  animation: admin-overlay-in .16s ease-out
+}
+
+.admin-notification-tray {
+  width: min(520px, calc(100vw - 24px));
+  height: calc(100vh - 32px);
+  margin: 16px;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #fff 0%, #f8fbfc 100%);
+  box-shadow: -18px 0 60px rgba(26, 26, 55, .18);
+  animation: admin-tray-in .22s ease-out
+}
+
+@keyframes admin-overlay-in {
+  from {
+    opacity: 0
+  }
+
+  to {
+    opacity: 1
+  }
+}
+
+@keyframes admin-tray-in {
+  from {
+    opacity: .7;
+    transform: translateX(28px)
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0)
+  }
 }
 
 .admin-inbox-head {
@@ -2191,19 +2264,51 @@ a {
   line-height: 1.15
 }
 
-.admin-inbox-head>div:last-child {
+.admin-inbox-head p {
+  color: var(--gris);
+  font-size: .86rem;
+  margin-top: 5px
+}
+
+.admin-inbox-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  justify-content: flex-end
+  margin-bottom: 14px
+}
+
+.admin-icon-button {
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--linea);
+  border-radius: 999px;
+  background: var(--blanco);
+  color: var(--gris);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background .18s, color .18s, border-color .18s
+}
+
+.admin-icon-button:hover {
+  border-color: rgba(19, 122, 159, .28);
+  background: rgba(19, 122, 159, .08);
+  color: var(--azul)
 }
 
 .admin-inbox-list {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: 1fr;
   gap: 10px;
-  max-height: 360px;
+  min-height: 0;
   overflow: auto
+}
+
+.admin-notification-tray .admin-inbox-list {
+  flex: 1;
+  align-content: start;
+  padding-right: 2px
 }
 
 .admin-inbox-item {
@@ -2230,7 +2335,8 @@ a {
 
 .admin-inbox-item.unread {
   border-color: rgba(19, 122, 159, .32);
-  background: #f4fbfd
+  background: #f4fbfd;
+  box-shadow: inset 4px 0 0 var(--azul)
 }
 
 .admin-inbox-icon {
@@ -4142,6 +4248,24 @@ a {
 }
 
 @media(max-width:620px) {
+  .admin-notification-overlay {
+    align-items: flex-end
+  }
+
+  .admin-notification-tray {
+    width: 100%;
+    height: min(82vh, 720px);
+    margin: 0;
+    border-radius: 22px 22px 0 0;
+    box-shadow: 0 -18px 52px rgba(26, 26, 55, .2)
+  }
+
+  .admin-inbox-head,
+  .admin-inbox-actions {
+    align-items: stretch;
+    flex-direction: column
+  }
+
   .admin-tabs {
     display: grid;
     grid-template-columns: 1fr;
