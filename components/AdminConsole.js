@@ -10,6 +10,7 @@ const API_BASE = process.env.NEXT_PUBLIC_BLOG_API_BASE_URL || '';
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
 const ALLOWED_EMAIL_DOMAIN = 'politeia.ar';
 const ASSIGNED_EMAIL_DOMAIN = 'gmail.com';
+const SHOW_EMAIL_SETTINGS_UI = false;
 
 const EMPTY_FORM = {
   id: '',
@@ -174,11 +175,12 @@ export default function AdminConsole() {
   const canUseReviewFilters = isAdmin || isReviewer;
   const canManageUsers = isAdmin && isPrimaryDomainUser;
   const canReviewProfiles = isAdmin;
-  const canAccessRolesMailPanel = canAccessPanel;
+  const canAccessRolesMailPanel = canManageUsers;
   const canAccessProfilePanel = canAccessPanel;
   const accountAuthorName = user?.name || user?.email || '';
   const profileAuthorName = profileDraft.fullName || userProfile.fullName || accountAuthorName;
   const profileClosingPhrase = profileDraft.closingPhrase || userProfile.closingPhrase || '';
+  const hasAuthorProfile = Boolean(profileDraft.fullName || userProfile.fullName);
   const profileNameMatchesLoadedAuthor = useMemo(() => {
     const key = taxonomyKey(profileDraft.fullName);
     if (!key) return false;
@@ -294,15 +296,15 @@ export default function AdminConsole() {
       setForm((current) => normalizeForm({
         ...current,
         authorName: profileAuthorName,
-        showAuthorNote: current.showAuthorNote || Boolean(profileClosingPhrase),
+        showAuthorNote: current.showAuthorNote || hasAuthorProfile,
       }));
       setSavedForm((current) => normalizeForm({
         ...current,
         authorName: profileAuthorName,
-        showAuthorNote: current.showAuthorNote || Boolean(profileClosingPhrase),
+        showAuthorNote: current.showAuthorNote || hasAuthorProfile,
       }));
     }
-  }, [accountAuthorName, form.authorName, form.id, profileAuthorName, profileClosingPhrase]);
+  }, [accountAuthorName, form.authorName, form.id, hasAuthorProfile, profileAuthorName]);
 
   useEffect(() => {
     if (!canAccessRolesMailPanel && activePanelTab === 'access') {
@@ -786,7 +788,7 @@ export default function AdminConsole() {
         setForm((current) => normalizeForm({
           ...current,
           authorName: nextProfile.fullName,
-          showAuthorNote: current.showAuthorNote || Boolean(nextProfile.closingPhrase),
+          showAuthorNote: current.showAuthorNote || Boolean(nextProfile.fullName),
         }));
       }
       setMessage('Perfil actualizado.');
@@ -1590,9 +1592,9 @@ export default function AdminConsole() {
                       className={activePanelTab === 'access' ? 'selected' : ''}
                       onClick={() => setActivePanelTab('access')}
                       type="button"
-                    >
-                      Roles y mails
-                    </button>
+                  >
+                    Roles
+                  </button>
                   )}
                   {canAccessProfilePanel && (
                     <button
@@ -1976,7 +1978,7 @@ export default function AdminConsole() {
 
               {activePanelTab === 'access' && (
                 <>
-              {notificationPreferences && (
+              {SHOW_EMAIL_SETTINGS_UI && notificationPreferences && (
                 <section className="admin-manager admin-notifications">
                   <div className="admin-manager-head">
                     <div>
@@ -2178,7 +2180,7 @@ export default function AdminConsole() {
                   )}
                 </section>
               )}
-              {!notificationPreferences && !canManageUsers && (
+              {SHOW_EMAIL_SETTINGS_UI && !notificationPreferences && !canManageUsers && (
                 <div className="admin-empty">
                   Cargando configuracion de mails.
                 </div>
@@ -2399,7 +2401,7 @@ export default function AdminConsole() {
                         const nextForm = normalizeForm({
                           ...EMPTY_FORM,
                           authorName: profileAuthorName,
-                          showAuthorNote: Boolean(profileClosingPhrase),
+                          showAuthorNote: hasAuthorProfile,
                         });
                         setForm(nextForm);
                         setSavedForm(nextForm);
