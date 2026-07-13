@@ -533,17 +533,22 @@ export default function AdminConsole() {
     try {
       setSavingProfile(true);
       setMessage('');
+      const payload = {
+        firstName: profileDraft.firstName,
+        lastName: profileDraft.lastName,
+        description: profileDraft.description,
+        photoUrl: profileDraft.photoUrl,
+        publicProfileEnabled: profileDraft.publicProfileEnabled,
+      };
       const data = await withActionLoading('profile-save', () => api('/v1/profile', {
         method: 'PATCH',
-        body: JSON.stringify({
-          firstName: profileDraft.firstName,
-          lastName: profileDraft.lastName,
-          description: profileDraft.description,
-          photoUrl: profileDraft.photoUrl,
-          publicProfileEnabled: profileDraft.publicProfileEnabled,
-        }),
+        body: JSON.stringify(payload),
       }));
-      const nextProfile = normalizeProfile(data.item);
+      const nextProfile = normalizeProfile({
+        ...payload,
+        ...(data.item || {}),
+        publicProfileEnabled: data.item?.publicProfileEnabled ?? payload.publicProfileEnabled,
+      });
       setUserProfile(nextProfile);
       setProfileDraft(nextProfile);
       if (!form.id && !form.authorName && nextProfile.fullName) {
