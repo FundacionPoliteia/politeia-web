@@ -196,6 +196,34 @@ test('admin managed author profiles can be edited', async () => {
   }
 });
 
+test('POST /v1/posts stores author note', async () => {
+  const firestore = createMemoryFirestore();
+  setFirestoreForTests(firestore);
+  const session = buildSessionCookie({
+    email: 'dev@politeia.ar',
+    name: 'Dev Politeia',
+    roles: ['admin'],
+  });
+
+  try {
+    const res = await request(createApp())
+      .post('/v1/posts')
+      .set('Cookie', `${config.sessionCookieName}=${encodeURIComponent(session)}`)
+      .send({
+        title: 'Nota con cierre',
+        contentMarkdown: 'Contenido de prueba',
+        authorName: 'Dev Politeia',
+        authorNote: '  Cierre   breve del autor.  ',
+        tags: [],
+      })
+      .expect(201);
+
+    assert.equal(res.body.item.authorNote, 'Cierre breve del autor.');
+  } finally {
+    setFirestoreForTests(null);
+  }
+});
+
 test('env parser ignores inline comments outside quotes', () => {
   assert.equal(parseEnvValue('admin # admin, reviewer, blog'), 'admin');
   assert.equal(parseEnvValue('"admin # literal"'), 'admin # literal');
@@ -373,8 +401,8 @@ class MemoryCollection {
     this.store = store;
   }
 
-  doc(id) {
-    return new MemoryDoc(this.store, id);
+  doc(id = '') {
+    return new MemoryDoc(this.store, id || `doc-${this.store.size + 1}`);
   }
 
   async add(data) {
@@ -426,7 +454,7 @@ class MemoryQuery {
   }
 
   async get() {
-    return { docs: this.docs };
+    return { docs: this.docs, empty: this.docs.length === 0 };
   }
 }
 

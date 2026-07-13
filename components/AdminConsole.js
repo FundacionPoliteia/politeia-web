@@ -19,6 +19,7 @@ const EMPTY_FORM = {
   contentMarkdown: '',
   coverImage: '',
   authorName: '',
+  authorNote: '',
   category: '',
   tagsText: '',
   status: '',
@@ -170,6 +171,7 @@ export default function AdminConsole() {
   const canAccessProfilePanel = canAccessPanel;
   const accountAuthorName = user?.name || user?.email || '';
   const profileAuthorName = profileDraft.fullName || userProfile.fullName || accountAuthorName;
+  const profileAuthorNote = profileDraft.description || userProfile.description || '';
   const profileNameMatchesLoadedAuthor = useMemo(() => {
     const key = taxonomyKey(profileDraft.fullName);
     if (!key) return false;
@@ -274,10 +276,18 @@ export default function AdminConsole() {
   useEffect(() => {
     const canUseProfileAuthor = !form.id && profileAuthorName && (!form.authorName || form.authorName === accountAuthorName);
     if (canUseProfileAuthor) {
-      setForm((current) => normalizeForm({ ...current, authorName: profileAuthorName }));
-      setSavedForm((current) => normalizeForm({ ...current, authorName: profileAuthorName }));
+      setForm((current) => normalizeForm({
+        ...current,
+        authorName: profileAuthorName,
+        authorNote: current.authorNote || profileAuthorNote,
+      }));
+      setSavedForm((current) => normalizeForm({
+        ...current,
+        authorName: profileAuthorName,
+        authorNote: current.authorNote || profileAuthorNote,
+      }));
     }
-  }, [accountAuthorName, form.authorName, form.id, profileAuthorName]);
+  }, [accountAuthorName, form.authorName, form.id, profileAuthorName, profileAuthorNote]);
 
   useEffect(() => {
     if (!canAccessRolesMailPanel && activePanelTab === 'access') {
@@ -1319,6 +1329,12 @@ export default function AdminConsole() {
     const tags = parseTagsText(form.tagsText);
     return tags.length ? tags : ['Nota'];
   }, [form.tagsText]);
+  const previewAuthorPhoto = taxonomyKey(form.authorName) === taxonomyKey(profileAuthorName)
+    ? profileDraft.photoUrl || userProfile.photoUrl || ''
+    : '';
+  const previewAuthorNote = form.authorNote || (
+    taxonomyKey(form.authorName) === taxonomyKey(profileAuthorName) ? profileAuthorNote : ''
+  );
   const openReviewCommentCount = reviewComments.filter((comment) => comment.status !== 'resolved').length;
   const filteredReviewComments = useMemo(() => {
     if (reviewCommentFilter === 'all') return reviewComments;
@@ -2186,7 +2202,7 @@ export default function AdminConsole() {
                     <button
                       className="btn btn-primary admin-new"
                       onClick={() => {
-                        const nextForm = normalizeForm({ ...EMPTY_FORM, authorName: profileAuthorName });
+                        const nextForm = normalizeForm({ ...EMPTY_FORM, authorName: profileAuthorName, authorNote: profileAuthorNote });
                         setForm(nextForm);
                         setSavedForm(nextForm);
                         setCategorySearchTerm('');
@@ -2240,6 +2256,17 @@ export default function AdminConsole() {
                     <label>
                       Autor
                       <input disabled={publishedAuthorLocked} value={form.authorName} onChange={(e) => updateForm('authorName', e.target.value)} placeholder={user?.name || user?.email || 'Nombre visible'} />
+                    </label>
+                    <label>
+                      Cierre de autor
+                      <textarea
+                        disabled={publishedAuthorLocked}
+                        maxLength="500"
+                        onChange={(e) => updateForm('authorNote', e.target.value)}
+                        placeholder="Texto breve para cerrar la nota. Si lo dejas vacio, se puede usar la descripcion de tu perfil."
+                        rows="3"
+                        value={form.authorNote}
+                      />
                     </label>
                     <label>
                       Categoría
@@ -2729,6 +2756,19 @@ export default function AdminConsole() {
                         />
                       )}
                       <div className="art-body" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+                      {(form.authorName || previewAuthorPhoto || previewAuthorNote) && (
+                        <section className="art-author-end" aria-label="Autor de la nota">
+                          {previewAuthorPhoto && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={previewAuthorPhoto} alt="" />
+                          )}
+                          <div>
+                            <span>Escrito por</span>
+                            {form.authorName && <h2>{form.authorName}</h2>}
+                            {previewAuthorNote && <p>{previewAuthorNote}</p>}
+                          </div>
+                        </section>
+                      )}
                     </article>
                   </div>
                 </div>
@@ -2855,6 +2895,7 @@ function buildPayload(form, canChooseSlug = false) {
     coverImage: form.coverImage || undefined,
     showCoverInPost: form.coverImage ? form.showCoverInPost !== false : true,
     authorName: form.authorName || undefined,
+    authorNote: form.authorNote || undefined,
     category: sanitizeCategory(form.category) || undefined,
     tags: parseTagsText(form.tagsText),
   };
@@ -3028,6 +3069,7 @@ function postToForm(post = {}) {
     contentMarkdown: post.contentMarkdown,
     coverImage: post.coverImage,
     authorName: post.authorName,
+    authorNote: post.authorNote,
     category: sanitizeCategory(post.category),
     tagsText: sanitizeTags(post.tags || []).join(', '),
     status: post.status,
@@ -3046,6 +3088,7 @@ function serializeForm(form) {
     contentMarkdown: form.contentMarkdown || '',
     coverImage: form.coverImage || '',
     authorName: form.authorName || '',
+    authorNote: form.authorNote || '',
     category: form.category || '',
     tagsText: form.tagsText || '',
     status: form.status || '',

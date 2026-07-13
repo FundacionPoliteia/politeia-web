@@ -203,6 +203,7 @@ function buildPostPayload(body, user) {
   assertOptionalString(body.coverImage, 'coverImage');
   assertOptionalString(body.category, 'category');
   assertOptionalString(body.authorName, 'authorName');
+  assertOptionalString(body.authorNote, 'authorNote');
   assertOptionalString(body.authorEmail, 'authorEmail');
   assertOptionalBoolean(body.showCoverInPost, 'showCoverInPost');
   assertStringArray(body.tags, 'tags');
@@ -225,6 +226,7 @@ function buildPostPayload(body, user) {
     showCoverInPost: body.showCoverInPost !== false,
     authorEmail: canManageAllPosts(user) ? body.authorEmail || user.email : user.email,
     authorName: body.authorName || user.name || user.email,
+    authorNote: normalizeAuthorNote(body.authorNote),
     category: sanitizeCategory(body.category),
     tags: sanitizeTags(body.tags),
   };
@@ -276,6 +278,10 @@ function buildPostPatch(body, user) {
     assertOptionalString(body.authorName, 'authorName');
     patch.authorName = body.authorName || '';
   }
+  if (body.authorNote !== undefined) {
+    assertOptionalString(body.authorNote, 'authorNote');
+    patch.authorNote = normalizeAuthorNote(body.authorNote);
+  }
   if (body.authorEmail !== undefined) {
     if (!canManageAllPosts(user)) {
       throw new HttpError(403, 'Only admin or reviewer users can change authorEmail');
@@ -284,6 +290,10 @@ function buildPostPatch(body, user) {
     patch.authorEmail = body.authorEmail || '';
   }
   return patch;
+}
+
+function normalizeAuthorNote(value = '') {
+  return typeof value === 'string' ? value.trim().replace(/\s+/g, ' ').slice(0, 500) : '';
 }
 
 function canChooseSlug(user) {

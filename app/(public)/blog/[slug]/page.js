@@ -45,6 +45,9 @@ export default async function NotaPage({ params }) {
   const { slug } = await params;
   const post = await getPost(slug);
   if (!post) notFound();
+  const autorNombre = post.autorPerfil?.fullName || post.autor || '';
+  const autorFoto = post.autorPerfil?.photoUrl || '';
+  const cierreAutor = post.cierreAutor || post.autorPerfil?.description || '';
 
   return (
     <article className="article">
@@ -72,6 +75,23 @@ export default async function NotaPage({ params }) {
         className="art-body"
         dangerouslySetInnerHTML={{ __html: post.contenido }}
       />
+      {(autorNombre || autorFoto || cierreAutor) && (
+        <section className="art-author-end" aria-label="Autor de la nota">
+          {autorFoto && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={autorFoto} alt="" />
+          )}
+          <div>
+            <span>Escrito por</span>
+            {autorNombre ? (
+              <h2>
+                <Link href={hrefAutorBlog(autorNombre)} className="art-author">{autorNombre}</Link>
+              </h2>
+            ) : null}
+            {cierreAutor && <p>{cierreAutor}</p>}
+          </div>
+        </section>
+      )}
     </article>
   );
 }
