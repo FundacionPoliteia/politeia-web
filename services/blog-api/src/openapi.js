@@ -34,6 +34,7 @@ export const openApiSpec = {
           authorEmail: { type: 'string' },
           authorName: { type: 'string' },
           authorNote: { type: 'string' },
+          showAuthorNote: { type: 'boolean' },
           category: { type: 'string' },
           tags: { type: 'array', items: { type: 'string' } },
           createdAt: { type: 'string', format: 'date-time' },
@@ -145,6 +146,7 @@ export const openApiSpec = {
                   showCoverInPost: { type: 'boolean' },
                   authorName: { type: 'string' },
                   authorNote: { type: 'string' },
+                  showAuthorNote: { type: 'boolean' },
                   authorEmail: { type: 'string' },
                   category: { type: 'string' },
                   tags: { type: 'array', items: { type: 'string' } },
@@ -226,6 +228,29 @@ export const openApiSpec = {
         security: [{ googleIdToken: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
         responses: { 200: { description: 'Post archived' } },
+      },
+    },
+    '/notifications/inbox': {
+      get: {
+        summary: 'List in-app editorial notifications for current user',
+        security: [{ googleIdToken: [] }],
+        parameters: [{ name: 'limit', in: 'query', schema: { type: 'integer', default: 50 } }],
+        responses: { 200: { description: 'In-app notification inbox' } },
+      },
+    },
+    '/notifications/{eventId}/read': {
+      patch: {
+        summary: 'Mark one in-app notification as read',
+        security: [{ googleIdToken: [] }],
+        parameters: [{ name: 'eventId', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { 200: { description: 'Notification marked as read' } },
+      },
+    },
+    '/notifications/read-all': {
+      post: {
+        summary: 'Mark all visible in-app notifications as read',
+        security: [{ googleIdToken: [] }],
+        responses: { 200: { description: 'Notifications marked as read' } },
       },
     },
     '/media': {

@@ -206,6 +206,7 @@ function buildPostPayload(body, user) {
   assertOptionalString(body.authorNote, 'authorNote');
   assertOptionalString(body.authorEmail, 'authorEmail');
   assertOptionalBoolean(body.showCoverInPost, 'showCoverInPost');
+  assertOptionalBoolean(body.showAuthorNote, 'showAuthorNote');
   assertStringArray(body.tags, 'tags');
   if (body.coverImage) assertHttpsUrl(body.coverImage, 'coverImage');
   if (body.slug && !canChooseSlug(user)) {
@@ -227,6 +228,7 @@ function buildPostPayload(body, user) {
     authorEmail: canManageAllPosts(user) ? body.authorEmail || user.email : user.email,
     authorName: body.authorName || user.name || user.email,
     authorNote: normalizeAuthorNote(body.authorNote),
+    showAuthorNote: body.showAuthorNote === true,
     category: sanitizeCategory(body.category),
     tags: sanitizeTags(body.tags),
   };
@@ -281,6 +283,10 @@ function buildPostPatch(body, user) {
   if (body.authorNote !== undefined) {
     assertOptionalString(body.authorNote, 'authorNote');
     patch.authorNote = normalizeAuthorNote(body.authorNote);
+  }
+  if (body.showAuthorNote !== undefined) {
+    assertOptionalBoolean(body.showAuthorNote, 'showAuthorNote');
+    patch.showAuthorNote = body.showAuthorNote === true;
   }
   if (body.authorEmail !== undefined) {
     if (!canManageAllPosts(user)) {

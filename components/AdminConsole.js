@@ -20,6 +20,7 @@ const EMPTY_FORM = {
   coverImage: '',
   authorName: '',
   authorNote: '',
+  showAuthorNote: false,
   category: '',
   tagsText: '',
   status: '',
@@ -28,7 +29,7 @@ const EMPTY_FORM = {
   showCoverInPost: true,
 };
 
-const FORM_STRING_FIELDS = Object.keys(EMPTY_FORM).filter((field) => field !== 'showCoverInPost');
+const FORM_STRING_FIELDS = Object.keys(EMPTY_FORM).filter((field) => !['showCoverInPost', 'showAuthorNote'].includes(field));
 
 const STATUS_LABELS = {
   draft: 'Borrador',
@@ -73,6 +74,7 @@ const EMPTY_PROFILE = {
   firstName: '',
   lastName: '',
   description: '',
+  closingPhrase: '',
   photoUrl: '',
   publicProfileEnabled: false,
   canSharePublicProfile: false,
@@ -86,6 +88,7 @@ const EMPTY_MANAGED_AUTHOR_PROFILE = {
   firstName: '',
   lastName: '',
   description: '',
+  closingPhrase: '',
   photoUrl: '',
   publicProfileEnabled: false,
 };
@@ -130,6 +133,10 @@ export default function AdminConsole() {
   const [notificationPreferences, setNotificationPreferences] = useState(null);
   const [notificationPreferencesOpen, setNotificationPreferencesOpen] = useState(false);
   const [savingNotificationPreferences, setSavingNotificationPreferences] = useState(false);
+  const [inAppNotifications, setInAppNotifications] = useState([]);
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [loadingNotifications, setLoadingNotifications] = useState(false);
   const [activePanelTab, setActivePanelTab] = useState('blogs');
   const [userProfile, setUserProfile] = useState(EMPTY_PROFILE);
   const [profileDraft, setProfileDraft] = useState(EMPTY_PROFILE);
@@ -171,7 +178,7 @@ export default function AdminConsole() {
   const canAccessProfilePanel = canAccessPanel;
   const accountAuthorName = user?.name || user?.email || '';
   const profileAuthorName = profileDraft.fullName || userProfile.fullName || accountAuthorName;
-  const profileAuthorNote = profileDraft.description || userProfile.description || '';
+  const profileClosingPhrase = profileDraft.closingPhrase || userProfile.closingPhrase || '';
   const profileNameMatchesLoadedAuthor = useMemo(() => {
     const key = taxonomyKey(profileDraft.fullName);
     if (!key) return false;
@@ -250,10 +257,18 @@ export default function AdminConsole() {
     if (canAccessPanel) {
       loadNotificationPreferences();
       loadUserProfile();
+      loadInAppNotifications({ silent: true });
+      const intervalId = window.setInterval(() => {
+        loadInAppNotifications({ silent: true });
+      }, 60000);
+      return () => window.clearInterval(intervalId);
     } else {
       setNotificationPreferences(null);
       setUserProfile(EMPTY_PROFILE);
       setProfileDraft(EMPTY_PROFILE);
+      setInAppNotifications([]);
+      setUnreadNotificationCount(0);
+      setNotificationsOpen(false);
     }
   }, [canAccessPanel]);
 
@@ -279,15 +294,15 @@ export default function AdminConsole() {
       setForm((current) => normalizeForm({
         ...current,
         authorName: profileAuthorName,
-        authorNote: current.authorNote || profileAuthorNote,
+        showAuthorNote: current.showAuthorNote || Boolean(profileClosingPhrase),
       }));
       setSavedForm((current) => normalizeForm({
         ...current,
         authorName: profileAuthorName,
-        authorNote: current.authorNote || profileAuthorNote,
+        showAuthorNote: current.showAuthorNote || Boolean(profileClosingPhrase),
       }));
     }
-  }, [accountAuthorName, form.authorName, form.id, profileAuthorName, profileAuthorNote]);
+  }, [accountAuthorName, form.authorName, form.id, profileAuthorName, profileClosingPhrase]);
 
   useEffect(() => {
     if (!canAccessRolesMailPanel && activePanelTab === 'access') {
@@ -446,6 +461,10 @@ export default function AdminConsole() {
       setSelectedAdminPostIds([]);
       setNotificationPreferences(null);
       setNotificationPreferencesOpen(false);
+      setInAppNotifications([]);
+      setUnreadNotificationCount(0);
+      setNotificationsOpen(false);
+      setLoadingNotifications(false);
       setUserProfile(EMPTY_PROFILE);
       setProfileDraft(EMPTY_PROFILE);
       setSavingProfile(false);
@@ -464,9 +483,12 @@ export default function AdminConsole() {
       setBusy(true);
       const query = activeStatusFilter ? `?status=${activeStatusFilter}` : '';
       const data = await api(`/v1/posts/manage${query}`);
-      setPosts(data.items || []);
+      const items = data.items || [];
+      setPosts(items);
+      return items;
     } catch (err) {
       setMessage(err.message);
+      return [];
     } finally {
       setBusy(false);
     }
@@ -512,6 +534,72 @@ export default function AdminConsole() {
     try {
       const data = await api('/v1/notifications/preferences');
       setNotificationPreferences(normalizeNotificationPreferences(data.item));
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function loadInAppNotifications({ silent = false } = {}) {
+    try {
+      if (!silent) setLoadingNotifications(true);
+      const data = await api('/v1/notifications/inbox?limit=50');
+      setInAppNotifications((data.items || []).map(normalizeInAppNotification));
+      setUnreadNotificationCount(Number(data.unreadCount) || 0);
+    } catch (err) {
+      if (!silent) setMessage(err.message);
+    } finally {
+      if (!silent) setLoadingNotifications(false);
+    }
+  }
+
+  async function markNotificationRead(notification) {
+    if (!notification?.id) return null;
+    const data = await api(`/v1/notifications/${encodeURIComponent(notification.id)}/read`, {
+      method: 'PATCH',
+    });
+    if (data.item) {
+      const nextItem = normalizeInAppNotification(data.item);
+      setInAppNotifications((current) => current.map((item) => item.id === nextItem.id ? nextItem : item));
+      setUnreadNotificationCount((current) => Math.max(0, current - (notification.readAt ? 0 : 1)));
+      return nextItem;
+    }
+    return null;
+  }
+
+  async function markAllNotificationsRead() {
+    try {
+      setLoadingNotifications(true);
+      const data = await api('/v1/notifications/read-all', { method: 'POST' });
+      setInAppNotifications((data.items || []).map(normalizeInAppNotification));
+      setUnreadNotificationCount(Number(data.unreadCount) || 0);
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setLoadingNotifications(false);
+    }
+  }
+
+  async function openInAppNotification(notification) {
+    try {
+      setMessage('');
+      await markNotificationRead(notification);
+      setNotificationsOpen(false);
+      if (!notification.postId) return;
+      setActivePanelTab('blogs');
+      setStatusFilter('');
+      const data = await api('/v1/posts/manage');
+      const items = data.items || [];
+      setPosts(items);
+      const post = items.find((item) => item.id === notification.postId);
+      if (!post) {
+        setMessage('No pudimos encontrar el post asociado a la notificacion.');
+        return;
+      }
+      selectPostForEdit(post);
+      if (notification.commentId) {
+        setReviewCommentFilter('all');
+        focusReviewComment(notification.commentId);
+      }
     } catch (err) {
       setMessage(err.message);
     }
@@ -604,6 +692,7 @@ export default function AdminConsole() {
       firstName: profile.firstName,
       lastName: profile.lastName,
       description: profile.description,
+      closingPhrase: profile.closingPhrase,
       photoUrl: profile.photoUrl,
       publicProfileEnabled: profile.publicProfileEnabled,
     });
@@ -621,6 +710,7 @@ export default function AdminConsole() {
         firstName: adminProfileDraft.firstName,
         lastName: adminProfileDraft.lastName,
         description: adminProfileDraft.description,
+        closingPhrase: adminProfileDraft.closingPhrase,
         photoUrl: adminProfileDraft.photoUrl,
         publicProfileEnabled: adminProfileDraft.publicProfileEnabled,
       };
@@ -677,6 +767,7 @@ export default function AdminConsole() {
         firstName: profileDraft.firstName,
         lastName: profileDraft.lastName,
         description: profileDraft.description,
+        closingPhrase: profileDraft.closingPhrase,
         photoUrl: profileDraft.photoUrl,
         publicProfileEnabled: canShowProfileOptIn && profileDraft.publicProfileEnabled,
       };
@@ -692,7 +783,11 @@ export default function AdminConsole() {
       setUserProfile(nextProfile);
       setProfileDraft(nextProfile);
       if (!form.id && !form.authorName && nextProfile.fullName) {
-        setForm((current) => normalizeForm({ ...current, authorName: nextProfile.fullName }));
+        setForm((current) => normalizeForm({
+          ...current,
+          authorName: nextProfile.fullName,
+          showAuthorNote: current.showAuthorNote || Boolean(nextProfile.closingPhrase),
+        }));
       }
       setMessage('Perfil actualizado.');
     } catch (err) {
@@ -856,6 +951,7 @@ export default function AdminConsole() {
       focusReviewComment(data.item.id);
       setReviewCommentFilter('open');
       await loadPosts();
+      await loadInAppNotifications({ silent: true });
       setMessage('Comentario de revision agregado.');
       return data.item;
     } catch (err) {
@@ -891,6 +987,7 @@ export default function AdminConsole() {
       }
       setReviewComments((current) => current.map((comment) => comment.id === commentId ? data.item : comment));
       await loadPosts();
+      await loadInAppNotifications({ silent: true });
       setMessage(status === 'resolved' ? 'Comentario resuelto.' : 'Comentario reabierto.');
     } catch (err) {
       setMessage(err.message);
@@ -985,6 +1082,7 @@ export default function AdminConsole() {
       }
       setMessage(success);
       await loadPosts();
+      await loadInAppNotifications({ silent: true });
     } catch (err) {
       setMessage(err.message);
     } finally {
@@ -1019,6 +1117,7 @@ export default function AdminConsole() {
       await withActionLoading(nextAction.loadingKey, () => api(nextAction.path, { method: 'POST' }));
       setMessage(nextAction.success);
       await Promise.all([loadPosts(), loadCategories()]);
+      await loadInAppNotifications({ silent: true });
     } catch (err) {
       setMessage(err.message);
     } finally {
@@ -1097,6 +1196,7 @@ export default function AdminConsole() {
       setSelectedAdminPostIds([]);
       setMessage(config.success);
       await loadPosts();
+      await loadInAppNotifications({ silent: true });
     } catch (err) {
       setMessage(err.message);
     } finally {
@@ -1329,12 +1429,14 @@ export default function AdminConsole() {
     const tags = parseTagsText(form.tagsText);
     return tags.length ? tags : ['Nota'];
   }, [form.tagsText]);
-  const previewAuthorPhoto = taxonomyKey(form.authorName) === taxonomyKey(profileAuthorName)
+  const previewUsesCurrentProfile = taxonomyKey(form.authorName) === taxonomyKey(profileAuthorName);
+  const previewAuthorPhoto = previewUsesCurrentProfile
     ? profileDraft.photoUrl || userProfile.photoUrl || ''
     : '';
-  const previewAuthorNote = form.authorNote || (
-    taxonomyKey(form.authorName) === taxonomyKey(profileAuthorName) ? profileAuthorNote : ''
-  );
+  const previewAuthorNote = form.showAuthorNote
+    ? form.authorNote || (previewUsesCurrentProfile ? profileClosingPhrase : '')
+    : '';
+  const usingProfileClosingPhrase = form.showAuthorNote && previewUsesCurrentProfile && Boolean(profileClosingPhrase) && !form.authorNote;
   const openReviewCommentCount = reviewComments.filter((comment) => comment.status !== 'resolved').length;
   const filteredReviewComments = useMemo(() => {
     if (reviewCommentFilter === 'all') return reviewComments;
@@ -1415,12 +1517,72 @@ export default function AdminConsole() {
               <div className="admin-session">
                 <div>
                   <strong>{user.name || user.email}</strong>
-                  <span>{user.email} · {roleLabel} · {roles.join(', ')}</span>
+                  <span>{user.email} - {roleLabel} - {roles.join(', ')}</span>
                 </div>
-                <button className="btn btn-ghost" onClick={logout}>
-                  Salir
-                </button>
+                <div className="admin-session-actions">
+                  <button
+                    aria-expanded={notificationsOpen}
+                    aria-label={`Notificaciones${unreadNotificationCount ? `, ${unreadNotificationCount} sin leer` : ''}`}
+                    className="admin-notification-button"
+                    onClick={() => {
+                      setNotificationsOpen((open) => !open);
+                      if (!notificationsOpen) loadInAppNotifications({ silent: true });
+                    }}
+                    type="button"
+                  >
+                    <span aria-hidden="true" className="material-symbols-outlined">notifications</span>
+                    {unreadNotificationCount > 0 && (
+                      <strong>{unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}</strong>
+                    )}
+                  </button>
+                  <button className="btn btn-ghost" onClick={logout}>
+                    Salir
+                  </button>
+                </div>
               </div>
+              {notificationsOpen && (
+                <section className="admin-inbox" aria-label="Notificaciones internas">
+                  <div className="admin-inbox-head">
+                    <div>
+                      <span>Notificaciones</span>
+                      <h2>Actividad editorial</h2>
+                    </div>
+                    <div>
+                      <button className="btn btn-ghost" disabled={loadingNotifications} onClick={() => loadInAppNotifications()} type="button">
+                        Actualizar
+                      </button>
+                      <button className="btn btn-ghost" disabled={loadingNotifications || unreadNotificationCount === 0} onClick={markAllNotificationsRead} type="button">
+                        Marcar todas como leidas
+                      </button>
+                    </div>
+                  </div>
+                  {loadingNotifications ? (
+                    <p className="admin-muted">Cargando notificaciones...</p>
+                  ) : inAppNotifications.length === 0 ? (
+                    <p className="admin-muted">No hay notificaciones recientes.</p>
+                  ) : (
+                    <div className="admin-inbox-list">
+                      {inAppNotifications.map((notification) => (
+                        <button
+                          className={`admin-inbox-item ${notification.readAt ? '' : 'unread'}`}
+                          key={notification.id}
+                          onClick={() => openInAppNotification(notification)}
+                          type="button"
+                        >
+                          <span className={`admin-inbox-icon ${notification.readAt ? '' : 'unread'}`}>
+                            <span aria-hidden="true" className="material-symbols-outlined">{notificationIcon(notification.type)}</span>
+                          </span>
+                          <span>
+                            <strong>{notificationTitle(notification)}</strong>
+                            <small>{notification.actorName ? `${notification.actorName} - ` : ''}{formatAdminDate(notification.createdAt)}</small>
+                            {notification.commentSelectedText && <q>{notification.commentSelectedText}</q>}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              )}
               <nav className="admin-tabs" aria-label="Secciones del panel">
                 <button
                   aria-pressed={activePanelTab === 'blogs'}
@@ -1527,6 +1689,16 @@ export default function AdminConsole() {
                           value={profileDraft.description}
                         />
                       </label>
+                      <label>
+                        Frase de cierre
+                        <textarea
+                          maxLength="220"
+                          onChange={(e) => updateProfileDraft('closingPhrase', e.target.value)}
+                          placeholder="Una frase corta para cerrar tus notas, por ejemplo una linea de presentacion o criterio editorial."
+                          rows="2"
+                          value={profileDraft.closingPhrase}
+                        />
+                      </label>
                       {canShowProfileOptIn ? (
                         <label className="admin-profile-share">
                           <input
@@ -1606,6 +1778,16 @@ export default function AdminConsole() {
                         placeholder="Bio corta del autor."
                         rows="3"
                         value={adminProfileDraft.description}
+                      />
+                    </label>
+                    <label>
+                      Frase de cierre
+                      <textarea
+                        maxLength="220"
+                        onChange={(event) => updateAdminProfileDraft('closingPhrase', event.target.value)}
+                        placeholder="Texto corto para el mini-perfil al final de sus notas."
+                        rows="2"
+                        value={adminProfileDraft.closingPhrase}
                       />
                     </label>
                     <label>
@@ -2202,7 +2384,11 @@ export default function AdminConsole() {
                     <button
                       className="btn btn-primary admin-new"
                       onClick={() => {
-                        const nextForm = normalizeForm({ ...EMPTY_FORM, authorName: profileAuthorName, authorNote: profileAuthorNote });
+                        const nextForm = normalizeForm({
+                          ...EMPTY_FORM,
+                          authorName: profileAuthorName,
+                          showAuthorNote: Boolean(profileClosingPhrase),
+                        });
                         setForm(nextForm);
                         setSavedForm(nextForm);
                         setCategorySearchTerm('');
@@ -2256,17 +2442,6 @@ export default function AdminConsole() {
                     <label>
                       Autor
                       <input disabled={publishedAuthorLocked} value={form.authorName} onChange={(e) => updateForm('authorName', e.target.value)} placeholder={user?.name || user?.email || 'Nombre visible'} />
-                    </label>
-                    <label>
-                      Cierre de autor
-                      <textarea
-                        disabled={publishedAuthorLocked}
-                        maxLength="500"
-                        onChange={(e) => updateForm('authorNote', e.target.value)}
-                        placeholder="Texto breve para cerrar la nota. Si lo dejas vacio, se puede usar la descripcion de tu perfil."
-                        rows="3"
-                        value={form.authorNote}
-                      />
                     </label>
                     <label>
                       Categoría
@@ -2535,6 +2710,46 @@ export default function AdminConsole() {
                     value={form.contentMarkdown}
                   />
 
+                  <section className="admin-author-ending">
+                    <div>
+                      <span>Final de nota</span>
+                      <p>Opcionalmente muestra un mini-perfil con foto, nombre y una frase breve al cierre.</p>
+                    </div>
+                    <label className="admin-cover-toggle">
+                      <input
+                        checked={form.showAuthorNote}
+                        disabled={publishedAuthorLocked}
+                        onChange={(e) => updateForm('showAuthorNote', e.target.checked)}
+                        type="checkbox"
+                      />
+                      Mostrar mini-perfil del autor al final
+                    </label>
+                    {form.showAuthorNote && previewUsesCurrentProfile && profileClosingPhrase && (
+                      <label className="admin-cover-toggle">
+                        <input
+                          checked={usingProfileClosingPhrase}
+                          disabled={publishedAuthorLocked}
+                          onChange={(e) => updateForm('authorNote', e.target.checked ? '' : profileClosingPhrase)}
+                          type="checkbox"
+                        />
+                        Usar mi frase de cierre guardada en el perfil
+                      </label>
+                    )}
+                    {form.showAuthorNote && !usingProfileClosingPhrase && (
+                      <label>
+                        Texto de cierre manual
+                        <textarea
+                          disabled={publishedAuthorLocked}
+                          maxLength="500"
+                          onChange={(e) => updateForm('authorNote', e.target.value)}
+                          placeholder="Escribe una frase breve para el final de esta nota."
+                          rows="3"
+                          value={form.authorNote}
+                        />
+                      </label>
+                    )}
+                  </section>
+
 
                   <details className="admin-advanced-options">
                     <summary>
@@ -2763,7 +2978,7 @@ export default function AdminConsole() {
                             <img src={previewAuthorPhoto} alt="" />
                           )}
                           <div>
-                            <span>Escrito por</span>
+                            <span>Por</span>
                             {form.authorName && <h2>{form.authorName}</h2>}
                             {previewAuthorNote && <p>{previewAuthorNote}</p>}
                           </div>
@@ -2896,6 +3111,7 @@ function buildPayload(form, canChooseSlug = false) {
     showCoverInPost: form.coverImage ? form.showCoverInPost !== false : true,
     authorName: form.authorName || undefined,
     authorNote: form.authorNote || undefined,
+    showAuthorNote: form.showAuthorNote === true,
     category: sanitizeCategory(form.category) || undefined,
     tags: parseTagsText(form.tagsText),
   };
@@ -2955,6 +3171,43 @@ function normalizeNotificationPreferences(value = {}) {
       ...(value?.events || {}),
     },
   };
+}
+
+function normalizeInAppNotification(value = {}) {
+  return {
+    id: normalizeInputValue(value.id),
+    type: normalizeInputValue(value.type),
+    eventKey: normalizeInputValue(value.eventKey),
+    subject: normalizeInputValue(value.subject),
+    text: normalizeInputValue(value.text),
+    actorEmail: normalizeInputValue(value.actorEmail),
+    actorName: normalizeInputValue(value.actorName),
+    postId: normalizeInputValue(value.postId),
+    postTitle: normalizeInputValue(value.postTitle),
+    commentId: normalizeInputValue(value.commentId),
+    commentBody: normalizeInputValue(value.commentBody),
+    commentSelectedText: normalizeInputValue(value.commentSelectedText),
+    createdAt: value.createdAt || '',
+    readAt: value.readAt || '',
+  };
+}
+
+function notificationTitle(notification = {}) {
+  if (notification.type === 'post.submittedReview') return `Post enviado a revision: ${notification.postTitle || 'Sin titulo'}`;
+  if (notification.type === 'comment.created') return `Nuevo comentario: ${notification.postTitle || 'Sin titulo'}`;
+  if (notification.type === 'comment.resolved') return `Comentario resuelto: ${notification.postTitle || 'Sin titulo'}`;
+  if (notification.type === 'comment.reopened') return `Comentario reabierto: ${notification.postTitle || 'Sin titulo'}`;
+  if (notification.type === 'post.published') return `Post publicado: ${notification.postTitle || 'Sin titulo'}`;
+  if (notification.type === 'user.roles.changed') return 'Tus permisos fueron actualizados';
+  return notification.subject || 'Actividad editorial';
+}
+
+function notificationIcon(type = '') {
+  if (type.startsWith('comment.')) return 'mode_comment';
+  if (type === 'post.published') return 'task_alt';
+  if (type === 'post.submittedReview') return 'rate_review';
+  if (type === 'user.roles.changed') return 'manage_accounts';
+  return 'notifications';
 }
 
 function normalizeInlineInput(value = '') {
@@ -3020,6 +3273,7 @@ function normalizeForm(value = {}) {
     next[field] = normalizeInputValue(next[field]);
   });
   next.showCoverInPost = next.showCoverInPost !== false;
+  next.showAuthorNote = next.showAuthorNote === true;
   return next;
 }
 
@@ -3031,6 +3285,7 @@ function normalizeProfile(value = {}) {
     firstName,
     lastName,
     description: normalizeInputValue(value.description),
+    closingPhrase: normalizeInputValue(value.closingPhrase),
     photoUrl: normalizeInputValue(value.photoUrl),
     publicProfileEnabled: normalizeBoolean(value.publicProfileEnabled),
     canSharePublicProfile: normalizeBoolean(value.canSharePublicProfile),
@@ -3070,6 +3325,7 @@ function postToForm(post = {}) {
     coverImage: post.coverImage,
     authorName: post.authorName,
     authorNote: post.authorNote,
+    showAuthorNote: post.showAuthorNote === true,
     category: sanitizeCategory(post.category),
     tagsText: sanitizeTags(post.tags || []).join(', '),
     status: post.status,
@@ -3089,6 +3345,7 @@ function serializeForm(form) {
     coverImage: form.coverImage || '',
     authorName: form.authorName || '',
     authorNote: form.authorNote || '',
+    showAuthorNote: form.showAuthorNote === true,
     category: form.category || '',
     tagsText: form.tagsText || '',
     status: form.status || '',

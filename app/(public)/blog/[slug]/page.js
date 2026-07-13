@@ -47,7 +47,7 @@ export default async function NotaPage({ params }) {
   if (!post) notFound();
   const autorNombre = post.autorPerfil?.fullName || post.autor || '';
   const autorFoto = post.autorPerfil?.photoUrl || '';
-  const cierreAutor = post.cierreAutor || post.autorPerfil?.description || '';
+  const cierreAutor = post.mostrarCierreAutor ? post.cierreAutor || post.autorPerfil?.closingPhrase || '' : '';
 
   return (
     <article className="article">
@@ -82,7 +82,7 @@ export default async function NotaPage({ params }) {
             <img src={autorFoto} alt="" />
           )}
           <div>
-            <span>Escrito por</span>
+            <span>Por</span>
             {autorNombre ? (
               <h2>
                 <Link href={hrefAutorBlog(autorNombre)} className="art-author">{autorNombre}</Link>

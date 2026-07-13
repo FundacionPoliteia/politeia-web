@@ -23,6 +23,8 @@ const DEFAULT_EVENTS = {
 const preferences = () => db().collection('notificationPreferences');
 const events = () => db().collection('notificationEvents');
 const deliveries = () => db().collection('emailDeliveries');
+const reads = () => db().collection('notificationReads');
+const INBOX_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
 
 export async function getNotificationPreferences(user) {
   const email = normalizeEmail(user?.email);
@@ -77,8 +79,65 @@ export async function updateNotificationPreferences(user, body = {}) {
   return after;
 }
 
+export async function listInAppNotifications(user, { limit = 50 } = {}) {
+  const email = normalizeEmail(user?.email);
+  if (!email) return { items: [], unreadCount: 0 };
+
+  const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 100);
+  const userRoles = sanitizeRoles(user?.roles || []);
+  const since = Date.now() - INBOX_RETENTION_MS;
+  const [eventsSnapshot, readsSnapshot] = await Promise.all([
+    events().get(),
+    reads().where('userEmail', '==', email).get(),
+  ]);
+  const readByEventId = new Map(
+    readsSnapshot.docs
+      .map(serializeDoc)
+      .filter((item) => item?.eventId)
+      .map((item) => [item.eventId, item.readAt || null])
+  );
+  const relevant = eventsSnapshot.docs
+    .map(serializeDoc)
+    .filter((event) => isEventRelevantForUser(event, { email, roles: userRoles }))
+    .filter((event) => eventTimestamp(event) >= since)
+    .sort((a, b) => eventTimestamp(b) - eventTimestamp(a))
+    .map((event) => toInboxItem(event, readByEventId.get(event.id) || null));
+
+  return {
+    items: relevant.slice(0, safeLimit),
+    unreadCount: relevant.filter((item) => !item.readAt).length,
+  };
+}
+
+export async function markNotificationRead(eventId = '', user) {
+  const email = normalizeEmail(user?.email);
+  const cleanEventId = normalizeId(eventId);
+  if (!email || !cleanEventId) return null;
+
+  const eventDoc = await events().doc(cleanEventId).get();
+  if (!eventDoc.exists) return null;
+  const event = serializeDoc(eventDoc);
+  if (!isEventRelevantForUser(event, { email, roles: sanitizeRoles(user?.roles || []) })) return null;
+
+  const ref = reads().doc(readId(cleanEventId, email));
+  await ref.set({
+    eventId: cleanEventId,
+    userEmail: email,
+    readAt: serverTimestamp(),
+  }, { merge: true });
+  return toInboxItem(event, serializeDoc(await ref.get()).readAt || null);
+}
+
+export async function markAllNotificationsRead(user) {
+  const inbox = await listInAppNotifications(user, { limit: 100 });
+  await Promise.all(inbox.items
+    .filter((item) => !item.readAt)
+    .map((item) => markNotificationRead(item.id, user)));
+  return listInAppNotifications(user, { limit: 50 });
+}
+
 export async function notifyPostSubmittedForReview(post, actor) {
-  const recipients = await listOptedInRecipients({
+  const emailRecipients = await listOptedInRecipients({
     eventKey: NOTIFICATION_EVENTS.postSubmittedReview,
     roles: ['admin', 'reviewer'],
     excludeEmails: [actor?.email],
@@ -88,7 +147,9 @@ export async function notifyPostSubmittedForReview(post, actor) {
     eventKey: NOTIFICATION_EVENTS.postSubmittedReview,
     actor,
     post,
-    recipients,
+    emailRecipients,
+    targetRoles: ['admin', 'reviewer'],
+    excludeEmails: [actor?.email],
     subject: `Nuevo post en revision: ${post.title}`,
     text: [
       `${actor?.name || actor?.email} envio un post a revision.`,
@@ -101,7 +162,7 @@ export async function notifyPostSubmittedForReview(post, actor) {
 
 export async function notifyCommentCreated(post, comment, actor) {
   if (!isReviewerActor(actor)) return null;
-  const recipients = await listOptedInEmails({
+  const emailRecipients = await listOptedInEmails({
     eventKey: NOTIFICATION_EVENTS.commentCreated,
     emails: [post.authorEmail],
     excludeEmails: [actor?.email],
@@ -112,7 +173,9 @@ export async function notifyCommentCreated(post, comment, actor) {
     actor,
     post,
     comment,
-    recipients,
+    emailRecipients,
+    targetEmails: [post.authorEmail],
+    excludeEmails: [actor?.email],
     subject: `Nuevo comentario en tu post: ${post.title}`,
     text: [
       `${actor?.name || actor?.email} dejo un comentario de revision.`,
@@ -125,22 +188,30 @@ export async function notifyCommentCreated(post, comment, actor) {
 }
 
 export async function notifyCommentStatusChanged(post, comment, actor, status) {
-  if (!isReviewerActor(actor)) return null;
   const eventKey = status === 'resolved'
     ? NOTIFICATION_EVENTS.commentResolved
     : NOTIFICATION_EVENTS.commentReopened;
-  const recipients = await listOptedInEmails({
+  const actorIsReviewer = isReviewerActor(actor);
+  const targetEmails = actorIsReviewer ? [post.authorEmail] : [comment.authorEmail];
+  const targetRoles = actorIsReviewer ? [] : ['admin', 'reviewer'];
+  const directRecipients = await listOptedInEmails({
     eventKey,
-    emails: [post.authorEmail],
+    emails: targetEmails,
     excludeEmails: [actor?.email],
   });
+  const roleRecipients = targetRoles.length
+    ? await listOptedInRecipients({ eventKey, roles: targetRoles, excludeEmails: [actor?.email] })
+    : [];
   return queueNotification({
     type: status === 'resolved' ? 'comment.resolved' : 'comment.reopened',
     eventKey,
     actor,
     post,
     comment,
-    recipients,
+    emailRecipients: [...directRecipients, ...roleRecipients],
+    targetEmails,
+    targetRoles,
+    excludeEmails: [actor?.email],
     subject: `${status === 'resolved' ? 'Comentario resuelto' : 'Comentario reabierto'}: ${post.title}`,
     text: [
       `${actor?.name || actor?.email} ${status === 'resolved' ? 'resolvio' : 'reabrio'} un comentario.`,
@@ -153,7 +224,7 @@ export async function notifyCommentStatusChanged(post, comment, actor, status) {
 
 export async function notifyPostPublished(post, actor) {
   if (!isReviewerActor(actor)) return null;
-  const recipients = await listOptedInEmails({
+  const emailRecipients = await listOptedInEmails({
     eventKey: NOTIFICATION_EVENTS.postPublished,
     emails: [post.authorEmail],
     excludeEmails: [actor?.email],
@@ -163,7 +234,9 @@ export async function notifyPostPublished(post, actor) {
     eventKey: NOTIFICATION_EVENTS.postPublished,
     actor,
     post,
-    recipients,
+    emailRecipients,
+    targetEmails: [post.authorEmail],
+    excludeEmails: [actor?.email],
     subject: `Post publicado: ${post.title}`,
     text: [
       `${actor?.name || actor?.email} publico tu post.`,
@@ -174,7 +247,7 @@ export async function notifyPostPublished(post, actor) {
 }
 
 export async function notifyRolesChanged(assignment, actorEmail) {
-  const recipients = await listOptedInEmails({
+  const emailRecipients = await listOptedInEmails({
     eventKey: NOTIFICATION_EVENTS.roleChanged,
     emails: [assignment.email],
     excludeEmails: [actorEmail],
@@ -183,7 +256,9 @@ export async function notifyRolesChanged(assignment, actorEmail) {
     type: 'user.roles.changed',
     eventKey: NOTIFICATION_EVENTS.roleChanged,
     actor: { email: actorEmail, name: actorEmail },
-    recipients,
+    emailRecipients,
+    targetEmails: [assignment.email],
+    excludeEmails: [actorEmail],
     subject: 'Tus permisos internos fueron actualizados',
     text: [
       'Un admin actualizo tus permisos internos en Politeia.',
@@ -207,22 +282,24 @@ export async function safeNotify(fn) {
   }
 }
 
-async function queueNotification({ type, eventKey, actor, post = null, comment = null, recipients = [], subject, text, metadata = {} }) {
-  const cleanRecipients = dedupeRecipients(recipients);
-  if (!cleanRecipients.length) {
-    console.info(JSON.stringify({
-      severity: 'INFO',
-      message: 'notification skipped',
-      reason: 'no opted-in recipients',
-      type,
-      eventKey,
-      actorEmail: normalizeEmail(actor?.email),
-      postId: post?.id || '',
-      postAuthorEmail: normalizeEmail(post?.authorEmail),
-    }));
-    return null;
-  }
-
+async function queueNotification({
+  type,
+  eventKey,
+  actor,
+  post = null,
+  comment = null,
+  emailRecipients = [],
+  targetEmails = [],
+  targetRoles = [],
+  excludeEmails = [],
+  subject,
+  text,
+  metadata = {},
+}) {
+  const cleanEmailRecipients = dedupeRecipients(emailRecipients);
+  const cleanTargetEmails = [...emailSet(targetEmails)];
+  const cleanTargetRoles = sanitizeRoles(targetRoles);
+  const cleanExcludeEmails = [...emailSet(excludeEmails)];
   const eventRef = events().doc();
   const event = {
     type,
@@ -233,10 +310,16 @@ async function queueNotification({ type, eventKey, actor, post = null, comment =
     postTitle: post?.title || '',
     postAuthorEmail: normalizeEmail(post?.authorEmail),
     commentId: comment?.id || '',
+    commentBody: comment?.body || '',
+    commentSelectedText: comment?.selectedText || '',
+    targetEmails: cleanTargetEmails,
+    targetRoles: cleanTargetRoles,
+    excludeEmails: cleanExcludeEmails,
     subject,
     text,
     metadata,
-    recipientCount: cleanRecipients.length,
+    recipientCount: cleanTargetEmails.length + cleanTargetRoles.length,
+    emailRecipientCount: cleanEmailRecipients.length,
     status: 'processed',
     createdAt: serverTimestamp(),
     processedAt: serverTimestamp(),
@@ -244,7 +327,7 @@ async function queueNotification({ type, eventKey, actor, post = null, comment =
   await eventRef.set(event);
 
   const createdDeliveries = [];
-  for (const recipient of cleanRecipients) {
+  for (const recipient of cleanEmailRecipients) {
     createdDeliveries.push(await createDelivery({
       eventId: eventRef.id,
       eventKey,
@@ -407,6 +490,44 @@ function sanitizeRoles(value = []) {
   return ['admin', 'reviewer', 'blog'].filter((role) => roles.has(role));
 }
 
+function toInboxItem(event, readAt = null) {
+  return {
+    id: event.id,
+    type: event.type || '',
+    eventKey: event.eventKey || '',
+    subject: event.subject || '',
+    text: event.text || '',
+    actorEmail: normalizeEmail(event.actorEmail),
+    actorName: event.actorName || event.actorEmail || '',
+    postId: event.postId || '',
+    postTitle: event.postTitle || '',
+    commentId: event.commentId || '',
+    commentBody: event.commentBody || '',
+    commentSelectedText: event.commentSelectedText || '',
+    createdAt: event.createdAt || null,
+    readAt,
+  };
+}
+
+function isEventRelevantForUser(event, user) {
+  const email = normalizeEmail(user?.email);
+  if (!email || normalizeEmail(event?.actorEmail) === email) return false;
+  if (emailSet(event?.excludeEmails || []).has(email)) return false;
+  if (emailSet(event?.targetEmails || []).has(email)) return true;
+  const userRoles = sanitizeRoles(user?.roles || []);
+  const eventRoles = sanitizeRoles(event?.targetRoles || []);
+  return eventRoles.some((role) => userRoles.includes(role));
+}
+
+function eventTimestamp(event) {
+  const value = event?.createdAt;
+  if (!value) return 0;
+  if (typeof value === 'string') return Date.parse(value) || 0;
+  if (typeof value.toDate === 'function') return value.toDate().getTime();
+  if (value instanceof Date) return value.getTime();
+  return Date.parse(String(value)) || 0;
+}
+
 function dedupeRecipients(recipients = []) {
   const seen = new Set();
   return recipients.filter((recipient) => {
@@ -429,6 +550,14 @@ function adminPostUrl(postId) {
 
 function preferenceId(email) {
   return normalizeEmail(email).replaceAll('/', '_');
+}
+
+function readId(eventId, email) {
+  return `${normalizeId(eventId)}__${preferenceId(email)}`;
+}
+
+function normalizeId(value = '') {
+  return typeof value === 'string' ? value.trim().replaceAll('/', '_') : '';
 }
 
 function emailSet(emails = []) {

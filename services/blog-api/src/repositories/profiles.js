@@ -212,6 +212,7 @@ export function sanitizeProfile(data = {}) {
   const firstName = normalizeText(data.firstName).slice(0, 80);
   const lastName = normalizeText(data.lastName).slice(0, 80);
   const description = normalizeText(data.description).slice(0, 500);
+  const closingPhrase = normalizeText(data.closingPhrase).slice(0, 220);
   const photoUrl = normalizeUrl(data.photoUrl);
   const publicProfileEnabled = normalizeBoolean(data.publicProfileEnabled);
 
@@ -219,6 +220,7 @@ export function sanitizeProfile(data = {}) {
     firstName,
     lastName,
     description,
+    closingPhrase,
     photoUrl,
     publicProfileEnabled,
   };
@@ -255,6 +257,7 @@ async function toPublicAuthorProfile(item) {
     fullName,
     authorSlug: slugify(item?.authorSlug || fullName),
     description: clean.description,
+    closingPhrase: clean.closingPhrase,
     photoUrl: clean.photoUrl,
   };
 }

@@ -7,6 +7,15 @@ import { config, parseEnvValue } from '../src/config.js';
 import { setFirestoreForTests } from '../src/firestore.js';
 import { canManageAllPosts, toBlogAuthorView } from '../src/repositories/posts.js';
 import {
+  listInAppNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+  notifyCommentCreated,
+  notifyCommentStatusChanged,
+  notifyPostPublished,
+  notifyPostSubmittedForReview,
+} from '../src/repositories/notifications.js';
+import {
   buildFullName,
   createManagedAuthorProfile,
   deleteManagedAuthorProfile,
@@ -75,12 +84,14 @@ test('user profiles normalize personal fields separately from roles', () => {
     firstName: '  Juan  ',
     lastName: '  Perez  ',
     description: '  Editor   politico  ',
+    closingPhrase: '  Una   mirada propia.  ',
     photoUrl: 'https://example.com/foto.png',
     publicProfileEnabled: 'true',
   }), {
     firstName: 'Juan',
     lastName: 'Perez',
     description: 'Editor politico',
+    closingPhrase: 'Una mirada propia.',
     photoUrl: 'https://example.com/foto.png',
     publicProfileEnabled: true,
   });
@@ -102,6 +113,7 @@ test('user profile public opt-in persists after save and reload', async () => {
       firstName: 'Juan Cruz',
       lastName: 'Galarza',
       description: 'Autor de relaciones internacionales.',
+      closingPhrase: 'Una mirada desde relaciones internacionales.',
       publicProfileEnabled: true,
     });
 
@@ -119,6 +131,7 @@ test('user profile public opt-in persists after save and reload', async () => {
     const publicProfile = await getPublicAuthorProfileBySlug('juan-cruz-galarza');
     assert.equal(publicProfile.fullName, 'Juan Cruz Galarza');
     assert.equal(publicProfile.description, 'Bio actualizada.');
+    assert.equal(publicProfile.closingPhrase, 'Una mirada desde relaciones internacionales.');
   } finally {
     setFirestoreForTests(null);
   }
@@ -177,6 +190,7 @@ test('admin managed author profiles can be edited', async () => {
       firstName: 'Autora',
       lastName: 'Editada',
       description: 'Perfil actualizado.',
+      closingPhrase: 'Cierre administrado.',
       photoUrl: 'https://example.com/autora.png',
       publicProfileEnabled: true,
     }, 'dev@politeia.ar');
@@ -185,12 +199,14 @@ test('admin managed author profiles can be edited', async () => {
     assert.equal(updated.fullName, 'Autora Editada');
     assert.equal(updated.authorSlug, 'autora-editada');
     assert.equal(updated.description, 'Perfil actualizado.');
+    assert.equal(updated.closingPhrase, 'Cierre administrado.');
     assert.equal(updated.photoUrl, 'https://example.com/autora.png');
     assert.equal(updated.managedAuthor, true);
     assert.equal(updated.publicProfileEnabled, true);
 
     const publicProfile = await getPublicAuthorProfileBySlug('autora-editada');
     assert.equal(publicProfile.fullName, 'Autora Editada');
+    assert.equal(publicProfile.closingPhrase, 'Cierre administrado.');
   } finally {
     setFirestoreForTests(null);
   }
@@ -214,11 +230,70 @@ test('POST /v1/posts stores author note', async () => {
         contentMarkdown: 'Contenido de prueba',
         authorName: 'Dev Politeia',
         authorNote: '  Cierre   breve del autor.  ',
+        showAuthorNote: true,
         tags: [],
       })
       .expect(201);
 
     assert.equal(res.body.item.authorNote, 'Cierre breve del autor.');
+    assert.equal(res.body.item.showAuthorNote, true);
+  } finally {
+    setFirestoreForTests(null);
+  }
+});
+
+test('in-app notifications target roles and emails independently from email opt-in', async () => {
+  const firestore = createMemoryFirestore();
+  setFirestoreForTests(firestore);
+
+  try {
+    const post = {
+      id: 'post-1',
+      title: 'Nota en revision',
+      authorEmail: 'autor@politeia.ar',
+      authorName: 'Autor Politeia',
+    };
+    const reviewer = { email: 'reviewer@politeia.ar', name: 'Reviewer', roles: ['reviewer', 'blog'] };
+    const author = { email: 'autor@politeia.ar', name: 'Autor', roles: ['blog'] };
+    const admin = { email: 'admin@politeia.ar', name: 'Admin', roles: ['admin', 'reviewer', 'blog'] };
+
+    await notifyPostSubmittedForReview(post, author);
+    let reviewerInbox = await listInAppNotifications(reviewer);
+    let authorInbox = await listInAppNotifications(author);
+    assert.equal(reviewerInbox.items.length, 1);
+    assert.equal(reviewerInbox.items[0].type, 'post.submittedReview');
+    assert.equal(authorInbox.items.length, 0);
+
+    const comment = {
+      id: 'comment-1',
+      authorEmail: reviewer.email,
+      authorName: reviewer.name,
+      body: 'Revisar fuente.',
+      selectedText: 'texto seleccionado',
+    };
+    await notifyCommentCreated(post, comment, reviewer);
+    authorInbox = await listInAppNotifications(author);
+    assert.equal(authorInbox.items.some((item) => item.type === 'comment.created'), true);
+
+    await notifyCommentStatusChanged(post, comment, author, 'resolved');
+    reviewerInbox = await listInAppNotifications(reviewer);
+    const adminInbox = await listInAppNotifications(admin);
+    assert.equal(reviewerInbox.items.some((item) => item.type === 'comment.resolved'), true);
+    assert.equal(adminInbox.items.some((item) => item.type === 'comment.resolved'), true);
+
+    await notifyPostPublished(post, reviewer);
+    authorInbox = await listInAppNotifications(author);
+    assert.equal(authorInbox.items.some((item) => item.type === 'post.published'), true);
+
+    const unreadBefore = authorInbox.unreadCount;
+    const first = authorInbox.items[0];
+    const readItem = await markNotificationRead(first.id, author);
+    assert.equal(Boolean(readItem.readAt), true);
+    authorInbox = await listInAppNotifications(author);
+    assert.equal(authorInbox.unreadCount, unreadBefore - 1);
+
+    const allRead = await markAllNotificationsRead(author);
+    assert.equal(allRead.unreadCount, 0);
   } finally {
     setFirestoreForTests(null);
   }
@@ -411,6 +486,11 @@ class MemoryCollection {
     return this.doc(id);
   }
 
+  async get() {
+    const docs = Array.from(this.store.entries()).map(([id, data]) => memorySnapshot(id, data));
+    return { docs, empty: docs.length === 0 };
+  }
+
   where(field, operator, value) {
     assert.equal(operator, '==');
     const docs = Array.from(this.store.entries())
@@ -475,7 +555,7 @@ function resolveMemoryData(data = {}) {
 function resolveMemoryValue(key, value) {
   if (Array.isArray(value)) return value.map((item) => resolveMemoryValue(key, item));
   if (value && typeof value === 'object') {
-    if (key.endsWith('At') && typeof value.toDate !== 'function') return '2026-01-01T00:00:00.000Z';
+    if (key.endsWith('At') && typeof value.toDate !== 'function') return new Date().toISOString();
     return resolveMemoryData(value);
   }
   return value;
