@@ -2592,7 +2592,7 @@ function normalizeProfile(value = {}) {
     lastName,
     description: normalizeInputValue(value.description),
     photoUrl: normalizeInputValue(value.photoUrl),
-    publicProfileEnabled: value.publicProfileEnabled === true,
+    publicProfileEnabled: normalizeBoolean(value.publicProfileEnabled),
     authorSlug: normalizeInputValue(value.authorSlug),
     fullName,
     createdAt: normalizeInputValue(value.createdAt),
@@ -2603,6 +2603,10 @@ function normalizeProfile(value = {}) {
 function profileNeedsSetup(profile = {}) {
   const nextProfile = normalizeProfile(profile);
   return !nextProfile.updatedAt || !nextProfile.fullName;
+}
+
+function normalizeBoolean(value) {
+  return value === true || value === 'true' || value === 1 || value === '1';
 }
 
 function postToForm(post = {}) {

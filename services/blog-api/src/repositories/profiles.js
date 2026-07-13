@@ -77,7 +77,7 @@ export function sanitizeProfile(data = {}) {
   const lastName = normalizeText(data.lastName).slice(0, 80);
   const description = normalizeText(data.description).slice(0, 500);
   const photoUrl = normalizeUrl(data.photoUrl);
-  const publicProfileEnabled = data.publicProfileEnabled === true;
+  const publicProfileEnabled = normalizeBoolean(data.publicProfileEnabled);
 
   return {
     firstName,
@@ -132,6 +132,10 @@ function normalizeUrl(value) {
   } catch (_err) {
     throw new HttpError(400, 'photoUrl must be a valid https URL');
   }
+}
+
+function normalizeBoolean(value) {
+  return value === true || value === 'true' || value === 1 || value === '1';
 }
 
 function profileId(email) {
