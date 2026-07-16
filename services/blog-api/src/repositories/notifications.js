@@ -5,18 +5,22 @@ import { writeAuditLog } from './audit.js';
 export const NOTIFICATION_EVENTS = {
   postSubmittedReview: 'postSubmittedReview',
   commentCreated: 'commentCreated',
+  commentReplied: 'commentReplied',
   commentResolved: 'commentResolved',
   commentReopened: 'commentReopened',
   postPublished: 'postPublished',
+  postEditEnabled: 'postEditEnabled',
   roleChanged: 'roleChanged',
 };
 
 const DEFAULT_EVENTS = {
   [NOTIFICATION_EVENTS.postSubmittedReview]: true,
   [NOTIFICATION_EVENTS.commentCreated]: true,
+  [NOTIFICATION_EVENTS.commentReplied]: true,
   [NOTIFICATION_EVENTS.commentResolved]: true,
   [NOTIFICATION_EVENTS.commentReopened]: true,
   [NOTIFICATION_EVENTS.postPublished]: true,
+  [NOTIFICATION_EVENTS.postEditEnabled]: true,
   [NOTIFICATION_EVENTS.roleChanged]: true,
 };
 
@@ -191,9 +195,7 @@ export async function notifyCommentStatusChanged(post, comment, actor, status) {
   const eventKey = status === 'resolved'
     ? NOTIFICATION_EVENTS.commentResolved
     : NOTIFICATION_EVENTS.commentReopened;
-  const actorIsReviewer = isReviewerActor(actor);
-  const targetEmails = actorIsReviewer ? [post.authorEmail] : [comment.authorEmail];
-  const targetRoles = actorIsReviewer ? [] : ['admin', 'reviewer'];
+  const { targetEmails, targetRoles } = commentReplyTargets(post, comment, actor);
   const directRecipients = await listOptedInEmails({
     eventKey,
     emails: targetEmails,
@@ -216,7 +218,38 @@ export async function notifyCommentStatusChanged(post, comment, actor, status) {
     text: [
       `${actor?.name || actor?.email} ${status === 'resolved' ? 'resolvio' : 'reabrio'} un comentario.`,
       `Post: ${post.title}`,
-      `Comentario: ${comment.body}`,
+      `Comentario: ${latestCommentReply(comment)?.body || comment.body}`,
+      `Abrir panel: ${adminPostUrl(post.id)}`,
+    ].join('\n'),
+  });
+}
+
+export async function notifyCommentReplied(post, comment, actor) {
+  const eventKey = NOTIFICATION_EVENTS.commentReplied;
+  const { targetEmails, targetRoles } = commentReplyTargets(post, comment, actor);
+  const directRecipients = await listOptedInEmails({
+    eventKey,
+    emails: targetEmails,
+    excludeEmails: [actor?.email],
+  });
+  const roleRecipients = targetRoles.length
+    ? await listOptedInRecipients({ eventKey, roles: targetRoles, excludeEmails: [actor?.email] })
+    : [];
+  return queueNotification({
+    type: 'comment.reply',
+    eventKey,
+    actor,
+    post,
+    comment,
+    emailRecipients: [...directRecipients, ...roleRecipients],
+    targetEmails,
+    targetRoles,
+    excludeEmails: [actor?.email],
+    subject: `Nueva respuesta en comentario: ${post.title}`,
+    text: [
+      `${actor?.name || actor?.email} respondio un comentario.`,
+      `Post: ${post.title}`,
+      `Respuesta: ${latestCommentReply(comment)?.body || comment.body}`,
       `Abrir panel: ${adminPostUrl(post.id)}`,
     ].join('\n'),
   });
@@ -225,7 +258,7 @@ export async function notifyCommentStatusChanged(post, comment, actor, status) {
 export async function notifyPostPublished(post, actor) {
   if (!isReviewerActor(actor)) return null;
   const emailRecipients = await listOptedInEmails({
-    eventKey: NOTIFICATION_EVENTS.postPublished,
+    eventKey: NOTIFICATION_EVENTS.postEditEnabled,
     emails: [post.authorEmail],
     excludeEmails: [actor?.email],
   });
@@ -240,6 +273,30 @@ export async function notifyPostPublished(post, actor) {
     subject: `Post publicado: ${post.title}`,
     text: [
       `${actor?.name || actor?.email} publico tu post.`,
+      `Titulo: ${post.title}`,
+      `Abrir panel: ${adminPostUrl(post.id)}`,
+    ].join('\n'),
+  });
+}
+
+export async function notifyPostEditEnabled(post, actor) {
+  if (!isReviewerActor(actor)) return null;
+  const emailRecipients = await listOptedInEmails({
+    eventKey: NOTIFICATION_EVENTS.postPublished,
+    emails: [post.authorEmail],
+    excludeEmails: [actor?.email],
+  });
+  return queueNotification({
+    type: 'post.editEnabled',
+    eventKey: NOTIFICATION_EVENTS.postEditEnabled,
+    actor,
+    post,
+    emailRecipients,
+    targetEmails: [post.authorEmail],
+    excludeEmails: [actor?.email],
+    subject: `Edicion habilitada: ${post.title}`,
+    text: [
+      `${actor?.name || actor?.email} habilito la edicion de tu post.`,
       `Titulo: ${post.title}`,
       `Abrir panel: ${adminPostUrl(post.id)}`,
     ].join('\n'),
@@ -310,8 +367,8 @@ async function queueNotification({
     postTitle: post?.title || '',
     postAuthorEmail: normalizeEmail(post?.authorEmail),
     commentId: comment?.id || '',
-    commentBody: comment?.body || '',
-    commentSelectedText: comment?.selectedText || '',
+    commentBody: latestCommentReply(comment)?.body || comment?.body || '',
+    commentSelectedText: comment?.selectedTextCurrent || latestCommentReply(comment)?.selectedText || comment?.selectedText || '',
     targetEmails: cleanTargetEmails,
     targetRoles: cleanTargetRoles,
     excludeEmails: cleanExcludeEmails,
@@ -464,6 +521,19 @@ async function listOptedInRecipients({ eventKey, roles = [], excludeEmails = [] 
 
 function preferenceAcceptsEvent(preference, eventKey) {
   return Boolean(preference?.enabled && preference?.events?.[eventKey] === true);
+}
+
+function commentReplyTargets(post, comment, actor) {
+  const actorIsReviewer = isReviewerActor(actor);
+  return {
+    targetEmails: actorIsReviewer ? [post.authorEmail] : [comment.authorEmail],
+    targetRoles: actorIsReviewer ? [] : ['admin', 'reviewer'],
+  };
+}
+
+function latestCommentReply(comment = {}) {
+  const replies = Array.isArray(comment?.replies) ? comment.replies : [];
+  return replies[replies.length - 1] || null;
 }
 
 function toPreference(item, user) {

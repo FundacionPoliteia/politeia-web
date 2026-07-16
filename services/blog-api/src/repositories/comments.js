@@ -42,14 +42,17 @@ export async function createPostComment(postId, data, user) {
   const key = duplicateKey(postId, data.selectedText);
   const lockRef = commentLocks().doc(duplicateLockId(key));
   const authorName = await resolveUserDisplayName(user);
+  const selectedText = normalizeText(data.selectedText).slice(0, 500);
   const comment = {
     postId,
     body,
-    selectedText: normalizeText(data.selectedText).slice(0, 500),
+    selectedText,
+    selectedTextCurrent: selectedText,
     duplicateKey: key,
     status: 'open',
     authorEmail: user.email,
     authorName: authorName || user.name || user.email,
+    replies: [],
     deletedAt: null,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -118,7 +121,13 @@ export async function updatePostCommentStatus(postId, commentId, data, user) {
   const hasBodyPatch = typeof data?.body === 'string';
   const nextBody = hasBodyPatch ? normalizeText(data.body) : '';
   if (hasBodyPatch && !nextBody) throw new HttpError(400, 'body is required');
-  if (!hasStatusPatch && !hasBodyPatch) throw new HttpError(400, 'status or body is required');
+  const hasReplyPatch = typeof data?.replyBody === 'string';
+  const replyBody = hasReplyPatch ? normalizeText(data.replyBody) : '';
+  if (hasReplyPatch && !replyBody) throw new HttpError(400, 'replyBody is required');
+  const selectedTextCurrent = normalizeText(data?.selectedTextCurrent).slice(0, 500);
+  if (!hasStatusPatch && !hasBodyPatch && !hasReplyPatch && !selectedTextCurrent) {
+    throw new HttpError(400, 'status, body or replyBody is required');
+  }
   const contentMarkdown = normalizeMarkdown(data?.contentMarkdown);
   if (status === 'resolved') {
     if (!contentMarkdown) throw new HttpError(400, 'contentMarkdown is required');
@@ -129,10 +138,14 @@ export async function updatePostCommentStatus(postId, commentId, data, user) {
 
   const ref = comments().doc(commentId);
   const patch = { updatedAt: serverTimestamp() };
+  const replyAuthorName = hasReplyPatch ? await resolveUserDisplayName(user) : '';
   if (hasStatusPatch) {
     patch.status = status;
     patch.resolvedAt = status === 'resolved' ? serverTimestamp() : null;
     patch.resolvedBy = status === 'resolved' ? user.email : '';
+  }
+  if (selectedTextCurrent) {
+    patch.selectedTextCurrent = selectedTextCurrent;
   }
 
   let before = null;
@@ -158,6 +171,18 @@ export async function updatePostCommentStatus(postId, commentId, data, user) {
     if (hasBodyPatch) {
       patch.body = nextBody;
       patch.duplicateKey = duplicateKey(postId, before.selectedText);
+    }
+    if (hasReplyPatch) {
+      patch.replies = [
+        ...normalizeReplies(before.replies),
+        buildCommentReply({
+          body: replyBody,
+          user,
+          authorName: replyAuthorName,
+          action: hasStatusPatch ? status : 'reply',
+          selectedText: selectedTextCurrent || before.selectedTextCurrent || before.selectedText || '',
+        }),
+      ];
     }
 
     const finalStatus = hasStatusPatch ? status : before.status;
@@ -213,7 +238,7 @@ export async function updatePostCommentStatus(postId, commentId, data, user) {
   const afterPost = serializeDoc(await posts().doc(postId).get());
   await writeAuditLog({
     actorEmail: user.email,
-    action: status === 'resolved' ? 'comment.resolve' : 'comment.reopen',
+    action: hasStatusPatch ? (status === 'resolved' ? 'comment.resolve' : 'comment.reopen') : 'comment.reply',
     resourceType: 'reviewComment',
     resourceId: commentId,
     before,
@@ -231,6 +256,34 @@ export async function updatePostCommentStatus(postId, commentId, data, user) {
   }
 
   return { comment: after, post: afterPost };
+}
+
+function buildCommentReply({ body, user, authorName, action = 'reply', selectedText = '' }) {
+  return {
+    id: `reply-${crypto.randomUUID().replace(/[^a-zA-Z0-9_-]/g, '')}`,
+    body,
+    action,
+    selectedText: normalizeText(selectedText).slice(0, 500),
+    authorEmail: user.email,
+    authorName: authorName || user.name || user.email,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function normalizeReplies(value = []) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((reply) => reply && !reply.deletedAt)
+    .map((reply) => ({
+      id: normalizeText(reply.id) || `reply-${crypto.randomUUID().replace(/[^a-zA-Z0-9_-]/g, '')}`,
+      body: normalizeText(reply.body),
+      action: normalizeText(reply.action) || 'reply',
+      selectedText: normalizeText(reply.selectedText).slice(0, 500),
+      authorEmail: normalizeEmail(reply.authorEmail),
+      authorName: normalizeText(reply.authorName || reply.authorEmail),
+      createdAt: reply.createdAt || '',
+    }))
+    .filter((reply) => reply.body);
 }
 
 export async function deletePostComment(postId, commentId, data, user) {

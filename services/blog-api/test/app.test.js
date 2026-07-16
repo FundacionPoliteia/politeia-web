@@ -11,7 +11,9 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
   notifyCommentCreated,
+  notifyCommentReplied,
   notifyCommentStatusChanged,
+  notifyPostEditEnabled,
   notifyPostPublished,
   notifyPostSubmittedForReview,
 } from '../src/repositories/notifications.js';
@@ -281,9 +283,20 @@ test('in-app notifications target roles and emails independently from email opt-
     assert.equal(reviewerInbox.items.some((item) => item.type === 'comment.resolved'), true);
     assert.equal(adminInbox.items.some((item) => item.type === 'comment.resolved'), true);
 
+    await notifyCommentReplied(post, {
+      ...comment,
+      replies: [{ id: 'reply-1', body: 'Lo reviso y actualizo.', authorEmail: author.email, authorName: author.name }],
+    }, author);
+    reviewerInbox = await listInAppNotifications(reviewer);
+    assert.equal(reviewerInbox.items.some((item) => item.type === 'comment.reply'), true);
+
     await notifyPostPublished(post, reviewer);
     authorInbox = await listInAppNotifications(author);
     assert.equal(authorInbox.items.some((item) => item.type === 'post.published'), true);
+
+    await notifyPostEditEnabled(post, reviewer);
+    authorInbox = await listInAppNotifications(author);
+    assert.equal(authorInbox.items.some((item) => item.type === 'post.editEnabled'), true);
 
     const unreadBefore = authorInbox.unreadCount;
     const first = authorInbox.items[0];

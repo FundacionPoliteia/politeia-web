@@ -63,6 +63,7 @@ const NOTIFICATION_EVENT_LABELS = [
   { value: 'commentResolved', label: 'Comentarios resueltos', roles: ['blog'] },
   { value: 'commentReopened', label: 'Comentarios reabiertos', roles: ['blog'] },
   { value: 'postPublished', label: 'Mis posts publicados', roles: ['blog'] },
+  { value: 'postEditEnabled', label: 'Edicion habilitada en mis posts', roles: ['blog'] },
 ];
 
 const DEFAULT_NOTIFICATION_EVENTS = Object.fromEntries(
@@ -153,7 +154,9 @@ export default function AdminConsole() {
   const [activeReviewCommentId, setActiveReviewCommentId] = useState('');
   const [activeReviewCommentNonce, setActiveReviewCommentNonce] = useState(0);
   const [editingReviewComment, setEditingReviewComment] = useState(null);
+  const [reviewCommentDialog, setReviewCommentDialog] = useState(null);
   const signInRef = useRef(null);
+  const userRef = useRef(null);
   const docxInputRef = useRef(null);
   const profilePhotoInputRef = useRef(null);
   const adminProfilePhotoInputRef = useRef(null);
@@ -204,11 +207,15 @@ export default function AdminConsole() {
   }, []);
 
   useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
+  useEffect(() => {
     if (!GOOGLE_CLIENT_ID) return;
 
     const existing = document.querySelector('script[data-google-identity]');
     if (existing) {
-      initializeGoogle();
+      if (!user) initializeGoogle();
       return;
     }
 
@@ -220,7 +227,7 @@ export default function AdminConsole() {
     script.onload = initializeGoogle;
     script.onerror = () => setGoogleButtonStatus('failed');
     document.head.appendChild(script);
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     if (!GOOGLE_CLIENT_ID || checkingSession || user) return;
@@ -231,6 +238,10 @@ export default function AdminConsole() {
 
     return () => window.clearTimeout(timeoutId);
   }, [checkingSession, user]);
+
+  useEffect(() => {
+    if (user) clearGoogleSignIn();
+  }, [user]);
 
   useEffect(() => {
     loadMe({ silent: true });
@@ -287,6 +298,8 @@ export default function AdminConsole() {
       setActiveReviewCommentId('');
       setActiveReviewCommentNonce(0);
       setEditingReviewComment(null);
+      setReviewCommentDialog(null);
+      setReviewCommentDialog(null);
     }
   }, [form.id, canAccessPanel]);
 
@@ -319,6 +332,10 @@ export default function AdminConsole() {
   }, [activePanelTab, canAccessProfilePanel, canAccessRolesMailPanel, canReviewProfiles]);
 
   function initializeGoogle() {
+    if (userRef.current) {
+      clearGoogleSignIn();
+      return;
+    }
     if (!window.google || !signInRef.current || !GOOGLE_CLIENT_ID) {
       setGoogleButtonStatus(GOOGLE_CLIENT_ID ? 'failed' : 'disabled');
       return;
@@ -343,6 +360,16 @@ export default function AdminConsole() {
       }, 1200);
     } catch (_err) {
       setGoogleButtonStatus('failed');
+    }
+  }
+
+  function clearGoogleSignIn() {
+    if (signInRef.current) signInRef.current.innerHTML = '';
+    setGoogleButtonStatus(GOOGLE_CLIENT_ID ? 'loading' : 'disabled');
+    try {
+      window.google?.accounts?.id?.cancel();
+    } catch (_err) {
+      // Google Identity can throw if the prompt was not initialized yet.
     }
   }
 
@@ -476,6 +503,7 @@ export default function AdminConsole() {
       setActiveReviewCommentId('');
       setActiveReviewCommentNonce(0);
       setEditingReviewComment(null);
+      setReviewCommentDialog(null);
       setMessage('');
     }
   }
@@ -525,10 +553,12 @@ export default function AdminConsole() {
   async function loadReviewComments(postId) {
     try {
       const data = await api(`/v1/posts/${postId}/comments`);
-      const items = data.items || [];
+      const items = (data.items || []).map(normalizeReviewComment);
       setReviewComments(items);
+      return items;
     } catch (err) {
       setMessage(err.message);
+      return [];
     }
   }
 
@@ -601,6 +631,13 @@ export default function AdminConsole() {
       if (notification.commentId) {
         setReviewCommentFilter('all');
         focusReviewComment(notification.commentId);
+        const comments = await loadReviewComments(post.id);
+        const comment = comments.find((item) => item.id === notification.commentId);
+        if (comment) {
+          openReviewCommentDialog(comment, 'reply');
+        } else {
+          setMessage('El comentario asociado ya no esta disponible.');
+        }
       }
     } catch (err) {
       setMessage(err.message);
@@ -949,7 +986,7 @@ export default function AdminConsole() {
         setForm((current) => normalizeForm({ ...current, contentMarkdown: data.post.contentMarkdown }));
         setSavedForm((current) => normalizeForm({ ...current, contentMarkdown: data.post.contentMarkdown }));
       }
-      setReviewComments((current) => [...current, data.item]);
+      setReviewComments((current) => [...current, normalizeReviewComment(data.item)]);
       focusReviewComment(data.item.id);
       setReviewCommentFilter('open');
       await loadPosts();
@@ -967,8 +1004,22 @@ export default function AdminConsole() {
     setActiveReviewCommentNonce((current) => current + 1);
   }
 
-  async function updateReviewCommentStatus(commentId, status) {
+  function openReviewCommentDialog(comment, mode = 'reply') {
+    const nextComment = normalizeReviewComment(comment);
+    focusReviewComment(nextComment.id);
+    setReviewCommentDialog({
+      mode,
+      comment: nextComment,
+      replyBody: '',
+    });
+  }
+
+  async function updateReviewCommentStatus(commentId, status, options = {}) {
     if (!form.id) return;
+    const selectedTextCurrent = extractReviewCommentTextById(form.contentMarkdown, commentId)
+      || reviewComments.find((comment) => comment.id === commentId)?.selectedTextCurrent
+      || reviewComments.find((comment) => comment.id === commentId)?.selectedText
+      || '';
     const nextMarkdown = status === 'resolved'
       ? stripReviewCommentMarkupById(form.contentMarkdown, commentId)
       : form.contentMarkdown;
@@ -977,7 +1028,12 @@ export default function AdminConsole() {
       setMessage('');
       const data = await withActionLoading(`comment-status:${commentId}`, () => api(`/v1/posts/${form.id}/comments/${commentId}`, {
         method: 'PATCH',
-        body: JSON.stringify({ status, contentMarkdown: nextMarkdown }),
+        body: JSON.stringify({
+          status,
+          contentMarkdown: nextMarkdown,
+          replyBody: options.replyBody || undefined,
+          selectedTextCurrent,
+        }),
       }));
       if (status === 'resolved') {
         setForm((current) => normalizeForm({ ...current, contentMarkdown: nextMarkdown }));
@@ -987,10 +1043,46 @@ export default function AdminConsole() {
           setActiveReviewCommentNonce((current) => current + 1);
         }
       }
-      setReviewComments((current) => current.map((comment) => comment.id === commentId ? data.item : comment));
+      const nextComment = normalizeReviewComment(data.item);
+      setReviewComments((current) => current.map((comment) => comment.id === commentId ? nextComment : comment));
+      setReviewCommentDialog((current) => (current?.comment?.id === commentId ? null : current));
       await loadPosts();
       await loadInAppNotifications({ silent: true });
       setMessage(status === 'resolved' ? 'Comentario resuelto.' : 'Comentario reabierto.');
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function replyToReviewComment(commentId, replyBody) {
+    if (!form.id) return;
+    const body = normalizeInlineInput(replyBody);
+    if (!body) {
+      setMessage('Escribi una respuesta para enviar.');
+      return;
+    }
+    const selectedTextCurrent = extractReviewCommentTextById(form.contentMarkdown, commentId)
+      || reviewComments.find((comment) => comment.id === commentId)?.selectedTextCurrent
+      || reviewComments.find((comment) => comment.id === commentId)?.selectedText
+      || '';
+    try {
+      setBusy(true);
+      setMessage('');
+      const data = await withActionLoading(`comment-reply:${commentId}`, () => api(`/v1/posts/${form.id}/comments/${commentId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ replyBody: body, selectedTextCurrent }),
+      }));
+      const nextComment = normalizeReviewComment(data.item);
+      setReviewComments((current) => current.map((comment) => comment.id === commentId ? nextComment : comment));
+      setReviewCommentDialog({
+        mode: 'reply',
+        comment: nextComment,
+        replyBody: '',
+      });
+      await loadInAppNotifications({ silent: true });
+      setMessage('Respuesta enviada.');
     } catch (err) {
       setMessage(err.message);
     } finally {
@@ -1012,7 +1104,11 @@ export default function AdminConsole() {
         method: 'PATCH',
         body: JSON.stringify({ body }),
       }));
-      setReviewComments((current) => current.map((comment) => comment.id === editingReviewComment.id ? data.item : comment));
+      const nextComment = normalizeReviewComment(data.item);
+      setReviewComments((current) => current.map((comment) => comment.id === editingReviewComment.id ? nextComment : comment));
+      setReviewCommentDialog((current) => (current?.comment?.id === nextComment.id
+        ? { ...current, comment: nextComment }
+        : current));
       setEditingReviewComment(null);
       setMessage('Comentario actualizado.');
     } catch (err) {
@@ -2913,17 +3009,20 @@ export default function AdminConsole() {
                             >
                               <button
                                 className="admin-review-comment-main"
-                                onClick={() => focusReviewComment(comment.id)}
+                                onClick={() => openReviewCommentDialog(comment, 'reply')}
                                 type="button"
                               >
                                 <span className={`admin-status status-${comment.status === 'resolved' ? 'published' : 'review'}`}>
                                   {comment.status === 'resolved' ? 'Resuelto' : 'Abierto'}
                                 </span>
-                                {comment.selectedText && <q>{comment.selectedText}</q>}
+                                {(comment.selectedTextCurrent || comment.selectedText) && <q>{comment.selectedTextCurrent || comment.selectedText}</q>}
                                 <strong>{comment.body}</strong>
                                 <small>
                                   {comment.authorName || comment.authorEmail} - {formatAdminDate(comment.createdAt)}
                                 </small>
+                                {comment.replies.length > 0 && (
+                                  <small>{comment.replies.length} respuesta{comment.replies.length === 1 ? '' : 's'}</small>
+                                )}
                               </button>
                               <div className="admin-review-actions">
                                 {canPublishPosts && comment.status !== 'resolved' && (
@@ -2932,8 +3031,14 @@ export default function AdminConsole() {
                                   </button>
                                 )}
                                 {comment.status !== 'resolved' && (
-                                  <button className="btn btn-ghost" disabled={busy || isActionLoading(`comment-status:${comment.id}`)} onClick={() => updateReviewCommentStatus(comment.id, 'resolved')} type="button">
+                                  <button className="btn btn-ghost" disabled={busy || isActionLoading(`comment-status:${comment.id}`)} onClick={() => openReviewCommentDialog(comment, 'resolve')} type="button">
                                     {isActionLoading(`comment-status:${comment.id}`) ? 'Resolviendo...' : 'Resolver'}
+                                    <ActionSpinner active={isActionLoading(`comment-status:${comment.id}`)} />
+                                  </button>
+                                )}
+                                {comment.status === 'resolved' && (
+                                  <button className="btn btn-ghost" disabled={busy || isActionLoading(`comment-status:${comment.id}`)} onClick={() => openReviewCommentDialog(comment, 'reopen')} type="button">
+                                    {isActionLoading(`comment-status:${comment.id}`) ? 'Reabriendo...' : 'Reabrir'}
                                     <ActionSpinner active={isActionLoading(`comment-status:${comment.id}`)} />
                                   </button>
                                 )}
@@ -3068,6 +3173,93 @@ export default function AdminConsole() {
                   </div>
                 </div>
               )}
+              {reviewCommentDialog && (
+                <div className="admin-modal-backdrop" role="presentation">
+                  <div aria-modal="true" className="admin-modal rich-comment-modal admin-comment-thread-modal" role="dialog">
+                    <div className="admin-comment-thread-head">
+                      <div>
+                        <span>Comentario de revision</span>
+                        <h3>{reviewCommentDialog.comment.status === 'resolved' ? 'Comentario resuelto' : 'Comentario abierto'}</h3>
+                      </div>
+                      <span className={`admin-status status-${reviewCommentDialog.comment.status === 'resolved' ? 'published' : 'review'}`}>
+                        {reviewCommentDialog.comment.status === 'resolved' ? 'Resuelto' : 'Abierto'}
+                      </span>
+                    </div>
+                    {(reviewCommentDialog.comment.selectedTextCurrent || reviewCommentDialog.comment.selectedText) && (
+                      <q>{reviewCommentDialog.comment.selectedTextCurrent || reviewCommentDialog.comment.selectedText}</q>
+                    )}
+                    <div className="admin-comment-thread">
+                      <article>
+                        <strong>{reviewCommentDialog.comment.body}</strong>
+                        <small>
+                          {reviewCommentDialog.comment.authorName || reviewCommentDialog.comment.authorEmail} - {formatAdminDate(reviewCommentDialog.comment.createdAt)}
+                        </small>
+                      </article>
+                      {reviewCommentDialog.comment.replies.map((reply) => (
+                        <article className="reply" key={reply.id}>
+                          <strong>{reply.body}</strong>
+                          <small>
+                            {reply.authorName || reply.authorEmail} - {commentReplyActionLabel(reply.action)} - {formatAdminDate(reply.createdAt)}
+                          </small>
+                          {reply.selectedText && <q>{reply.selectedText}</q>}
+                        </article>
+                      ))}
+                    </div>
+                    <label>
+                      {reviewCommentDialog.mode === 'resolve'
+                        ? 'Texto para acompanar la resolucion'
+                        : reviewCommentDialog.mode === 'reopen'
+                          ? 'Texto para acompanar la reapertura'
+                          : 'Respuesta'}
+                      <textarea
+                        autoFocus
+                        onChange={(event) => setReviewCommentDialog((current) => ({ ...current, replyBody: event.target.value }))}
+                        placeholder="Escribi una respuesta breve para dejar contexto."
+                        rows="5"
+                        value={reviewCommentDialog.replyBody || ''}
+                      />
+                    </label>
+                    <div className="admin-modal-actions">
+                      <button className="btn btn-ghost" disabled={busy} onClick={() => setReviewCommentDialog(null)} type="button">
+                        Cerrar
+                      </button>
+                      {reviewCommentDialog.mode === 'reply' && (
+                        <button
+                          className="btn btn-primary"
+                          disabled={busy || isActionLoading(`comment-reply:${reviewCommentDialog.comment.id}`) || !normalizeInlineInput(reviewCommentDialog.replyBody)}
+                          onClick={() => replyToReviewComment(reviewCommentDialog.comment.id, reviewCommentDialog.replyBody)}
+                          type="button"
+                        >
+                          {isActionLoading(`comment-reply:${reviewCommentDialog.comment.id}`) ? 'Enviando...' : 'Responder'}
+                          <ActionSpinner active={isActionLoading(`comment-reply:${reviewCommentDialog.comment.id}`)} />
+                        </button>
+                      )}
+                      {reviewCommentDialog.mode === 'resolve' && (
+                        <button
+                          className="btn btn-primary"
+                          disabled={busy || isActionLoading(`comment-status:${reviewCommentDialog.comment.id}`)}
+                          onClick={() => updateReviewCommentStatus(reviewCommentDialog.comment.id, 'resolved', { replyBody: reviewCommentDialog.replyBody })}
+                          type="button"
+                        >
+                          {isActionLoading(`comment-status:${reviewCommentDialog.comment.id}`) ? 'Resolviendo...' : 'Resolver'}
+                          <ActionSpinner active={isActionLoading(`comment-status:${reviewCommentDialog.comment.id}`)} />
+                        </button>
+                      )}
+                      {reviewCommentDialog.mode === 'reopen' && (
+                        <button
+                          className="btn btn-primary"
+                          disabled={busy || isActionLoading(`comment-status:${reviewCommentDialog.comment.id}`)}
+                          onClick={() => updateReviewCommentStatus(reviewCommentDialog.comment.id, 'open', { replyBody: reviewCommentDialog.replyBody })}
+                          type="button"
+                        >
+                          {isActionLoading(`comment-status:${reviewCommentDialog.comment.id}`) ? 'Reabriendo...' : 'Reabrir'}
+                          <ActionSpinner active={isActionLoading(`comment-status:${reviewCommentDialog.comment.id}`)} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
               {editingReviewComment && (
                 <div className="admin-modal-backdrop" role="presentation">
                   <div aria-modal="true" className="admin-modal rich-comment-modal" role="dialog">
@@ -3146,6 +3338,18 @@ function stripReviewCommentMarkupById(markdown = '', commentId = '') {
   return markdown.replace(pattern, '$1');
 }
 
+function extractReviewCommentTextById(markdown = '', commentId = '') {
+  const escapedId = escapeRegExp(commentId);
+  if (!escapedId) return '';
+  const pattern = new RegExp(`<span\\b[^>]*data-review-comment-id=["']${escapedId}["'][^>]*>([\\s\\S]*?)<\\/span>`, 'i');
+  const match = markdown.match(pattern);
+  return normalizeInlineInput(stripHtmlTags(match?.[1] || '')).slice(0, 500);
+}
+
+function stripHtmlTags(value = '') {
+  return String(value).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+}
+
 function escapeRegExp(value = '') {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -3206,12 +3410,49 @@ function normalizeInAppNotification(value = {}) {
   };
 }
 
+function normalizeReviewComment(value = {}) {
+  return {
+    ...value,
+    id: normalizeInputValue(value.id),
+    body: normalizeInputValue(value.body),
+    selectedText: normalizeInputValue(value.selectedText),
+    selectedTextCurrent: normalizeInputValue(value.selectedTextCurrent || value.selectedText),
+    status: normalizeInputValue(value.status || 'open'),
+    authorEmail: normalizeInputValue(value.authorEmail),
+    authorName: normalizeInputValue(value.authorName),
+    createdAt: value.createdAt || '',
+    replies: Array.isArray(value.replies)
+      ? value.replies.map(normalizeReviewCommentReply).filter((reply) => reply.body)
+      : [],
+  };
+}
+
+function normalizeReviewCommentReply(value = {}) {
+  return {
+    id: normalizeInputValue(value.id),
+    body: normalizeInputValue(value.body),
+    action: normalizeInputValue(value.action || 'reply'),
+    selectedText: normalizeInputValue(value.selectedText),
+    authorEmail: normalizeInputValue(value.authorEmail),
+    authorName: normalizeInputValue(value.authorName),
+    createdAt: value.createdAt || '',
+  };
+}
+
+function commentReplyActionLabel(action = '') {
+  if (action === 'resolved') return 'resolvio';
+  if (action === 'open') return 'reabrio';
+  return 'respondio';
+}
+
 function notificationTitle(notification = {}) {
   if (notification.type === 'post.submittedReview') return `Post enviado a revision: ${notification.postTitle || 'Sin titulo'}`;
   if (notification.type === 'comment.created') return `Nuevo comentario: ${notification.postTitle || 'Sin titulo'}`;
+  if (notification.type === 'comment.reply') return `Nueva respuesta: ${notification.postTitle || 'Sin titulo'}`;
   if (notification.type === 'comment.resolved') return `Comentario resuelto: ${notification.postTitle || 'Sin titulo'}`;
   if (notification.type === 'comment.reopened') return `Comentario reabierto: ${notification.postTitle || 'Sin titulo'}`;
   if (notification.type === 'post.published') return `Post publicado: ${notification.postTitle || 'Sin titulo'}`;
+  if (notification.type === 'post.editEnabled') return `Edicion habilitada: ${notification.postTitle || 'Sin titulo'}`;
   if (notification.type === 'user.roles.changed') return 'Tus permisos fueron actualizados';
   return notification.subject || 'Actividad editorial';
 }
@@ -3219,6 +3460,7 @@ function notificationTitle(notification = {}) {
 function notificationIcon(type = '') {
   if (type.startsWith('comment.')) return 'mode_comment';
   if (type === 'post.published') return 'task_alt';
+  if (type === 'post.editEnabled') return 'edit_note';
   if (type === 'post.submittedReview') return 'rate_review';
   if (type === 'user.roles.changed') return 'manage_accounts';
   return 'notifications';

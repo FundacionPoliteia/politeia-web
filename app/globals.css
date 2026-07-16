@@ -3966,6 +3966,71 @@ a {
   color: #9b3030
 }
 
+.admin-comment-thread-modal {
+  max-width: 680px
+}
+
+.admin-comment-thread-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px
+}
+
+.admin-comment-thread-head span:first-child {
+  display: block;
+  color: var(--azul);
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  margin-bottom: 4px
+}
+
+.admin-comment-thread {
+  display: grid;
+  gap: 10px;
+  max-height: 280px;
+  overflow: auto;
+  margin: 14px 0;
+  padding-right: 4px
+}
+
+.admin-comment-thread article {
+  border: 1px solid var(--linea);
+  border-radius: 12px;
+  background: var(--hueso);
+  padding: 12px 13px
+}
+
+.admin-comment-thread article.reply {
+  margin-left: 18px;
+  background: #fff;
+  border-color: rgba(19, 122, 159, .2)
+}
+
+.admin-comment-thread article strong,
+.admin-comment-thread article small,
+.admin-comment-thread article q {
+  display: block
+}
+
+.admin-comment-thread article strong {
+  font-size: .92rem;
+  line-height: 1.4
+}
+
+.admin-comment-thread article small {
+  color: var(--gris);
+  font-size: .76rem;
+  margin-top: 6px
+}
+
+.admin-comment-thread article q {
+  margin-top: 8px
+}
+
 .admin-article-preview {
   max-width: none;
   margin: 0;
