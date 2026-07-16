@@ -1933,6 +1933,26 @@ a {
   box-shadow: 0 10px 26px rgba(26, 26, 55, .04)
 }
 
+.admin-panel-tabsbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 22px
+}
+
+.admin-panel-tabsbar .admin-session-actions {
+  margin-left: auto
+}
+
+@media(min-width:961px) {
+  .admin-panel-navbar {
+    position: sticky;
+    top: 16px;
+    z-index: 45
+  }
+}
+
 .admin-panel-user {
   min-width: 220px
 }
@@ -4466,7 +4486,8 @@ a {
   }
 
   .admin-profile-body {
-    grid-template-columns: 1fr
+    grid-template-columns: 1fr;
+    gap: 14px
   }
 
   .admin-profile-photo {
@@ -4485,6 +4506,10 @@ a {
 
   .admin-panel-navbar {
     padding: 12px 14px;
+    margin-bottom: 16px
+  }
+
+  .admin-panel-tabsbar {
     margin-bottom: 16px
   }
 
@@ -4530,12 +4555,12 @@ a {
   .admin-tabs {
     position: fixed;
     left: 12px;
-    right: 76px;
+    right: auto;
     bottom: calc(12px + env(safe-area-inset-bottom));
     z-index: 120;
     display: flex;
-    width: auto;
-    max-width: none;
+    width: max-content;
+    max-width: calc(100vw - 88px);
     overflow-x: auto;
     border-radius: 999px;
     padding: 6px;
@@ -4630,6 +4655,48 @@ a {
     display: block;
     width: 100%;
     margin-bottom: 14px
+  }
+
+  .admin-profile {
+    padding: 18px
+  }
+
+  .admin-profile .admin-manager-head h2 {
+    font-size: 1.45rem
+  }
+
+  .admin-profile-photo {
+    grid-template-columns: 92px minmax(0, 1fr);
+    align-items: center;
+    justify-items: stretch;
+    padding: 14px;
+    gap: 8px 12px
+  }
+
+  .admin-profile-photo img {
+    grid-row: 1 / span 2;
+    width: 84px;
+    height: 84px;
+    justify-self: center
+  }
+
+  .admin-profile-photo .btn {
+    min-height: 42px;
+    padding: 9px 12px
+  }
+
+  .admin-profile-fields {
+    gap: 12px
+  }
+
+  .admin-profile-fields input,
+  .admin-profile-fields textarea {
+    padding: 11px 13px
+  }
+
+  .admin-profile .admin-manager-actions .btn {
+    width: 100%;
+    justify-content: center
   }
 
   .admin-manager-head {

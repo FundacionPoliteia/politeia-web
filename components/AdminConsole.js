@@ -1683,11 +1683,7 @@ export default function AdminConsole() {
             </div>
           ) : (
             <>
-              <div className="admin-panel-navbar">
-                <div className="admin-panel-user">
-                  <strong>{user.name || user.email}</strong>
-                  <span>{user.email} - {roleLabel} - {roles.join(', ')}</span>
-                </div>
+              <div className="admin-panel-tabsbar">
                 <nav className="admin-tabs" aria-label="Secciones del panel">
                   <button
                     aria-pressed={activePanelTab === 'blogs'}
@@ -1746,114 +1742,122 @@ export default function AdminConsole() {
                       <strong>{unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}</strong>
                     )}
                   </button>
-                  <button className="btn btn-ghost" onClick={logout}>
-                    Salir
-                  </button>
                 </div>
               </div>
               {activePanelTab === 'profile' && (
-                <section className="admin-manager admin-profile">
-                  <div className="admin-manager-head">
-                    <div>
-                      <span>Perfil</span>
-                      <h2>Usuario y perfil</h2>
-                      <p>Estos datos se guardan separados de los roles. Se usan para firmar comentarios y prellenar el autor de nuevos blogs.</p>
+                <>
+                  <div className="admin-panel-navbar admin-profile-session-card">
+                    <div className="admin-panel-user">
+                      <strong>{user.name || user.email}</strong>
+                      <span>{user.email} - {roleLabel} - {roles.join(', ')}</span>
                     </div>
+                    <button className="btn btn-ghost" onClick={logout}>
+                      Salir
+                    </button>
                   </div>
-                  <div className="admin-profile-body">
-                    {profileNeedsSetup(profileDraft) && (
-                      <div className="admin-profile-notice">
-                        Completa tu nombre y apellido para seguir con el gestor de blogs.
+                  <section className="admin-manager admin-profile">
+                    <div className="admin-manager-head">
+                      <div>
+                        <span>Perfil</span>
+                        <h2>Usuario y perfil</h2>
+                        <p>Estos datos se guardan separados de los roles. Se usan para firmar comentarios y prellenar el autor de nuevos blogs.</p>
                       </div>
-                    )}
-                    <div className="admin-profile-photo">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img alt="" src={profileDraft.photoUrl || DEFAULT_PROFILE_PHOTO} />
-                      <input
-                        accept="image/jpeg,image/png,image/webp"
-                        hidden
-                        onChange={(event) => {
-                          const file = event.target.files?.[0];
-                          event.target.value = '';
-                          uploadProfilePhoto(file);
-                        }}
-                        ref={profilePhotoInputRef}
-                        type="file"
-                      />
-                      <button
-                        className="btn btn-ghost"
-                        disabled={profilePhotoUploading || isActionLoading('profile-photo')}
-                        onClick={() => profilePhotoInputRef.current?.click()}
-                        type="button"
-                      >
-                        {isActionLoading('profile-photo') ? 'Subiendo foto...' : 'Subir foto'}
-                        <ActionSpinner active={isActionLoading('profile-photo')} />
-                      </button>
-                      {profileDraft.photoUrl && (
-                        <button className="btn btn-ghost danger" onClick={() => updateProfileDraft('photoUrl', '')} type="button">
-                          Quitar foto
-                        </button>
-                      )}
                     </div>
-                    <div className="admin-profile-fields">
-                      <div className="admin-two">
-                        <label>
-                          Nombre
-                          <input value={profileDraft.firstName} onChange={(e) => updateProfileDraft('firstName', e.target.value)} />
-                        </label>
-                        <label>
-                          Apellido
-                          <input value={profileDraft.lastName} onChange={(e) => updateProfileDraft('lastName', e.target.value)} />
-                        </label>
-                      </div>
-                      <label>
-                        Descripcion breve
-                        <textarea
-                          maxLength="500"
-                          onChange={(e) => updateProfileDraft('description', e.target.value)}
-                          placeholder="Una bio corta para futuros perfiles de autor."
-                          rows="4"
-                          value={profileDraft.description}
-                        />
-                      </label>
-                      <label>
-                        Frase de cierre
-                        <textarea
-                          maxLength="220"
-                          onChange={(e) => updateProfileDraft('closingPhrase', e.target.value)}
-                          placeholder="Una frase corta para cerrar tus notas, por ejemplo una linea de presentacion o criterio editorial."
-                          rows="2"
-                          value={profileDraft.closingPhrase}
-                        />
-                      </label>
-                      {canShowProfileOptIn ? (
-                        <label className="admin-profile-share">
-                          <input
-                            checked={profileDraft.publicProfileEnabled}
-                            onChange={(e) => updateProfileDraft('publicProfileEnabled', e.target.checked)}
-                            type="checkbox"
-                          />
-                          <span>
-                            <strong>Mostrar mi perfil junto a mis notas</strong>
-                            <small>Permito que mi nombre, descripcion y foto se usen para armar una pagina publica de autor en el blog.</small>
-                          </span>
-                        </label>
-                      ) : (
-                        <div className="admin-profile-warning">
-                          <strong>Perfil publico no disponible todavia</strong>
-                          <span>Para mostrarlo en el blog, el nombre y apellido deben coincidir con el autor usado en alguna nota existente.</span>
+                    <div className="admin-profile-body">
+                      {profileNeedsSetup(profileDraft) && (
+                        <div className="admin-profile-notice">
+                          Completa tu nombre y apellido para seguir con el gestor de blogs.
                         </div>
                       )}
-                      <div className="admin-manager-actions">
-                        <span>{profileDraft.fullName ? `Nombre visible: ${profileDraft.fullName}` : 'Si no cargas nombre, se usa tu cuenta.'}</span>
-                        <button className="btn btn-primary" disabled={savingProfile || profilePhotoUploading || isActionLoading('profile-save')} onClick={saveUserProfile} type="button">
-                          {isActionLoading('profile-save') ? 'Guardando perfil...' : 'Guardar perfil'}
-                          <ActionSpinner active={isActionLoading('profile-save')} />
+                      <div className="admin-profile-photo">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img alt="" src={profileDraft.photoUrl || DEFAULT_PROFILE_PHOTO} />
+                        <input
+                          accept="image/jpeg,image/png,image/webp"
+                          hidden
+                          onChange={(event) => {
+                            const file = event.target.files?.[0];
+                            event.target.value = '';
+                            uploadProfilePhoto(file);
+                          }}
+                          ref={profilePhotoInputRef}
+                          type="file"
+                        />
+                        <button
+                          className="btn btn-ghost"
+                          disabled={profilePhotoUploading || isActionLoading('profile-photo')}
+                          onClick={() => profilePhotoInputRef.current?.click()}
+                          type="button"
+                        >
+                          {isActionLoading('profile-photo') ? 'Subiendo foto...' : 'Subir foto'}
+                          <ActionSpinner active={isActionLoading('profile-photo')} />
                         </button>
+                        {profileDraft.photoUrl && (
+                          <button className="btn btn-ghost danger" onClick={() => updateProfileDraft('photoUrl', '')} type="button">
+                            Quitar foto
+                          </button>
+                        )}
+                      </div>
+                      <div className="admin-profile-fields">
+                        <div className="admin-two">
+                          <label>
+                            Nombre
+                            <input value={profileDraft.firstName} onChange={(e) => updateProfileDraft('firstName', e.target.value)} />
+                          </label>
+                          <label>
+                            Apellido
+                            <input value={profileDraft.lastName} onChange={(e) => updateProfileDraft('lastName', e.target.value)} />
+                          </label>
+                        </div>
+                        <label>
+                          Descripcion breve
+                          <textarea
+                            maxLength="500"
+                            onChange={(e) => updateProfileDraft('description', e.target.value)}
+                            placeholder="Una bio corta para futuros perfiles de autor."
+                            rows="4"
+                            value={profileDraft.description}
+                          />
+                        </label>
+                        <label>
+                          Frase de cierre
+                          <textarea
+                            maxLength="220"
+                            onChange={(e) => updateProfileDraft('closingPhrase', e.target.value)}
+                            placeholder="Una frase corta para cerrar tus notas, por ejemplo una linea de presentacion o criterio editorial."
+                            rows="2"
+                            value={profileDraft.closingPhrase}
+                          />
+                        </label>
+                        {canShowProfileOptIn ? (
+                          <label className="admin-profile-share">
+                            <input
+                              checked={profileDraft.publicProfileEnabled}
+                              onChange={(e) => updateProfileDraft('publicProfileEnabled', e.target.checked)}
+                              type="checkbox"
+                            />
+                            <span>
+                              <strong>Mostrar mi perfil junto a mis notas</strong>
+                              <small>Permito que mi nombre, descripcion y foto se usen para armar una pagina publica de autor en el blog.</small>
+                            </span>
+                          </label>
+                        ) : (
+                          <div className="admin-profile-warning">
+                            <strong>Perfil publico no disponible todavia</strong>
+                            <span>Para mostrarlo en el blog, el nombre y apellido deben coincidir con el autor usado en alguna nota existente.</span>
+                          </div>
+                        )}
+                        <div className="admin-manager-actions">
+                          <span>{profileDraft.fullName ? `Nombre visible: ${profileDraft.fullName}` : 'Si no cargas nombre, se usa tu cuenta.'}</span>
+                          <button className="btn btn-primary" disabled={savingProfile || profilePhotoUploading || isActionLoading('profile-save')} onClick={saveUserProfile} type="button">
+                            {isActionLoading('profile-save') ? 'Guardando perfil...' : 'Guardar perfil'}
+                            <ActionSpinner active={isActionLoading('profile-save')} />
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </section>
+                  </section>
+                </>
               )}
 
               {activePanelTab === 'profiles' && canReviewProfiles && (
