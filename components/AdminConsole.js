@@ -140,6 +140,7 @@ export default function AdminConsole() {
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
+  const [mobilePostsOpen, setMobilePostsOpen] = useState(false);
   const [activePanelTab, setActivePanelTab] = useState('blogs');
   const [userProfile, setUserProfile] = useState(EMPTY_PROFILE);
   const [profileDraft, setProfileDraft] = useState(EMPTY_PROFILE);
@@ -2468,15 +2469,34 @@ export default function AdminConsole() {
               <div className="admin-grid">
                 <aside className="admin-list">
                   <div className="admin-list-head">
+                    <button
+                      aria-expanded={mobilePostsOpen}
+                      className="admin-list-toggle"
+                      onClick={() => setMobilePostsOpen((open) => !open)}
+                      type="button"
+                    >
+                      <span>Posts</span>
+                      <span aria-hidden="true" className="material-symbols-outlined">
+                        {mobilePostsOpen ? 'expand_less' : 'expand_more'}
+                      </span>
+                    </button>
                     <h2>Posts</h2>
                     {!canUseReviewFilters && (
-                      <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                      <select className="admin-list-status-desktop" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
                         {BLOG_STATUS_FILTERS.map((filter) => (
                           <option key={filter.value || 'all'} value={filter.value}>{filter.label}</option>
                         ))}
                       </select>
                     )}
                   </div>
+                  <div className={`admin-list-body ${mobilePostsOpen ? 'open' : ''}`}>
+                  {!canUseReviewFilters && (
+                    <select className="admin-list-status-mobile" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                      {BLOG_STATUS_FILTERS.map((filter) => (
+                        <option key={filter.value || 'all'} value={filter.value}>{filter.label}</option>
+                      ))}
+                    </select>
+                  )}
                   {canUseReviewFilters && (
                     <div className="admin-post-filters">
                       <div className="admin-filter-chips" aria-label="Filtrar por estado">
@@ -2527,7 +2547,10 @@ export default function AdminConsole() {
                     <article
                       className={`admin-post ${form.id === post.id ? 'selected' : ''}`}
                       key={post.id}
-                      onClick={() => selectPostForEdit(post)}
+                      onClick={() => {
+                        selectPostForEdit(post);
+                        setMobilePostsOpen(false);
+                      }}
                     >
                       {visibleStatusLabel(post, canUseReviewFilters) && (
                         <span className={`admin-status status-${visibleStatusValue(post, canUseReviewFilters)}`}>
@@ -2538,6 +2561,7 @@ export default function AdminConsole() {
                       <p>{post.excerpt || 'Sin extracto'}</p>
                     </article>
                   ))}
+                  </div>
                 </aside>
 
                 <form className="admin-editor" onSubmit={savePost}>

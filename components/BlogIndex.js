@@ -10,6 +10,7 @@ export default function BlogIndex({ posts = [], autorFiltro = '', authorProfile 
   const filtrandoAutor = Boolean(autorFiltro);
   const authorName = authorProfile?.fullName || autorFiltro;
   const authorLead = authorProfile?.description || 'Publicaciones del autor, reunidas en un mismo lugar.';
+  const authorPhoto = authorProfile?.photoUrl || '';
 
   const postsPorAutor = useMemo(
     () => filtrarPorAutor(posts, autorFiltro),
@@ -33,7 +34,7 @@ export default function BlogIndex({ posts = [], autorFiltro = '', authorProfile 
   return (
     <main>
       <section className="page-hero">
-        <div className={filtrandoAutor && authorProfile?.photoUrl ? 'wrap blog-author-hero' : 'wrap'}>
+        <div className={filtrandoAutor && authorPhoto ? 'wrap blog-author-hero' : 'wrap'}>
           <div>
             <span className="eyebrow">Blog</span>
             <h1>{filtrandoAutor ? `Notas escritas por ${authorName}.` : 'Ideas para entender mejor lo publico.'}</h1>
@@ -42,14 +43,20 @@ export default function BlogIndex({ posts = [], autorFiltro = '', authorProfile 
                 ? authorLead
                 : 'Investigacion, analisis y opinion sobre politica, instituciones y participacion ciudadana.'}
             </p>
+            {filtrandoAutor && authorPhoto && (
+              <div className="blog-author-mobile-card" aria-hidden="true">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={authorPhoto} alt="" />
+              </div>
+            )}
             {filtrandoAutor && (
               <Link href="/blog" className="btn btn-ghost blog-filter-clear">Ver todos</Link>
             )}
           </div>
-          {filtrandoAutor && authorProfile?.photoUrl && (
+          {filtrandoAutor && authorPhoto && (
             <aside className="blog-author-card" aria-label={`Perfil de ${authorName}`}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={authorProfile.photoUrl} alt="" />
+              <img src={authorPhoto} alt="" />
             </aside>
           )}
         </div>
