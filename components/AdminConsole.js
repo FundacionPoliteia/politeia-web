@@ -202,6 +202,10 @@ export default function AdminConsole() {
     () => serializeForm(form) !== serializeForm(savedForm),
     [form, savedForm]
   );
+  const notificationDayGroups = useMemo(
+    () => groupNotificationsByDay(inAppNotifications),
+    [inAppNotifications]
+  );
 
   useEffect(() => {
     setCurrentOrigin(window.location.origin);
@@ -1601,22 +1605,29 @@ export default function AdminConsole() {
               <p className="admin-muted">No hay notificaciones recientes.</p>
             ) : (
               <div className="admin-inbox-list">
-                {inAppNotifications.map((notification) => (
-                  <button
-                    className={`admin-inbox-item ${notification.readAt ? '' : 'unread'}`}
-                    key={notification.id}
-                    onClick={() => openInAppNotification(notification)}
-                    type="button"
-                  >
-                    <span className={`admin-inbox-icon ${notification.readAt ? '' : 'unread'}`}>
-                      <span aria-hidden="true" className="material-symbols-outlined">{notificationIcon(notification.type)}</span>
-                    </span>
-                    <span>
-                      <strong>{notificationTitle(notification)}</strong>
-                      <small>{notification.actorName ? `${notification.actorName} - ` : ''}{formatAdminDate(notification.createdAt)}</small>
-                      {notification.commentSelectedText && <q>{notification.commentSelectedText}</q>}
-                    </span>
-                  </button>
+                {notificationDayGroups.map((group) => (
+                  <section className="admin-inbox-day" key={group.key}>
+                    <div className="admin-inbox-day-label">
+                      <span>{group.label}</span>
+                    </div>
+                    {group.items.map((notification) => (
+                      <button
+                        className={`admin-inbox-item ${notification.readAt ? '' : 'unread'}`}
+                        key={notification.id}
+                        onClick={() => openInAppNotification(notification)}
+                        type="button"
+                      >
+                        <span className={`admin-inbox-icon ${notification.readAt ? '' : 'unread'}`}>
+                          <span aria-hidden="true" className="material-symbols-outlined">{notificationIcon(notification.type)}</span>
+                        </span>
+                        <span>
+                          <strong>{notificationTitle(notification)}</strong>
+                          <small>{notification.actorName ? `${notification.actorName} - ` : ''}{formatAdminDate(notification.createdAt)}</small>
+                          {notification.commentSelectedText && <q>{notification.commentSelectedText}</q>}
+                        </span>
+                      </button>
+                    ))}
+                  </section>
                 ))}
               </div>
             )}
@@ -3466,6 +3477,54 @@ function isOwnThreadMessage(authorEmail = '', user = null) {
 
 function normalizeEmailKey(value = '') {
   return typeof value === 'string' ? value.trim().toLowerCase() : '';
+}
+
+function groupNotificationsByDay(notifications = []) {
+  const groups = [];
+  const todayKey = dayKey(new Date());
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayKey = dayKey(yesterday);
+
+  for (const notification of notifications) {
+    const date = parseNotificationDate(notification.createdAt);
+    const key = date ? dayKey(date) : 'sin-fecha';
+    let group = groups.find((item) => item.key === key);
+    if (!group) {
+      group = {
+        key,
+        label: key === todayKey ? 'Hoy' : key === yesterdayKey ? 'Ayer' : date ? formatNotificationDay(date) : 'Sin fecha',
+        items: [],
+      };
+      groups.push(group);
+    }
+    group.items.push(notification);
+  }
+
+  return groups;
+}
+
+function parseNotificationDate(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function dayKey(date) {
+  return new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
+
+function formatNotificationDay(date) {
+  return new Intl.DateTimeFormat('es-AR', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  }).format(date);
 }
 
 function commentReplyActionLabel(action = '') {
