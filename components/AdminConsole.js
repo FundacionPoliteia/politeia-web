@@ -3198,18 +3198,23 @@ export default function AdminConsole() {
                     )}
                     <div className="admin-comment-thread">
                       <article>
-                        <strong>{reviewCommentDialog.comment.body}</strong>
-                        <small>
-                          {reviewCommentDialog.comment.authorName || reviewCommentDialog.comment.authorEmail} - {formatAdminDate(reviewCommentDialog.comment.createdAt)}
-                        </small>
+                        <img alt="" className="admin-comment-thread-avatar" onError={handleProfilePhotoError} src={reviewCommentDialog.comment.authorPhotoUrl || DEFAULT_PROFILE_PHOTO} />
+                        <div>
+                          <strong>{reviewCommentDialog.comment.body}</strong>
+                          <small>
+                            {reviewCommentDialog.comment.authorName || reviewCommentDialog.comment.authorEmail} - {formatAdminDate(reviewCommentDialog.comment.createdAt)}
+                          </small>
+                        </div>
                       </article>
                       {reviewCommentDialog.comment.replies.map((reply) => (
                         <article className="reply" key={reply.id}>
-                          <strong>{reply.body}</strong>
-                          <small>
-                            {reply.authorName || reply.authorEmail} - {commentReplyActionLabel(reply.action)} - {formatAdminDate(reply.createdAt)}
-                          </small>
-                          {reply.selectedText && <q>{reply.selectedText}</q>}
+                          <img alt="" className="admin-comment-thread-avatar" onError={handleProfilePhotoError} src={reply.authorPhotoUrl || DEFAULT_PROFILE_PHOTO} />
+                          <div>
+                            <strong>{reply.body}</strong>
+                            <small>
+                              {reply.authorName || reply.authorEmail} - {commentReplyActionLabel(reply.action)} - {formatAdminDate(reply.createdAt)}
+                            </small>
+                          </div>
                         </article>
                       ))}
                     </div>
@@ -3428,6 +3433,7 @@ function normalizeReviewComment(value = {}) {
     status: normalizeInputValue(value.status || 'open'),
     authorEmail: normalizeInputValue(value.authorEmail),
     authorName: normalizeInputValue(value.authorName),
+    authorPhotoUrl: normalizeInputValue(value.authorPhotoUrl),
     createdAt: value.createdAt || '',
     replies: Array.isArray(value.replies)
       ? value.replies.map(normalizeReviewCommentReply).filter((reply) => reply.body)
@@ -3443,8 +3449,15 @@ function normalizeReviewCommentReply(value = {}) {
     selectedText: normalizeInputValue(value.selectedText),
     authorEmail: normalizeInputValue(value.authorEmail),
     authorName: normalizeInputValue(value.authorName),
+    authorPhotoUrl: normalizeInputValue(value.authorPhotoUrl),
     createdAt: value.createdAt || '',
   };
+}
+
+function handleProfilePhotoError(event) {
+  if (!event.currentTarget.src.endsWith(DEFAULT_PROFILE_PHOTO)) {
+    event.currentTarget.src = DEFAULT_PROFILE_PHOTO;
+  }
 }
 
 function commentReplyActionLabel(action = '') {

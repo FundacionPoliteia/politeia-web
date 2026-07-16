@@ -208,6 +208,22 @@ export async function resolveUserDisplayName(user) {
   return profile.fullName || user?.name || user?.email || '';
 }
 
+export async function getInternalProfileSummaryByEmail(email = '') {
+  const cleanEmail = normalizeEmail(email);
+  if (!cleanEmail) return null;
+
+  const doc = await profiles().doc(profileId(cleanEmail)).get();
+  if (!doc.exists) return null;
+
+  const item = serializeDoc(doc);
+  const clean = sanitizeProfile(item || {});
+  return {
+    email: cleanEmail,
+    fullName: buildFullName(clean.firstName, clean.lastName),
+    photoUrl: clean.photoUrl,
+  };
+}
+
 export function sanitizeProfile(data = {}) {
   const firstName = normalizeText(data.firstName).slice(0, 80);
   const lastName = normalizeText(data.lastName).slice(0, 80);

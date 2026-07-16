@@ -3,7 +3,7 @@ import { db, serializeDoc, serverTimestamp } from '../firestore.js';
 import { HttpError } from '../errors.js';
 import { writeAuditLog } from './audit.js';
 import { buildExcerpt, markdownToSafeHtml } from '../utils/content.js';
-import { resolveUserDisplayName } from './profiles.js';
+import { getInternalProfileSummaryByEmail, resolveUserDisplayName } from './profiles.js';
 
 const comments = () => db().collection('reviewComments');
 const commentLocks = () => db().collection('reviewCommentLocks');
@@ -20,7 +20,7 @@ export async function listPostComments(postId, user) {
     .filter((comment) => comment && !comment.deletedAt)
     .sort((a, b) => compareIsoDate(a.createdAt, b.createdAt));
 
-  return { items };
+  return { items: await enrichCommentAuthors(items) };
 }
 
 export async function createPostComment(postId, data, user) {
@@ -111,7 +111,8 @@ export async function createPostComment(postId, data, user) {
     after: updatedPost,
   });
 
-  return { comment: created, post: updatedPost };
+  const [enrichedComment] = await enrichCommentAuthors([created]);
+  return { comment: enrichedComment, post: updatedPost };
 }
 
 export async function updatePostCommentStatus(postId, commentId, data, user) {
@@ -262,7 +263,46 @@ export async function updatePostCommentStatus(postId, commentId, data, user) {
     });
   }
 
-  return { comment: after, post: afterPost };
+  const [comment] = await enrichCommentAuthors([after]);
+  return { comment, post: afterPost };
+}
+
+async function enrichCommentAuthors(items = []) {
+  const emails = new Set();
+  for (const item of items) {
+    const itemEmail = normalizeEmail(item?.authorEmail);
+    if (itemEmail) emails.add(itemEmail);
+    for (const reply of normalizeReplies(item?.replies)) {
+      const replyEmail = normalizeEmail(reply?.authorEmail);
+      if (replyEmail) emails.add(replyEmail);
+    }
+  }
+
+  const pairs = await Promise.all(Array.from(emails).map(async (email) => {
+    try {
+      return [email, await getInternalProfileSummaryByEmail(email)];
+    } catch (_err) {
+      return [email, null];
+    }
+  }));
+  const profiles = new Map(pairs.filter(([, profile]) => profile));
+
+  return items.map((item) => {
+    const profile = profiles.get(normalizeEmail(item?.authorEmail));
+    return {
+      ...item,
+      authorName: item?.authorName || profile?.fullName || item?.authorEmail || '',
+      authorPhotoUrl: item?.authorPhotoUrl || profile?.photoUrl || '',
+      replies: normalizeReplies(item?.replies).map((reply) => {
+        const replyProfile = profiles.get(normalizeEmail(reply?.authorEmail));
+        return {
+          ...reply,
+          authorName: reply.authorName || replyProfile?.fullName || reply.authorEmail || '',
+          authorPhotoUrl: reply.authorPhotoUrl || replyProfile?.photoUrl || '',
+        };
+      }),
+    };
+  });
 }
 
 function buildCommentReply({ body, user, authorName, action = 'reply', selectedText = '' }) {
@@ -288,6 +328,7 @@ function normalizeReplies(value = []) {
       selectedText: normalizeText(reply.selectedText).slice(0, 500),
       authorEmail: normalizeEmail(reply.authorEmail),
       authorName: normalizeText(reply.authorName || reply.authorEmail),
+      authorPhotoUrl: normalizeText(reply.authorPhotoUrl),
       createdAt: reply.createdAt || '',
     }))
     .filter((reply) => reply.body);

@@ -3972,7 +3972,8 @@ a {
 }
 
 .admin-comment-thread-modal {
-  max-width: 680px
+  width: min(920px, calc(100vw - 32px));
+  max-width: none
 }
 
 .admin-comment-thread-head {
@@ -3996,13 +3997,17 @@ a {
 .admin-comment-thread {
   display: grid;
   gap: 10px;
-  max-height: 280px;
+  max-height: min(62vh, 640px);
   overflow: auto;
   margin: 14px 0;
   padding-right: 4px
 }
 
 .admin-comment-thread article {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: flex-start;
+  gap: 10px;
   border: 1px solid var(--linea);
   border-radius: 12px;
   background: var(--hueso);
@@ -4019,6 +4024,15 @@ a {
 .admin-comment-thread article small,
 .admin-comment-thread article q {
   display: block
+}
+
+.admin-comment-thread-avatar {
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--linea);
+  border-radius: 999px;
+  background: var(--blanco);
+  object-fit: cover
 }
 
 .admin-comment-thread article strong {

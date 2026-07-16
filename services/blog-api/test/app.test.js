@@ -325,6 +325,18 @@ test('resolved comments can receive follow-up replies', async () => {
       status: 'published',
       contentMarkdown: 'Contenido con comentario resuelto.',
     });
+    await firestore.collection('userProfiles').doc('autor@politeia.ar').set({
+      email: 'autor@politeia.ar',
+      firstName: 'Autor',
+      lastName: 'Politeia',
+      photoUrl: 'https://example.com/autor.png',
+    });
+    await firestore.collection('userProfiles').doc('reviewer@politeia.ar').set({
+      email: 'reviewer@politeia.ar',
+      firstName: 'Revisor',
+      lastName: 'Politeia',
+      photoUrl: 'https://example.com/revisor.png',
+    });
     await firestore.collection('reviewComments').doc('comment-1').set({
       postId: 'post-1',
       body: 'Aclarar esta idea.',
@@ -358,6 +370,7 @@ test('resolved comments can receive follow-up replies', async () => {
     assert.equal(result.comment.replies[1].body, 'Agrego mas detalle sobre la resolucion.');
     assert.equal(result.comment.replies[1].action, 'reply');
     assert.equal(result.comment.replies[1].selectedText, 'idea actualizada final');
+    assert.equal(result.comment.replies[1].authorPhotoUrl, 'https://example.com/autor.png');
   } finally {
     setFirestoreForTests(null);
   }
