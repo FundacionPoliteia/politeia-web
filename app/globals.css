@@ -3036,6 +3036,11 @@ a {
   color: var(--azul)
 }
 
+.status-published-edition {
+  background: rgba(111, 83, 186, .13);
+  color: #5f3fa2
+}
+
 .status-archived {
   background: rgba(26, 26, 55, .1);
   color: var(--tinta)

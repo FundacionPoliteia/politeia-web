@@ -5,7 +5,7 @@ import { createApp } from '../src/app.js';
 import { buildSessionCookie, expandRoles, resolveBuiltInRoles, verifySessionCookie } from '../src/auth.js';
 import { config, parseEnvValue } from '../src/config.js';
 import { setFirestoreForTests } from '../src/firestore.js';
-import { canManageAllPosts, toBlogAuthorView } from '../src/repositories/posts.js';
+import { canManageAllPosts, matchesManageStatus, toBlogAuthorView } from '../src/repositories/posts.js';
 import {
   listInAppNotifications,
   markAllNotificationsRead,
@@ -27,6 +27,7 @@ import {
   updateManagedAuthorProfile,
   updateUserProfile,
 } from '../src/repositories/profiles.js';
+import { updatePostCommentStatus } from '../src/repositories/comments.js';
 import { isAllowedRoleEmail, sanitizeAssignedRoles } from '../src/repositories/users.js';
 
 test('GET /healthz returns service health', async () => {
@@ -312,6 +313,56 @@ test('in-app notifications target roles and emails independently from email opt-
   }
 });
 
+test('resolved comments can receive follow-up replies', async () => {
+  const firestore = createMemoryFirestore();
+  setFirestoreForTests(firestore);
+
+  try {
+    await firestore.collection('posts').doc('post-1').set({
+      title: 'Nota publicada',
+      authorEmail: 'autor@politeia.ar',
+      authorName: 'Autor Politeia',
+      status: 'published',
+      contentMarkdown: 'Contenido con comentario resuelto.',
+    });
+    await firestore.collection('reviewComments').doc('comment-1').set({
+      postId: 'post-1',
+      body: 'Aclarar esta idea.',
+      selectedText: 'idea original',
+      selectedTextCurrent: 'idea actualizada',
+      status: 'resolved',
+      authorEmail: 'reviewer@politeia.ar',
+      authorName: 'Reviewer',
+      replies: [{
+        id: 'reply-previa',
+        body: 'Ya lo resolvi.',
+        action: 'resolved',
+        selectedText: 'idea actualizada',
+        authorEmail: 'autor@politeia.ar',
+        authorName: 'Autor',
+        createdAt: '2026-07-13T00:00:00.000Z',
+      }],
+    });
+
+    const result = await updatePostCommentStatus('post-1', 'comment-1', {
+      replyBody: 'Agrego mas detalle sobre la resolucion.',
+      selectedTextCurrent: 'idea actualizada final',
+    }, {
+      email: 'autor@politeia.ar',
+      name: 'Autor',
+      roles: ['blog'],
+    });
+
+    assert.equal(result.comment.status, 'resolved');
+    assert.equal(result.comment.replies.length, 2);
+    assert.equal(result.comment.replies[1].body, 'Agrego mas detalle sobre la resolucion.');
+    assert.equal(result.comment.replies[1].action, 'reply');
+    assert.equal(result.comment.replies[1].selectedText, 'idea actualizada final');
+  } finally {
+    setFirestoreForTests(null);
+  }
+});
+
 test('env parser ignores inline comments outside quotes', () => {
   assert.equal(parseEnvValue('admin # admin, reviewer, blog'), 'admin');
   assert.equal(parseEnvValue('"admin # literal"'), 'admin # literal');
@@ -359,7 +410,15 @@ test('post ownership scope is limited for blog and global for reviewer/admin', (
 
 test('blog author view does not expose archived status', () => {
   assert.equal(toBlogAuthorView({ status: 'archived' }).status, 'published');
+  assert.equal(toBlogAuthorView({ status: 'published-edition' }).status, 'published-edition');
   assert.equal(toBlogAuthorView({ status: 'review' }).status, 'review');
+});
+
+test('published edition stays visible in published and review management filters', () => {
+  assert.equal(matchesManageStatus({ status: 'published-edition' }, 'published', true), true);
+  assert.equal(matchesManageStatus({ status: 'published-edition' }, 'review', true), false);
+  assert.equal(matchesManageStatus({ status: 'published-edition', editionSubmittedAt: '2026-07-16T00:00:00Z' }, 'review', true), true);
+  assert.equal(matchesManageStatus({ status: 'published-edition' }, 'published', false), true);
 });
 
 test('session cookies reject emails outside the allowed domain', () => {
@@ -481,6 +540,20 @@ function createMemoryFirestore() {
       if (!collections.has(name)) collections.set(name, new Map());
       return new MemoryCollection(collections.get(name));
     },
+    async runTransaction(fn) {
+      const transaction = {
+        get(ref) {
+          return ref.get();
+        },
+        set(ref, data, options) {
+          return ref.set(data, options);
+        },
+        update(ref, data) {
+          return ref.update(data);
+        },
+      };
+      return fn(transaction);
+    },
   };
 }
 
@@ -525,6 +598,14 @@ class MemoryDoc {
 
   async set(data, options = {}) {
     const current = options.merge ? this.store.get(this.id) || {} : {};
+    this.store.set(this.id, {
+      ...current,
+      ...resolveMemoryData(data),
+    });
+  }
+
+  async update(data) {
+    const current = this.store.get(this.id) || {};
     this.store.set(this.id, {
       ...current,
       ...resolveMemoryData(data),

@@ -36,6 +36,7 @@ const STATUS_LABELS = {
   draft: 'Borrador',
   review: 'En revisión',
   published: 'Publicado',
+  'published-edition': 'Publicado en edición',
   archived: 'Archivado',
 };
 
@@ -192,6 +193,7 @@ export default function AdminConsole() {
   const canShowProfileOptIn = Boolean(profileDraft.canSharePublicProfile || profileNameMatchesLoadedAuthor);
   const activeStatusFilter = statusFilter;
   const publishedAuthorLocked = Boolean(form.id && !canPublishPosts && ['published', 'archived'].includes(form.status));
+  const editingLivePost = form.status === 'published-edition';
   const editRequestPending = Boolean(form.editRequestedAt);
   const editorBusy = busy || publishedAuthorLocked;
   const roleLabel = isAdmin ? 'Panel' : isReviewer ? 'Panel de revision' : 'Panel de blog';
@@ -2429,7 +2431,7 @@ export default function AdminConsole() {
                                       <button
                                         className="btn btn-workflow"
                                         disabled={busy || isActionLoading(`workflow:enable-edit:${post.id}`)}
-                                        onClick={() => requestAction(`/v1/posts/${post.id}/enable-edit`, 'Post habilitado como borrador.', 'habilitar edicion', `workflow:enable-edit:${post.id}`)}
+                                        onClick={() => requestAction(`/v1/posts/${post.id}/enable-edit`, 'Edicion habilitada sobre el post publicado.', 'habilitar edicion', `workflow:enable-edit:${post.id}`)}
                                         type="button"
                                       >
                                         {isActionLoading(`workflow:enable-edit:${post.id}`) ? 'Habilitando...' : 'Habilitar edicion'}
@@ -2538,8 +2540,14 @@ export default function AdminConsole() {
                       <span>
                         {editRequestPending
                           ? 'Tu solicitud de edicion esta pendiente de revision.'
-                          : 'Para modificarlo, solicita que un reviewer o admin lo vuelva a abrir como borrador.'}
+                          : 'Para modificarlo, solicita que un reviewer o admin habilite una edicion sobre el post publicado.'}
                       </span>
+                    </div>
+                  )}
+                  {editingLivePost && (
+                    <div className="admin-editor-lock">
+                      <strong>Edicion sobre publicado</strong>
+                      <span>El articulo sigue publicado afuera. Estos cambios quedan como nueva version hasta que los envies a revision y se vuelvan a publicar.</span>
                     </div>
                   )}
 
@@ -2904,7 +2912,7 @@ export default function AdminConsole() {
                         {canPublishPosts && (
                           <>
                             {form.editRequestedAt && (
-                              <button className="btn btn-workflow" disabled={busy || isActionLoading('workflow:enable-edit')} type="button" onClick={() => requestAction(`/v1/posts/${form.id}/enable-edit`, 'Post habilitado como borrador.', 'habilitar edicion')}>
+                              <button className="btn btn-workflow" disabled={busy || isActionLoading('workflow:enable-edit')} type="button" onClick={() => requestAction(`/v1/posts/${form.id}/enable-edit`, 'Edicion habilitada sobre el post publicado.', 'habilitar edicion')}>
                                 {isActionLoading('workflow:enable-edit') ? 'Habilitando...' : 'Habilitar edicion'}
                                 <ActionSpinner active={isActionLoading('workflow:enable-edit')} />
                               </button>
@@ -3509,6 +3517,7 @@ function visibleStatusValue(post, canUseReviewFilters) {
   const status = post?.status || '';
   if (canUseReviewFilters) return status;
   if (status === 'archived') return 'published';
+  if (status === 'published-edition') return post?.editionSubmittedAt ? 'review' : 'published-edition';
   if (status === 'review' || status === 'published') return status;
   return '';
 }

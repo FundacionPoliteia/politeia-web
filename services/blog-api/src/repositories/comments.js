@@ -121,8 +121,15 @@ export async function updatePostCommentStatus(postId, commentId, data, user) {
   const hasBodyPatch = typeof data?.body === 'string';
   const nextBody = hasBodyPatch ? normalizeText(data.body) : '';
   if (hasBodyPatch && !nextBody) throw new HttpError(400, 'body is required');
-  const hasReplyPatch = typeof data?.replyBody === 'string';
-  const replyBody = hasReplyPatch ? normalizeText(data.replyBody) : '';
+  const rawReplyBody = typeof data?.replyBody === 'string'
+    ? data.replyBody
+    : typeof data?.reply === 'string'
+      ? data.reply
+      : typeof data?.responseBody === 'string'
+        ? data.responseBody
+        : undefined;
+  const hasReplyPatch = typeof rawReplyBody === 'string';
+  const replyBody = hasReplyPatch ? normalizeText(rawReplyBody) : '';
   if (hasReplyPatch && !replyBody) throw new HttpError(400, 'replyBody is required');
   const selectedTextCurrent = normalizeText(data?.selectedTextCurrent).slice(0, 500);
   if (!hasStatusPatch && !hasBodyPatch && !hasReplyPatch && !selectedTextCurrent) {

@@ -5,21 +5,40 @@ import { createCategory } from './categories.js';
 import { buildGeneratedSlug } from '../utils/slug.js';
 
 const posts = () => db().collection('posts');
+const PUBLIC_FIELDS = [
+  'title',
+  'slug',
+  'excerpt',
+  'contentMarkdown',
+  'contentHtml',
+  'coverImage',
+  'showCoverInPost',
+  'authorName',
+  'authorEmail',
+  'authorNote',
+  'showAuthorNote',
+  'category',
+  'tags',
+];
+const PUBLIC_STATUSES = ['published', 'published-edition'];
 
 export async function listPublishedPosts({ limit = 20, cursor = '' }) {
   const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
   let query = posts()
-    .where('status', '==', 'published')
     .where('deletedAt', '==', null)
     .orderBy('publishedAt', 'desc')
-    .limit(safeLimit + 1);
+    .limit((safeLimit + 1) * 4);
 
   if (cursor) query = query.startAfter(Timestamp.fromDate(new Date(cursor)));
 
   const snapshot = await query.get();
-  const docs = snapshot.docs.slice(0, safeLimit).map(serializeDoc);
-  const nextCursor = snapshot.docs.length > safeLimit
-    ? snapshot.docs[safeLimit - 1].get('publishedAt')?.toDate?.()?.toISOString()
+  const publicDocs = snapshot.docs
+    .map(serializeDoc)
+    .filter((post) => PUBLIC_STATUSES.includes(post.status))
+    .slice(0, safeLimit + 1);
+  const docs = publicDocs.slice(0, safeLimit).map(toPublicPost);
+  const nextCursor = publicDocs.length > safeLimit
+    ? publicDocs[safeLimit - 1].publishedAt
     : null;
 
   return { items: docs, nextCursor };
@@ -50,15 +69,20 @@ export async function listManagePosts({ limit = 30, status = '', user }) {
 }
 
 export async function getPublishedPostBySlug(slug) {
+  const post = await findPublicPostBySlugField('slug', slug)
+    || await findPublicPostBySlugField('publicSlug', slug);
+  return post ? toPublicPost(post) : null;
+}
+
+async function findPublicPostBySlugField(field, slug) {
   const snapshot = await posts()
-    .where('slug', '==', slug)
-    .where('status', '==', 'published')
+    .where(field, '==', slug)
     .where('deletedAt', '==', null)
-    .limit(1)
+    .limit(10)
     .get();
 
   if (snapshot.empty) return null;
-  return serializeDoc(snapshot.docs[0]);
+  return snapshot.docs.map(serializeDoc).find((item) => PUBLIC_STATUSES.includes(item.status)) || null;
 }
 
 export async function ensureSlugAvailable(slug, exceptId = '') {
@@ -125,17 +149,26 @@ export async function transitionPost(id, status, actorUser, action) {
   const before = serializeDoc(beforeDoc);
   if (before.deletedAt) throw new HttpError(404, 'Post not found');
   assertCanAccessPost(before, actorUser);
-  if (!canManageAllPosts(actorUser) && status === 'review' && before.status !== 'draft') {
+  if (!canManageAllPosts(actorUser) && status === 'review' && !['draft', 'published-edition'].includes(before.status)) {
     throw new HttpError(403, 'Solicita edicion para modificar un post publicado');
   }
 
   const patch = {
-    status,
+    status: before.status === 'published-edition' && status === 'review' ? 'published-edition' : status,
     updatedAt: serverTimestamp(),
     editRequestedAt: null,
     editRequestedBy: '',
   };
-  if (status === 'published') patch.publishedAt = serverTimestamp();
+  if (before.status === 'published-edition' && status === 'review') {
+    patch.editionSubmittedAt = serverTimestamp();
+    patch.editionSubmittedBy = actorUser.email;
+  }
+  if (status === 'published') {
+    patch.publishedAt = serverTimestamp();
+    patch.editionSubmittedAt = null;
+    patch.editionSubmittedBy = '';
+    Object.assign(patch, buildPublicSnapshot(before));
+  }
   if (status === 'draft') patch.publishedAt = null;
   await ref.update(patch);
 
@@ -158,7 +191,7 @@ export async function requestPostEdit(id, actorUser) {
   const before = serializeDoc(beforeDoc);
   if (before.deletedAt) throw new HttpError(404, 'Post not found');
   assertPostOwner(before, actorUser);
-  if (!['published', 'archived'].includes(before.status)) {
+  if (!['published', 'published-edition', 'archived'].includes(before.status)) {
     throw new HttpError(400, 'Solo se puede solicitar edicion sobre posts publicados');
   }
 
@@ -189,11 +222,13 @@ export async function enablePostEditing(id, actorUser) {
   if (!canManageAllPosts(actorUser)) throw new HttpError(403, 'Only reviewer users can enable editing');
 
   await ref.update({
-    status: 'draft',
-    publishedAt: null,
+    status: before.status === 'published' ? 'published-edition' : before.status,
     editRequestedAt: null,
     editRequestedBy: '',
+    editionSubmittedAt: null,
+    editionSubmittedBy: '',
     updatedAt: serverTimestamp(),
+    ...(before.status === 'published' || !before.publicSlug ? buildPublicSnapshot(before) : {}),
   });
 
   const after = serializeDoc(await ref.get());
@@ -221,10 +256,17 @@ export function toBlogAuthorView(post) {
   };
 }
 
-function matchesManageStatus(post, status, managesAllPosts) {
-  if (managesAllPosts) return post.status === status;
+export function matchesManageStatus(post, status, managesAllPosts) {
+  if (managesAllPosts) {
+    if (status === 'review') return post.status === 'review' || (post.status === 'published-edition' && Boolean(post.editionSubmittedAt));
+    if (status === 'published') return post.status === 'published' || post.status === 'published-edition';
+    return post.status === status;
+  }
   if (status === 'published' || status === 'archived') {
-    return post.status === 'published' || post.status === 'archived';
+    return post.status === 'published' || post.status === 'published-edition' || post.status === 'archived';
+  }
+  if (status === 'review') {
+    return post.status === 'review' || (post.status === 'published-edition' && Boolean(post.editionSubmittedAt));
   }
   return post.status === status;
 }
@@ -240,6 +282,22 @@ function assertCanEditPost(post, user) {
   if (['published', 'archived'].includes(post.status)) {
     throw new HttpError(403, 'Solicita edicion para modificar un post publicado');
   }
+}
+
+function buildPublicSnapshot(post = {}) {
+  return Object.fromEntries(
+    PUBLIC_FIELDS.map((field) => [`public${field.charAt(0).toUpperCase()}${field.slice(1)}`, post[field] ?? null])
+  );
+}
+
+function toPublicPost(post = {}) {
+  if (post.status !== 'published-edition') return post;
+  const next = { ...post, status: 'published' };
+  for (const field of PUBLIC_FIELDS) {
+    const key = `public${field.charAt(0).toUpperCase()}${field.slice(1)}`;
+    if (post[key] !== undefined && post[key] !== null) next[field] = post[key];
+  }
+  return next;
 }
 
 function assertPostOwner(post, user) {

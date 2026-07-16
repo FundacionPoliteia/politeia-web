@@ -92,7 +92,7 @@ export function postsRouter({ writeLimiter }) {
       const result = await updatePostCommentStatus(req.params.id, req.params.commentId, req.body || {}, req.user);
       if (req.body?.status) {
         await safeNotify(() => notifyCommentStatusChanged(result.post, result.comment, req.user, req.body.status));
-      } else if (req.body?.replyBody) {
+      } else if (req.body?.replyBody || req.body?.reply || req.body?.responseBody) {
         await safeNotify(() => notifyCommentReplied(result.post, result.comment, req.user));
       }
       res.json({ item: result.comment, post: result.post });
