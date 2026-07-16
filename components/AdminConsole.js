@@ -3197,7 +3197,7 @@ export default function AdminConsole() {
                       <q>{reviewCommentDialog.comment.selectedTextCurrent || reviewCommentDialog.comment.selectedText}</q>
                     )}
                     <div className="admin-comment-thread">
-                      <article>
+                      <article className={isOwnThreadMessage(reviewCommentDialog.comment.authorEmail, user) ? 'own' : 'other'}>
                         <img alt="" className="admin-comment-thread-avatar" onError={handleProfilePhotoError} src={reviewCommentDialog.comment.authorPhotoUrl || DEFAULT_PROFILE_PHOTO} />
                         <div>
                           <strong>{reviewCommentDialog.comment.body}</strong>
@@ -3207,7 +3207,7 @@ export default function AdminConsole() {
                         </div>
                       </article>
                       {reviewCommentDialog.comment.replies.map((reply) => (
-                        <article className="reply" key={reply.id}>
+                        <article className={`reply ${isOwnThreadMessage(reply.authorEmail, user) ? 'own' : 'other'}`} key={reply.id}>
                           <img alt="" className="admin-comment-thread-avatar" onError={handleProfilePhotoError} src={reply.authorPhotoUrl || DEFAULT_PROFILE_PHOTO} />
                           <div>
                             <strong>{reply.body}</strong>
@@ -3458,6 +3458,14 @@ function handleProfilePhotoError(event) {
   if (!event.currentTarget.src.endsWith(DEFAULT_PROFILE_PHOTO)) {
     event.currentTarget.src = DEFAULT_PROFILE_PHOTO;
   }
+}
+
+function isOwnThreadMessage(authorEmail = '', user = null) {
+  return normalizeEmailKey(authorEmail) && normalizeEmailKey(authorEmail) === normalizeEmailKey(user?.email);
+}
+
+function normalizeEmailKey(value = '') {
+  return typeof value === 'string' ? value.trim().toLowerCase() : '';
 }
 
 function commentReplyActionLabel(action = '') {

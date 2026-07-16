@@ -4008,6 +4008,7 @@ a {
   grid-template-columns: 38px minmax(0, 1fr);
   align-items: flex-start;
   gap: 10px;
+  width: min(76%, 660px);
   border: 1px solid var(--linea);
   border-radius: 12px;
   background: var(--hueso);
@@ -4015,9 +4016,30 @@ a {
 }
 
 .admin-comment-thread article.reply {
-  margin-left: 18px;
   background: #fff;
   border-color: rgba(19, 122, 159, .2)
+}
+
+.admin-comment-thread article.other {
+  justify-self: start
+}
+
+.admin-comment-thread article.own {
+  justify-self: end;
+  grid-template-columns: minmax(0, 1fr) 38px;
+  background: rgba(19, 122, 159, .07);
+  border-color: rgba(19, 122, 159, .24)
+}
+
+.admin-comment-thread article.own .admin-comment-thread-avatar {
+  grid-column: 2;
+  grid-row: 1
+}
+
+.admin-comment-thread article.own > div {
+  grid-column: 1;
+  grid-row: 1;
+  text-align: right
 }
 
 .admin-comment-thread article strong,
@@ -4048,6 +4070,12 @@ a {
 
 .admin-comment-thread article q {
   margin-top: 8px
+}
+
+@media (max-width: 720px) {
+  .admin-comment-thread article {
+    width: 92%
+  }
 }
 
 .admin-article-preview {
