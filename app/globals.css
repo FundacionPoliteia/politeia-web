@@ -1934,23 +1934,37 @@ a {
 }
 
 .admin-panel-tabsbar {
-  display: flex;
+  position: sticky;
+  top: 16px;
+  z-index: 90;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: center;
   gap: 12px;
-  margin-bottom: 22px
+  background: var(--blanco);
+  border: 1px solid var(--linea);
+  border-radius: 999px;
+  padding: 8px 10px;
+  margin-bottom: 22px;
+  box-shadow: 0 14px 34px rgba(26, 26, 55, .08)
+}
+
+.admin-panel-tabsbar .admin-tabs {
+  grid-column: 2;
+  margin: 0
+}
+
+.admin-panel-tabsbar .admin-profile-nav-button {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: start
 }
 
 .admin-panel-tabsbar .admin-session-actions {
-  margin-left: auto
-}
-
-@media(min-width:961px) {
-  .admin-panel-navbar {
-    position: sticky;
-    top: 16px;
-    z-index: 45
-  }
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+  margin-left: 0
 }
 
 .admin-panel-user {
@@ -4510,7 +4524,14 @@ a {
   }
 
   .admin-panel-tabsbar {
-    margin-bottom: 16px
+    position: static;
+    display: block;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    margin-bottom: 16px;
+    box-shadow: none
   }
 
   .admin-panel-user span {
