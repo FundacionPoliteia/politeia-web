@@ -1956,6 +1956,39 @@ a {
   gap: 10px
 }
 
+.admin-profile-nav-button {
+  border: 1px solid var(--linea);
+  border-radius: 999px;
+  background: var(--blanco);
+  color: var(--tinta);
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--texto);
+  font-size: .86rem;
+  font-weight: 800;
+  padding: 6px 7px 6px 14px;
+  cursor: pointer;
+  transition: border-color .18s, background .18s, color .18s, box-shadow .18s
+}
+
+.admin-profile-nav-button:hover,
+.admin-profile-nav-button.selected {
+  border-color: rgba(19, 122, 159, .34);
+  background: rgba(19, 122, 159, .08);
+  color: var(--azul);
+  box-shadow: 0 10px 22px rgba(26, 26, 55, .08)
+}
+
+.admin-profile-nav-button img {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--linea);
+  border-radius: 999px;
+  background: var(--blanco);
+  object-fit: cover
+}
+
 .admin-notification-button {
   position: relative;
   width: 44px;
@@ -4481,7 +4514,8 @@ a {
 
   .admin-notification-tray {
     width: 100%;
-    height: min(82vh, 720px);
+    height: calc(100vh - 16px - env(safe-area-inset-top));
+    height: calc(100dvh - 16px - env(safe-area-inset-top));
     margin: 0;
     border-radius: 22px 22px 0 0;
     box-shadow: 0 -18px 52px rgba(26, 26, 55, .2)
@@ -4496,7 +4530,7 @@ a {
   .admin-tabs {
     position: fixed;
     left: 12px;
-    right: 12px;
+    right: 76px;
     bottom: calc(12px + env(safe-area-inset-bottom));
     z-index: 120;
     display: flex;
@@ -4518,6 +4552,33 @@ a {
     flex: 0 0 auto;
     border-radius: 999px;
     white-space: nowrap
+  }
+
+  .admin-profile-nav-button {
+    position: fixed;
+    right: 12px;
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    z-index: 121;
+    width: 52px;
+    height: 52px;
+    justify-content: center;
+    gap: 0;
+    padding: 5px;
+    box-shadow: 0 16px 40px rgba(26, 26, 55, .18)
+  }
+
+  .admin-profile-nav-button span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap
+  }
+
+  .admin-profile-nav-button img {
+    width: 40px;
+    height: 40px
   }
 
   .admin-list {

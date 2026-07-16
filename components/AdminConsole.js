@@ -185,6 +185,7 @@ export default function AdminConsole() {
   const accountAuthorName = user?.name || user?.email || '';
   const profileAuthorName = profileDraft.fullName || userProfile.fullName || accountAuthorName;
   const profileClosingPhrase = profileDraft.closingPhrase || userProfile.closingPhrase || '';
+  const profileNavPhoto = profileDraft.photoUrl || userProfile.photoUrl || DEFAULT_PROFILE_PHOTO;
   const hasAuthorProfile = Boolean(profileDraft.fullName || userProfile.fullName);
   const profileNameMatchesLoadedAuthor = useMemo(() => {
     const key = taxonomyKey(profileDraft.fullName);
@@ -1706,16 +1707,6 @@ export default function AdminConsole() {
                     Roles
                   </button>
                   )}
-                  {canAccessProfilePanel && (
-                    <button
-                      aria-pressed={activePanelTab === 'profile'}
-                      className={activePanelTab === 'profile' ? 'selected' : ''}
-                      onClick={() => setActivePanelTab('profile')}
-                      type="button"
-                    >
-                      Usuario y perfil
-                    </button>
-                  )}
                   {canReviewProfiles && (
                     <button
                       aria-pressed={activePanelTab === 'profiles'}
@@ -1727,6 +1718,18 @@ export default function AdminConsole() {
                     </button>
                   )}
                 </nav>
+                {canAccessProfilePanel && (
+                  <button
+                    aria-label="Abrir mi perfil"
+                    aria-pressed={activePanelTab === 'profile'}
+                    className={`admin-profile-nav-button ${activePanelTab === 'profile' ? 'selected' : ''}`}
+                    onClick={() => setActivePanelTab('profile')}
+                    type="button"
+                  >
+                    <span>Mi perfil</span>
+                    <img alt="" onError={handleProfilePhotoError} src={profileNavPhoto} />
+                  </button>
+                )}
                 <div className="admin-session-actions">
                   <button
                     aria-expanded={notificationsOpen}
