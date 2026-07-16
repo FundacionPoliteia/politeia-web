@@ -64,7 +64,8 @@ const NOTIFICATION_EVENT_LABELS = [
   { value: 'commentResolved', label: 'Comentarios resueltos', roles: ['blog'] },
   { value: 'commentReopened', label: 'Comentarios reabiertos', roles: ['blog'] },
   { value: 'postPublished', label: 'Mis posts publicados', roles: ['blog'] },
-  { value: 'postEditEnabled', label: 'Edicion habilitada en mis posts', roles: ['blog'] },
+  { value: 'postEditRequested', label: 'Solicitudes de edición', roles: ['admin', 'reviewer'] },
+  { value: 'postEditEnabled', label: 'Edición habilitada en mis posts', roles: ['blog'] },
 ];
 
 const DEFAULT_NOTIFICATION_EVENTS = Object.fromEntries(
@@ -77,6 +78,7 @@ const EMPTY_PROFILE = {
   firstName: '',
   lastName: '',
   description: '',
+  focusArea: '',
   closingPhrase: '',
   photoUrl: '',
   publicProfileEnabled: false,
@@ -91,6 +93,7 @@ const EMPTY_MANAGED_AUTHOR_PROFILE = {
   firstName: '',
   lastName: '',
   description: '',
+  focusArea: '',
   closingPhrase: '',
   photoUrl: '',
   publicProfileEnabled: false,
@@ -120,6 +123,7 @@ export default function AdminConsole() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewCardOpen, setPreviewCardOpen] = useState(true);
   const [pendingAction, setPendingAction] = useState(null);
+  const [editRequestConfirmOpen, setEditRequestConfirmOpen] = useState(false);
   const [categoryDeleteTarget, setCategoryDeleteTarget] = useState(null);
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
   const [categorySearchTerm, setCategorySearchTerm] = useState('');
@@ -739,6 +743,7 @@ export default function AdminConsole() {
       firstName: profile.firstName,
       lastName: profile.lastName,
       description: profile.description,
+      focusArea: profile.focusArea,
       closingPhrase: profile.closingPhrase,
       photoUrl: profile.photoUrl,
       publicProfileEnabled: profile.publicProfileEnabled,
@@ -757,6 +762,7 @@ export default function AdminConsole() {
         firstName: adminProfileDraft.firstName,
         lastName: adminProfileDraft.lastName,
         description: adminProfileDraft.description,
+        focusArea: adminProfileDraft.focusArea,
         closingPhrase: adminProfileDraft.closingPhrase,
         photoUrl: adminProfileDraft.photoUrl,
         publicProfileEnabled: adminProfileDraft.publicProfileEnabled,
@@ -814,6 +820,7 @@ export default function AdminConsole() {
         firstName: profileDraft.firstName,
         lastName: profileDraft.lastName,
         description: profileDraft.description,
+        focusArea: profileDraft.focusArea,
         closingPhrase: profileDraft.closingPhrase,
         photoUrl: profileDraft.photoUrl,
         publicProfileEnabled: canShowProfileOptIn && profileDraft.publicProfileEnabled,
@@ -1202,6 +1209,30 @@ export default function AdminConsole() {
       return;
     }
     action(path, success, loadingKey);
+  }
+
+  async function confirmEditRequest() {
+    if (!form.id || editRequestPending) return;
+    const postId = form.id;
+    const loadingKey = `workflow:request-edit:${postId}`;
+    try {
+      setBusy(true);
+      setMessage('');
+      const data = await withActionLoading(loadingKey, () => api(`/v1/posts/${postId}/request-edit`, { method: 'POST' }));
+      if (data.item?.id && data.item.id === form.id) {
+        const nextForm = postToForm(data.item);
+        setForm(nextForm);
+        setSavedForm(nextForm);
+      }
+      setMessage('Solicitud de edición enviada.');
+      setEditRequestConfirmOpen(false);
+      await loadPosts();
+      await loadInAppNotifications({ silent: true });
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
   }
 
   function confirmPendingAction() {
@@ -1614,7 +1645,7 @@ export default function AdminConsole() {
                     </div>
                     {group.items.map((notification) => (
                       <button
-                        className={`admin-inbox-item ${notification.readAt ? '' : 'unread'}`}
+                        className={`admin-inbox-item ${notification.readAt ? '' : 'unread'} ${notificationToneClass(notification)}`}
                         key={notification.id}
                         onClick={() => openInAppNotification(notification)}
                         type="button"
@@ -1810,17 +1841,26 @@ export default function AdminConsole() {
                           </label>
                         </div>
                         <label>
-                          Descripcion breve
+                          Descripcion breve de Perfil
                           <textarea
                             maxLength="500"
                             onChange={(e) => updateProfileDraft('description', e.target.value)}
-                            placeholder="Una bio corta para futuros perfiles de autor."
+                            placeholder="Una bio corta para el perfiles de autor."
                             rows="4"
                             value={profileDraft.description}
                           />
                         </label>
                         <label>
-                          Frase de cierre
+                          Sobre que escribo
+                          <input
+                            maxLength="180"
+                            onChange={(e) => updateProfileDraft('focusArea', e.target.value)}
+                            placeholder="Miradas o areas sobre las que queres que te identifiquen en 'Conoce a los autores'."
+                            value={profileDraft.focusArea}
+                          />
+                        </label>
+                        <label>
+                          Frase de cierre de Nota
                           <textarea
                             maxLength="220"
                             onChange={(e) => updateProfileDraft('closingPhrase', e.target.value)}
@@ -1902,21 +1942,30 @@ export default function AdminConsole() {
                       </label>
                     </div>
                     <label>
-                      Descripcion breve
+                      Descripcion breve para Perfil
                       <textarea
                         maxLength="500"
                         onChange={(event) => updateAdminProfileDraft('description', event.target.value)}
-                        placeholder="Bio corta del autor."
+                        placeholder="Una descripción breve sobre vos, para mostrar en tu perfil público."
                         rows="3"
                         value={adminProfileDraft.description}
                       />
                     </label>
                     <label>
-                      Frase de cierre
+                      Sobre vos, para "Conoce a los autores"
+                      <input
+                        maxLength="180"
+                        onChange={(event) => updateAdminProfileDraft('focusArea', event.target.value)}
+                        placeholder="Mirada o areas sobre las que se armar el 'Conoce a los autores'."
+                        value={adminProfileDraft.focusArea}
+                      />
+                    </label>
+                    <label>
+                      Frase de cierre de Nota
                       <textarea
                         maxLength="220"
                         onChange={(event) => updateAdminProfileDraft('closingPhrase', event.target.value)}
-                        placeholder="Texto corto para el mini-perfil al final de sus notas."
+                        placeholder="Texto corto para el cierre de sus notas."
                         rows="2"
                         value={adminProfileDraft.closingPhrase}
                       />
@@ -2023,6 +2072,7 @@ export default function AdminConsole() {
                           <th>Perfil</th>
                           <th>Estado</th>
                           <th>Descripcion</th>
+                          <th>Mirada</th>
                           <th>Slug</th>
                           <th>Actualizado</th>
                           <th>Acciones</th>
@@ -2031,7 +2081,7 @@ export default function AdminConsole() {
                       <tbody>
                         {adminProfiles.length === 0 ? (
                           <tr>
-                            <td colSpan="6">Todavia no hay perfiles cargados.</td>
+                            <td colSpan="7">Todavia no hay perfiles cargados.</td>
                           </tr>
                         ) : adminProfiles.map((profile) => (
                           <tr key={profile.email || profile.id}>
@@ -2051,6 +2101,7 @@ export default function AdminConsole() {
                               </span>
                             </td>
                             <td>{profile.description || 'Sin descripcion'}</td>
+                            <td>{profile.focusArea || 'Sin area definida'}</td>
                             <td>
                               {profile.authorSlug || 'Sin slug'}
                               {profile.publicProfileEnabled && profile.fullName && (
@@ -2572,20 +2623,37 @@ export default function AdminConsole() {
                 </aside>
 
                 <form className="admin-editor" onSubmit={savePost}>
+                  {publishedAuthorLocked && (
+                    editRequestPending ? (
+                      <div className="admin-editor-lock is-pending">
+                        <span aria-hidden="true" className="material-symbols-outlined">hourglass_top</span>
+                        <div>
+                          <strong>Solicitud de ediciín pendiente</strong>
+                          <span>Un reviewer o admin debe habilitar una nueva versiín antes de que puedas modificar este post.</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        className="admin-editor-lock admin-editor-lock-action"
+                        disabled={busy || isActionLoading(`workflow:request-edit:${form.id}`)}
+                        onClick={() => setEditRequestConfirmOpen(true)}
+                        type="button"
+                      >
+                        <span aria-hidden="true" className="material-symbols-outlined">
+                          {isActionLoading(`workflow:request-edit:${form.id}`) ? 'hourglass_top' : 'edit_note'}
+                        </span>
+                        <div>
+                          <strong>Solicitar edicion</strong>
+                          <span>Este post esta publicado. Pedile a revisión que lo habilite como nueva versión editable.</span>
+                        </div>
+                        <em>{isActionLoading(`workflow:request-edit:${form.id}`) ? 'Enviando...' : 'Pedir acceso'}</em>
+                      </button>
+                    )
+                  )}
                   <div className="admin-editor-head">
                     <h2>{publishedAuthorLocked ? 'Vista previa' : form.id ? 'Editar post' : canCreatePosts ? 'Nuevo post' : 'Selecciona un post'}</h2>
                     {form.id && <span className="admin-id">{form.id}</span>}
                   </div>
-                  {publishedAuthorLocked && (
-                    <div className="admin-editor-lock">
-                      <strong>Post publicado</strong>
-                      <span>
-                        {editRequestPending
-                          ? 'Tu solicitud de edicion esta pendiente de revision.'
-                          : 'Para modificarlo, solicita que un reviewer o admin habilite una edicion sobre el post publicado.'}
-                      </span>
-                    </div>
-                  )}
                   {editingLivePost && (
                     <div className="admin-editor-lock">
                       <strong>Edicion sobre publicado</strong>
@@ -2927,6 +2995,7 @@ export default function AdminConsole() {
                     </label>
                   </details>
 
+                  {!publishedAuthorLocked && (
                   <div className="admin-actions">
                     <button className="btn btn-primary admin-action-save" disabled={busy || uploading || importing || isActionLoading('post-save') || publishedAuthorLocked || (!form.id && !canCreatePosts)} type="submit">
                       {isActionLoading('post-save') ? 'Guardando...' : form.id ? 'Guardar cambios' : 'Crear borrador'}
@@ -2934,19 +3003,8 @@ export default function AdminConsole() {
                     </button>
                     {form.id && (
                       <>
-                        {publishedAuthorLocked && (
-                          <button
-                            className="btn btn-workflow"
-                            disabled={busy || editRequestPending || isActionLoading(`workflow:request-edit:${form.id}`)}
-                            type="button"
-                            onClick={() => requestAction(`/v1/posts/${form.id}/request-edit`, 'Solicitud de edicion enviada.', 'solicitar edicion', `workflow:request-edit:${form.id}`)}
-                          >
-                            {isActionLoading(`workflow:request-edit:${form.id}`) ? 'Enviando solicitud...' : editRequestPending ? 'Solicitud pendiente' : 'Solicitar edicion'}
-                            <ActionSpinner active={isActionLoading(`workflow:request-edit:${form.id}`)} />
-                          </button>
-                        )}
                         {canSubmitReview && !publishedAuthorLocked && (
-                          <button className="btn btn-ghost" disabled={busy || isActionLoading('workflow:submit-review')} type="button" onClick={() => requestAction(`/v1/posts/${form.id}/submit-review`, 'Post enviado a revisión.', 'enviar a revisión')}>
+                          <button className="btn btn-review-action" disabled={busy || isActionLoading('workflow:submit-review')} type="button" onClick={() => requestAction(`/v1/posts/${form.id}/submit-review`, 'Post enviado a revisión.', 'enviar a revisión')}>
                             {isActionLoading('workflow:submit-review') ? 'Enviando...' : 'Enviar a revisión'}
                             <ActionSpinner active={isActionLoading('workflow:submit-review')} />
                           </button>
@@ -2959,11 +3017,11 @@ export default function AdminConsole() {
                                 <ActionSpinner active={isActionLoading('workflow:enable-edit')} />
                               </button>
                             )}
-                            <button className="btn btn-ghost" disabled={busy || isActionLoading('workflow:publish')} type="button" onClick={() => requestAction(`/v1/posts/${form.id}/publish`, 'Post publicado.', 'publicar')}>
+                            <button className="btn btn-publish-action" disabled={busy || isActionLoading('workflow:publish')} type="button" onClick={() => requestAction(`/v1/posts/${form.id}/publish`, 'Post publicado.', 'publicar')}>
                               {isActionLoading('workflow:publish') ? 'Publicando...' : 'Publicar'}
                               <ActionSpinner active={isActionLoading('workflow:publish')} />
                             </button>
-                            <button className="btn btn-ghost" disabled={busy || isActionLoading('workflow:archive')} type="button" onClick={() => requestAction(`/v1/posts/${form.id}/archive`, 'Post archivado.', 'archivar')}>
+                            <button className="btn btn-archive-action" disabled={busy || isActionLoading('workflow:archive')} type="button" onClick={() => requestAction(`/v1/posts/${form.id}/archive`, 'Post archivado.', 'archivar')}>
                               {isActionLoading('workflow:archive') ? 'Archivando...' : 'Archivar'}
                               <ActionSpinner active={isActionLoading('workflow:archive')} />
                             </button>
@@ -2978,6 +3036,7 @@ export default function AdminConsole() {
                       </>
                     )}
                   </div>
+                  )}
                 </form>
                 <aside className="admin-preview-sidebar">
                   <section className="admin-preview-card-panel">
@@ -3195,6 +3254,35 @@ export default function AdminConsole() {
                       >
                         {isActionLoading(`admin-profile-delete:${adminProfileDeleteTarget.id}`) ? 'Eliminando...' : 'Eliminar perfil'}
                         <ActionSpinner active={isActionLoading(`admin-profile-delete:${adminProfileDeleteTarget.id}`)} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {editRequestConfirmOpen && (
+                <div className="admin-modal-backdrop" role="presentation">
+                  <div aria-modal="true" className="admin-modal" role="dialog">
+                    <h3>Solicitar edicion</h3>
+                    <p>
+                      Vas a pedir que este post publicado se habilite como nueva versión editable. El articulo seguira publicado hasta que revision apruebe y vuelva a publicar los cambios.
+                    </p>
+                    <div className="admin-modal-actions">
+                      <button
+                        className="btn btn-ghost"
+                        disabled={busy || isActionLoading(`workflow:request-edit:${form.id}`)}
+                        onClick={() => setEditRequestConfirmOpen(false)}
+                        type="button"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        className="btn btn-primary"
+                        disabled={busy || isActionLoading(`workflow:request-edit:${form.id}`)}
+                        onClick={confirmEditRequest}
+                        type="button"
+                      >
+                        {isActionLoading(`workflow:request-edit:${form.id}`) ? 'Enviando solicitud...' : 'Confirmar solicitud'}
+                        <ActionSpinner active={isActionLoading(`workflow:request-edit:${form.id}`)} />
                       </button>
                     </div>
                   </div>
@@ -3571,7 +3659,8 @@ function notificationTitle(notification = {}) {
   if (notification.type === 'comment.resolved') return `Comentario resuelto: ${notification.postTitle || 'Sin titulo'}`;
   if (notification.type === 'comment.reopened') return `Comentario reabierto: ${notification.postTitle || 'Sin titulo'}`;
   if (notification.type === 'post.published') return `Post publicado: ${notification.postTitle || 'Sin titulo'}`;
-  if (notification.type === 'post.editEnabled') return `Edicion habilitada: ${notification.postTitle || 'Sin titulo'}`;
+  if (notification.type === 'post.editRequested') return `Solicitud de edición: ${notification.postTitle || 'Sin titulo'}`;
+  if (notification.type === 'post.editEnabled') return `Edición habilitada: ${notification.postTitle || 'Sin titulo'}`;
   if (notification.type === 'user.roles.changed') return 'Tus permisos fueron actualizados';
   return notification.subject || 'Actividad editorial';
 }
@@ -3579,10 +3668,17 @@ function notificationTitle(notification = {}) {
 function notificationIcon(type = '') {
   if (type.startsWith('comment.')) return 'mode_comment';
   if (type === 'post.published') return 'task_alt';
+  if (type === 'post.editRequested') return 'pending_actions';
   if (type === 'post.editEnabled') return 'edit_note';
   if (type === 'post.submittedReview') return 'rate_review';
   if (type === 'user.roles.changed') return 'manage_accounts';
   return 'notifications';
+}
+
+function notificationToneClass(notification = {}) {
+  return ['post.submittedReview', 'post.editRequested', 'post.editEnabled'].includes(notification.type)
+    ? 'attention'
+    : '';
 }
 
 function normalizeInlineInput(value = '') {
@@ -3661,6 +3757,7 @@ function normalizeProfile(value = {}) {
     firstName,
     lastName,
     description: normalizeInputValue(value.description),
+    focusArea: normalizeInputValue(value.focusArea),
     closingPhrase: normalizeInputValue(value.closingPhrase),
     photoUrl: normalizeInputValue(value.photoUrl),
     publicProfileEnabled: normalizeBoolean(value.publicProfileEnabled),

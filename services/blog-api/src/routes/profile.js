@@ -6,6 +6,7 @@ import {
   deleteManagedAuthorProfile,
   getPublicAuthorProfileBySlug,
   getUserProfile,
+  listPublicAuthorProfiles,
   listUserProfiles,
   updateManagedAuthorProfile,
   updateUserProfile,
@@ -13,6 +14,15 @@ import {
 
 export function profileRouter({ writeLimiter }) {
   const router = Router();
+
+  router.get('/public', async (req, res, next) => {
+    try {
+      const result = await listPublicAuthorProfiles({ limit: req.query.limit });
+      res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
 
   router.get('/public/:slug', async (req, res, next) => {
     try {

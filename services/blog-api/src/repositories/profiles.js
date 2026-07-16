@@ -6,6 +6,7 @@ import { isValidSlug, slugify } from '../utils/slug.js';
 
 const profiles = () => db().collection('userProfiles');
 const posts = () => db().collection('posts');
+const PUBLIC_AUTHOR_STATUSES = ['published', 'published-edition'];
 
 export async function getUserProfile(user) {
   const email = normalizeEmail(user?.email);
@@ -203,6 +204,27 @@ export async function getPublicAuthorProfileBySlug(slug = '') {
   return item || null;
 }
 
+export async function listPublicAuthorProfiles({ limit = 24 } = {}) {
+  const safeLimit = Math.min(Math.max(Number(limit) || 24, 1), 100);
+  const [profileSnapshot, postSnapshot] = await Promise.all([
+    profiles().get(),
+    posts().orderBy('publishedAt', 'desc').limit(300).get(),
+  ]);
+  const authorStats = buildAuthorStats(postSnapshot.docs.map((doc) => serializeDoc(doc)));
+  const items = profileSnapshot.docs
+    .map((doc) => serializeDoc(doc))
+    .map((item) => toPublicAuthorProfileFromStats(item, authorStats))
+    .filter(Boolean)
+    .sort((a, b) => {
+      const dateCompare = String(b.latestPostDate || '').localeCompare(String(a.latestPostDate || ''));
+      if (dateCompare) return dateCompare;
+      return a.fullName.localeCompare(b.fullName);
+    })
+    .slice(0, safeLimit);
+
+  return { items };
+}
+
 export async function resolveUserDisplayName(user) {
   const profile = await getUserProfile(user);
   return profile.fullName || user?.name || user?.email || '';
@@ -228,6 +250,7 @@ export function sanitizeProfile(data = {}) {
   const firstName = normalizeText(data.firstName).slice(0, 80);
   const lastName = normalizeText(data.lastName).slice(0, 80);
   const description = normalizeText(data.description).slice(0, 500);
+  const focusArea = normalizeText(data.focusArea).slice(0, 180);
   const closingPhrase = normalizeText(data.closingPhrase).slice(0, 220);
   const photoUrl = normalizeUrl(data.photoUrl);
   const publicProfileEnabled = normalizeBoolean(data.publicProfileEnabled);
@@ -236,6 +259,7 @@ export function sanitizeProfile(data = {}) {
     firstName,
     lastName,
     description,
+    focusArea,
     closingPhrase,
     photoUrl,
     publicProfileEnabled,
@@ -273,9 +297,58 @@ async function toPublicAuthorProfile(item) {
     fullName,
     authorSlug: slugify(item?.authorSlug || fullName),
     description: clean.description,
+    focusArea: clean.focusArea,
     closingPhrase: clean.closingPhrase,
     photoUrl: clean.photoUrl,
   };
+}
+
+function toPublicAuthorProfileFromStats(item, authorStats) {
+  const clean = sanitizeProfile(item || {});
+  const fullName = buildFullName(clean.firstName, clean.lastName);
+  const stats = authorStats.get(authorKey(fullName));
+  if (!clean.publicProfileEnabled || !fullName || !stats) return null;
+
+  return {
+    fullName,
+    authorSlug: slugify(item?.authorSlug || fullName),
+    description: clean.description,
+    focusArea: clean.focusArea,
+    closingPhrase: clean.closingPhrase,
+    photoUrl: clean.photoUrl,
+    postCount: stats.postCount,
+    latestPostTitle: stats.latestPostTitle,
+    latestPostSlug: stats.latestPostSlug,
+    latestPostDate: stats.latestPostDate,
+    categories: [...stats.categories].slice(0, 4),
+  };
+}
+
+function buildAuthorStats(items = []) {
+  const stats = new Map();
+  items
+    .filter((post) => post && !post.deletedAt && PUBLIC_AUTHOR_STATUSES.includes(post.status))
+    .forEach((post) => {
+      const fullName = normalizeText(post.authorName);
+      const key = authorKey(fullName);
+      if (!key) return;
+      const current = stats.get(key) || {
+        postCount: 0,
+        latestPostTitle: '',
+        latestPostSlug: '',
+        latestPostDate: '',
+        categories: new Set(),
+      };
+      current.postCount += 1;
+      if (!current.latestPostDate || String(post.publishedAt || post.updatedAt || '').localeCompare(String(current.latestPostDate)) > 0) {
+        current.latestPostTitle = post.title || '';
+        current.latestPostSlug = post.publicSlug || post.slug || '';
+        current.latestPostDate = post.publishedAt || post.updatedAt || '';
+      }
+      if (post.category) current.categories.add(normalizeText(post.category));
+      stats.set(key, current);
+    });
+  return stats;
 }
 
 function normalizeText(value) {
@@ -311,6 +384,10 @@ async function authorNameExists(fullName = '') {
     const post = serializeDoc(doc);
     return post && !post.deletedAt;
   });
+}
+
+function authorKey(fullName = '') {
+  return normalizeText(fullName).toLocaleLowerCase('es-AR');
 }
 
 function profileId(email) {

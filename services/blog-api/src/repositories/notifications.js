@@ -9,6 +9,7 @@ export const NOTIFICATION_EVENTS = {
   commentResolved: 'commentResolved',
   commentReopened: 'commentReopened',
   postPublished: 'postPublished',
+  postEditRequested: 'postEditRequested',
   postEditEnabled: 'postEditEnabled',
   roleChanged: 'roleChanged',
 };
@@ -20,6 +21,7 @@ const DEFAULT_EVENTS = {
   [NOTIFICATION_EVENTS.commentResolved]: true,
   [NOTIFICATION_EVENTS.commentReopened]: true,
   [NOTIFICATION_EVENTS.postPublished]: true,
+  [NOTIFICATION_EVENTS.postEditRequested]: true,
   [NOTIFICATION_EVENTS.postEditEnabled]: true,
   [NOTIFICATION_EVENTS.roleChanged]: true,
 };
@@ -258,7 +260,7 @@ export async function notifyCommentReplied(post, comment, actor) {
 export async function notifyPostPublished(post, actor) {
   if (!isReviewerActor(actor)) return null;
   const emailRecipients = await listOptedInEmails({
-    eventKey: NOTIFICATION_EVENTS.postEditEnabled,
+    eventKey: NOTIFICATION_EVENTS.postPublished,
     emails: [post.authorEmail],
     excludeEmails: [actor?.email],
   });
@@ -279,11 +281,40 @@ export async function notifyPostPublished(post, actor) {
   });
 }
 
+export async function notifyPostEditRequested(post, actor) {
+  const emailRecipients = await listOptedInRecipients({
+    eventKey: NOTIFICATION_EVENTS.postEditRequested,
+    roles: ['admin', 'reviewer'],
+    excludeEmails: [actor?.email],
+  });
+  return queueNotification({
+    type: 'post.editRequested',
+    eventKey: NOTIFICATION_EVENTS.postEditRequested,
+    actor,
+    post,
+    emailRecipients,
+    targetRoles: ['admin', 'reviewer'],
+    excludeEmails: [actor?.email],
+    subject: `Solicitud de edición: ${post.title}`,
+    text: [
+      `${actor?.name || actor?.email} solicitó habilitar una edicion.`,
+      `Titulo: ${post.title}`,
+      `Autor: ${post.authorName || post.authorEmail}`,
+      `Abrir panel: ${adminPostUrl(post.id)}`,
+    ].join('\n'),
+  });
+}
+
 export async function notifyPostEditEnabled(post, actor) {
   if (!isReviewerActor(actor)) return null;
-  const emailRecipients = await listOptedInEmails({
-    eventKey: NOTIFICATION_EVENTS.postPublished,
+  const directRecipients = await listOptedInEmails({
+    eventKey: NOTIFICATION_EVENTS.postEditEnabled,
     emails: [post.authorEmail],
+    excludeEmails: [actor?.email],
+  });
+  const roleRecipients = await listOptedInRecipients({
+    eventKey: NOTIFICATION_EVENTS.postEditEnabled,
+    roles: ['admin', 'reviewer'],
     excludeEmails: [actor?.email],
   });
   return queueNotification({
@@ -291,8 +322,9 @@ export async function notifyPostEditEnabled(post, actor) {
     eventKey: NOTIFICATION_EVENTS.postEditEnabled,
     actor,
     post,
-    emailRecipients,
+    emailRecipients: [...directRecipients, ...roleRecipients],
     targetEmails: [post.authorEmail],
+    targetRoles: ['admin', 'reviewer'],
     excludeEmails: [actor?.email],
     subject: `Edicion habilitada: ${post.title}`,
     text: [

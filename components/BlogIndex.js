@@ -4,7 +4,9 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { taxonomyKey } from '../lib/taxonomy';
 
-export default function BlogIndex({ posts = [], autorFiltro = '', authorProfile = null }) {
+const DEFAULT_PROFILE_PHOTO = '/default_profile.png';
+
+export default function BlogIndex({ posts = [], autorFiltro = '', authorProfile = null, authors = [] }) {
   const [query, setQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('');
   const filtrandoAutor = Boolean(autorFiltro);
@@ -86,6 +88,34 @@ export default function BlogIndex({ posts = [], autorFiltro = '', authorProfile 
               {hasFilters ? ' con los filtros actuales.' : '.'}
             </p>
           </div>
+
+          {!filtrandoAutor && authors.length > 0 && (
+            <section className="authors-teaser" aria-labelledby="authors-teaser-title">
+              <div className="authors-teaser-head">
+                <div>
+                  <span>Autores</span>
+                  <h2 id="authors-teaser-title">Conoce a nuestros autores</h2>
+                  <p>Voces, temas y recorridos que le dan forma al blog.</p>
+                </div>
+                <Link href="/blog/autores" className="btn btn-ghost">Ver todos</Link>
+              </div>
+              <div className="authors-teaser-grid">
+                {authors.slice(0, 4).map((author) => (
+                  <article className="authors-teaser-card" key={author.authorSlug || author.fullName}>
+                    <Link href={hrefAutorBlog(author.fullName)} aria-label={`Ver notas de ${author.fullName}`}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={author.photoUrl || DEFAULT_PROFILE_PHOTO} alt="" />
+                      <div>
+                        {author.focusArea && <span>{author.focusArea}</span>}
+                        <h3>{author.fullName}</h3>
+                        <p>{author.postCount} {author.postCount === 1 ? 'nota publicada' : 'notas publicadas'}</p>
+                      </div>
+                    </Link>
+                  </article>
+                ))}
+              </div>
+            </section>
+          )}
 
           {postsPorAutor.length === 0 && (
             <div className="empty">

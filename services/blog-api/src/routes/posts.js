@@ -33,6 +33,7 @@ import {
   notifyCommentReplied,
   notifyCommentStatusChanged,
   notifyPostEditEnabled,
+  notifyPostEditRequested,
   notifyPostPublished,
   notifyPostSubmittedForReview,
   safeNotify,
@@ -162,6 +163,7 @@ export function postsRouter({ writeLimiter }) {
   router.post('/:id/request-edit', writeLimiter, requireAuth, requireRole('blog'), async (req, res, next) => {
     try {
       const post = await requestPostEdit(req.params.id, req.user);
+      await safeNotify(() => notifyPostEditRequested(post, req.user));
       res.json({ item: post });
     } catch (err) {
       next(err);

@@ -14,6 +14,7 @@ import {
   notifyCommentReplied,
   notifyCommentStatusChanged,
   notifyPostEditEnabled,
+  notifyPostEditRequested,
   notifyPostPublished,
   notifyPostSubmittedForReview,
 } from '../src/repositories/notifications.js';
@@ -23,6 +24,7 @@ import {
   deleteManagedAuthorProfile,
   getPublicAuthorProfileBySlug,
   getUserProfile,
+  listPublicAuthorProfiles,
   sanitizeProfile,
   updateManagedAuthorProfile,
   updateUserProfile,
@@ -87,6 +89,7 @@ test('user profiles normalize personal fields separately from roles', () => {
     firstName: '  Juan  ',
     lastName: '  Perez  ',
     description: '  Editor   politico  ',
+    focusArea: '  Seguridad   internacional  ',
     closingPhrase: '  Una   mirada propia.  ',
     photoUrl: 'https://example.com/foto.png',
     publicProfileEnabled: 'true',
@@ -94,6 +97,7 @@ test('user profiles normalize personal fields separately from roles', () => {
     firstName: 'Juan',
     lastName: 'Perez',
     description: 'Editor politico',
+    focusArea: 'Seguridad internacional',
     closingPhrase: 'Una mirada propia.',
     photoUrl: 'https://example.com/foto.png',
     publicProfileEnabled: true,
@@ -116,6 +120,7 @@ test('user profile public opt-in persists after save and reload', async () => {
       firstName: 'Juan Cruz',
       lastName: 'Galarza',
       description: 'Autor de relaciones internacionales.',
+      focusArea: 'Relaciones internacionales y seguridad.',
       closingPhrase: 'Una mirada desde relaciones internacionales.',
       publicProfileEnabled: true,
     });
@@ -134,7 +139,50 @@ test('user profile public opt-in persists after save and reload', async () => {
     const publicProfile = await getPublicAuthorProfileBySlug('juan-cruz-galarza');
     assert.equal(publicProfile.fullName, 'Juan Cruz Galarza');
     assert.equal(publicProfile.description, 'Bio actualizada.');
+    assert.equal(publicProfile.focusArea, 'Relaciones internacionales y seguridad.');
     assert.equal(publicProfile.closingPhrase, 'Una mirada desde relaciones internacionales.');
+  } finally {
+    setFirestoreForTests(null);
+  }
+});
+
+test('public author profiles list published author cards with stats', async () => {
+  const firestore = createMemoryFirestore();
+  setFirestoreForTests(firestore);
+
+  try {
+    await firestore.collection('posts').doc('post-1').set({
+      authorName: 'Juan Cruz Galarza',
+      title: 'Nota publicada',
+      slug: 'nota-publicada',
+      category: 'Relaciones Internacionales',
+      status: 'published',
+      publishedAt: '2026-07-14T10:00:00.000Z',
+    });
+    await firestore.collection('posts').doc('post-2').set({
+      authorName: 'Juan Cruz Galarza',
+      title: 'Nota archivada',
+      slug: 'nota-archivada',
+      category: 'Archivo',
+      status: 'archived',
+      publishedAt: '2026-07-15T10:00:00.000Z',
+    });
+
+    await updateUserProfile({ email: 'juan@politeia.ar', name: 'Juan' }, {
+      firstName: 'Juan Cruz',
+      lastName: 'Galarza',
+      description: 'Autor de relaciones internacionales.',
+      focusArea: 'Relaciones internacionales y seguridad.',
+      publicProfileEnabled: true,
+    });
+
+    const result = await listPublicAuthorProfiles();
+    assert.equal(result.items.length, 1);
+    assert.equal(result.items[0].fullName, 'Juan Cruz Galarza');
+    assert.equal(result.items[0].focusArea, 'Relaciones internacionales y seguridad.');
+    assert.equal(result.items[0].postCount, 1);
+    assert.equal(result.items[0].latestPostTitle, 'Nota publicada');
+    assert.deepEqual(result.items[0].categories, ['Relaciones Internacionales']);
   } finally {
     setFirestoreForTests(null);
   }
@@ -193,6 +241,7 @@ test('admin managed author profiles can be edited', async () => {
       firstName: 'Autora',
       lastName: 'Editada',
       description: 'Perfil actualizado.',
+      focusArea: 'Instituciones y cultura politica.',
       closingPhrase: 'Cierre administrado.',
       photoUrl: 'https://example.com/autora.png',
       publicProfileEnabled: true,
@@ -202,6 +251,7 @@ test('admin managed author profiles can be edited', async () => {
     assert.equal(updated.fullName, 'Autora Editada');
     assert.equal(updated.authorSlug, 'autora-editada');
     assert.equal(updated.description, 'Perfil actualizado.');
+    assert.equal(updated.focusArea, 'Instituciones y cultura politica.');
     assert.equal(updated.closingPhrase, 'Cierre administrado.');
     assert.equal(updated.photoUrl, 'https://example.com/autora.png');
     assert.equal(updated.managedAuthor, true);
@@ -209,6 +259,7 @@ test('admin managed author profiles can be edited', async () => {
 
     const publicProfile = await getPublicAuthorProfileBySlug('autora-editada');
     assert.equal(publicProfile.fullName, 'Autora Editada');
+    assert.equal(publicProfile.focusArea, 'Instituciones y cultura politica.');
     assert.equal(publicProfile.closingPhrase, 'Cierre administrado.');
   } finally {
     setFirestoreForTests(null);
@@ -295,9 +346,15 @@ test('in-app notifications target roles and emails independently from email opt-
     authorInbox = await listInAppNotifications(author);
     assert.equal(authorInbox.items.some((item) => item.type === 'post.published'), true);
 
+    await notifyPostEditRequested(post, author);
+    reviewerInbox = await listInAppNotifications(reviewer);
+    assert.equal(reviewerInbox.items.some((item) => item.type === 'post.editRequested'), true);
+
     await notifyPostEditEnabled(post, reviewer);
     authorInbox = await listInAppNotifications(author);
     assert.equal(authorInbox.items.some((item) => item.type === 'post.editEnabled'), true);
+    const adminEditInbox = await listInAppNotifications(admin);
+    assert.equal(adminEditInbox.items.some((item) => item.type === 'post.editEnabled'), true);
 
     const unreadBefore = authorInbox.unreadCount;
     const first = authorInbox.items[0];
@@ -597,6 +654,14 @@ class MemoryCollection {
       .map(([id, data]) => memorySnapshot(id, data));
     return new MemoryQuery(docs);
   }
+
+  orderBy(field, direction = 'asc') {
+    const multiplier = direction === 'desc' ? -1 : 1;
+    const docs = Array.from(this.store.entries())
+      .map(([id, data]) => memorySnapshot(id, data))
+      .sort((a, b) => String(a.data()?.[field] || '').localeCompare(String(b.data()?.[field] || '')) * multiplier);
+    return new MemoryQuery(docs);
+  }
 }
 
 class MemoryDoc {
@@ -636,8 +701,8 @@ class MemoryQuery {
     this.empty = docs.length === 0;
   }
 
-  limit() {
-    return this;
+  limit(count) {
+    return new MemoryQuery(this.docs.slice(0, count));
   }
 
   async get() {

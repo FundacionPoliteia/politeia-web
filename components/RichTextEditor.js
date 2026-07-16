@@ -77,6 +77,7 @@ export default function RichTextEditor({
   disabled = false,
 }) {
   const [uploading, setUploading] = useState(false);
+  const [commentSubmitting, setCommentSubmitting] = useState(false);
   const [tableMenuOpen, setTableMenuOpen] = useState(false);
   const [commentDraft, setCommentDraft] = useState(null);
   const fileInputRef = useRef(null);
@@ -117,7 +118,7 @@ export default function RichTextEditor({
       TableCell,
       ReviewComment,
       Placeholder.configure({
-        placeholder: 'Escribi o importá el contenido de la nota...',
+        placeholder: 'Escribi o importa el contenido de la nota...',
       }),
     ],
     content: markdownToHtml(value),
@@ -186,35 +187,40 @@ export default function RichTextEditor({
   }
 
   async function submitReviewComment() {
-    if (!editor || !commentDraft || !commentDraft.body.trim()) return;
+    if (!editor || !commentDraft || !commentDraft.body.trim() || commentSubmitting) return;
 
     const previousMarkdown = htmlToMarkdown(editor.getHTML(), turndown);
     const commentId = createReviewCommentId();
+    setCommentSubmitting(true);
 
-    editor
-      .chain()
-      .focus()
-      .setTextSelection({ from: commentDraft.from, to: commentDraft.to })
-      .setMark('reviewComment', { commentId })
-      .run();
-    const markdown = htmlToMarkdown(editor.getHTML(), turndown);
+    try {
+      editor
+        .chain()
+        .focus()
+        .setTextSelection({ from: commentDraft.from, to: commentDraft.to })
+        .setMark('reviewComment', { commentId })
+        .run();
+      const markdown = htmlToMarkdown(editor.getHTML(), turndown);
 
-    const comment = await onCreateComment({
-      body: commentDraft.body.trim(),
-      selectedText: commentDraft.selectedText,
-      commentId,
-      contentMarkdown: markdown,
-    });
-    if (!comment?.id) {
-      lastAppliedMarkdown.current = previousMarkdown;
-      editor.commands.setContent(markdownToHtml(previousMarkdown), false);
-      onChange(previousMarkdown);
-      return;
+      const comment = await onCreateComment({
+        body: commentDraft.body.trim(),
+        selectedText: commentDraft.selectedText,
+        commentId,
+        contentMarkdown: markdown,
+      });
+      if (!comment?.id) {
+        lastAppliedMarkdown.current = previousMarkdown;
+        editor.commands.setContent(markdownToHtml(previousMarkdown), false);
+        onChange(previousMarkdown);
+        return;
+      }
+
+      lastAppliedMarkdown.current = markdown;
+      onChange(markdown);
+      setCommentDraft(null);
+    } finally {
+      setCommentSubmitting(false);
     }
-
-    lastAppliedMarkdown.current = markdown;
-    onChange(markdown);
-    setCommentDraft(null);
   }
 
   return (
@@ -380,11 +386,12 @@ export default function RichTextEditor({
               />
             </label>
             <div className="admin-modal-actions">
-              <button className="btn btn-ghost" onClick={() => setCommentDraft(null)} type="button">
+              <button className="btn btn-ghost" disabled={commentSubmitting} onClick={() => setCommentDraft(null)} type="button">
                 Cancelar
               </button>
-              <button className="btn btn-primary" disabled={!commentDraft.body.trim()} onClick={submitReviewComment} type="button">
-                Agregar comentario
+              <button className="btn btn-primary" disabled={commentSubmitting || !commentDraft.body.trim()} onClick={submitReviewComment} type="button">
+                {commentSubmitting ? 'Agregando...' : 'Agregar comentario'}
+                {commentSubmitting && <span className="admin-button-spinner" aria-hidden="true" />}
               </button>
             </div>
           </div>
