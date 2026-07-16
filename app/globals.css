@@ -4555,12 +4555,12 @@ a {
   .admin-tabs {
     position: fixed;
     left: 12px;
-    right: auto;
+    right: 76px;
     bottom: calc(12px + env(safe-area-inset-bottom));
     z-index: 120;
     display: flex;
-    width: max-content;
-    max-width: calc(100vw - 88px);
+    width: auto;
+    max-width: none;
     overflow-x: auto;
     border-radius: 999px;
     padding: 6px;
