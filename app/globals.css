@@ -1850,7 +1850,7 @@ a {
 }
 
 .admin-page .sec {
-  padding: 56px 0
+  padding: 32px 0
 }
 
 .admin-hero {
@@ -1934,37 +1934,23 @@ a {
 }
 
 .admin-panel-tabsbar {
-  position: sticky;
-  top: 16px;
-  z-index: 90;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  display: flex;
   align-items: center;
+  justify-content: center;
   gap: 12px;
-  background: var(--blanco);
-  border: 1px solid var(--linea);
-  border-radius: 999px;
-  padding: 8px 10px;
-  margin-bottom: 22px;
-  box-shadow: 0 14px 34px rgba(26, 26, 55, .08)
-}
-
-.admin-panel-tabsbar .admin-tabs {
-  grid-column: 2;
-  margin: 0
-}
-
-.admin-panel-tabsbar .admin-profile-nav-button {
-  grid-column: 3;
-  grid-row: 1;
-  justify-self: start
+  margin-bottom: 22px
 }
 
 .admin-panel-tabsbar .admin-session-actions {
-  grid-column: 3;
-  grid-row: 1;
-  justify-self: end;
-  margin-left: 0
+  margin-left: auto
+}
+
+@media(min-width:961px) {
+  .admin-panel-navbar {
+    position: sticky;
+    top: 16px;
+    z-index: 45
+  }
 }
 
 .admin-panel-user {
@@ -4515,7 +4501,7 @@ a {
   }
 
   .admin-page .sec {
-    padding: 28px 0 44px
+    padding: 16px 0 44px
   }
 
   .admin-panel-navbar {
@@ -4524,14 +4510,7 @@ a {
   }
 
   .admin-panel-tabsbar {
-    position: static;
-    display: block;
-    background: transparent;
-    border: 0;
-    border-radius: 0;
-    padding: 0;
-    margin-bottom: 16px;
-    box-shadow: none
+    margin-bottom: 16px
   }
 
   .admin-panel-user span {
