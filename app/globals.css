@@ -4527,8 +4527,8 @@ a {
 
   .admin-notification-button {
     position: fixed;
-    top: calc(12px + env(safe-area-inset-top));
-    right: 12px;
+    top: calc(16px + env(safe-area-inset-top));
+    right: 10px;
     z-index: 125;
     box-shadow: 0 12px 26px rgba(26, 26, 55, .16)
   }
@@ -4546,10 +4546,14 @@ a {
     box-shadow: 0 -18px 52px rgba(26, 26, 55, .2)
   }
 
-  .admin-inbox-head,
   .admin-inbox-actions {
     align-items: stretch;
     flex-direction: column
+  }
+
+  .admin-inbox-head {
+    align-items: flex-start;
+    flex-direction: row
   }
 
   .admin-tabs {
