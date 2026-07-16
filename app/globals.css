@@ -584,6 +584,7 @@ a {
   margin-bottom: 10px;
   display: -webkit-box;
   -webkit-line-clamp: 3;
+  line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden
 }
@@ -603,6 +604,7 @@ a {
   margin-top: 2px;
   display: -webkit-box;
   -webkit-line-clamp: 3;
+  line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden
 }
@@ -1032,7 +1034,8 @@ a {
   .blog-index-section .post-excerpt {
     font-size: 1rem;
     line-height: 1.52;
-    -webkit-line-clamp: 4
+    -webkit-line-clamp: 4;
+    line-clamp: 3;
   }
 
   .blog-index-section .post-body .meta {
@@ -1406,6 +1409,7 @@ a {
   text-shadow: 0 2px 16px rgba(0, 0, 0, .35);
   display: -webkit-box;
   -webkit-line-clamp: 4;
+  line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden
 }
@@ -4281,6 +4285,7 @@ a {
   margin-top: 2px;
   display: -webkit-box;
   -webkit-line-clamp: 3;
+  line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden
 }
@@ -4373,6 +4378,7 @@ a {
   quotes: none;
   display: -webkit-box;
   -webkit-line-clamp: 3;
+  line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden
 }
