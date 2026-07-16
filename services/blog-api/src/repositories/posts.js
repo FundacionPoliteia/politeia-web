@@ -25,7 +25,6 @@ const PUBLIC_STATUSES = ['published', 'published-edition'];
 export async function listPublishedPosts({ limit = 20, cursor = '' }) {
   const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
   let query = posts()
-    .where('deletedAt', '==', null)
     .orderBy('publishedAt', 'desc')
     .limit((safeLimit + 1) * 4);
 
@@ -34,7 +33,7 @@ export async function listPublishedPosts({ limit = 20, cursor = '' }) {
   const snapshot = await query.get();
   const publicDocs = snapshot.docs
     .map(serializeDoc)
-    .filter((post) => PUBLIC_STATUSES.includes(post.status))
+    .filter((post) => !post.deletedAt && PUBLIC_STATUSES.includes(post.status))
     .slice(0, safeLimit + 1);
   const docs = publicDocs.slice(0, safeLimit).map(toPublicPost);
   const nextCursor = publicDocs.length > safeLimit
@@ -77,12 +76,11 @@ export async function getPublishedPostBySlug(slug) {
 async function findPublicPostBySlugField(field, slug) {
   const snapshot = await posts()
     .where(field, '==', slug)
-    .where('deletedAt', '==', null)
     .limit(10)
     .get();
 
   if (snapshot.empty) return null;
-  return snapshot.docs.map(serializeDoc).find((item) => PUBLIC_STATUSES.includes(item.status)) || null;
+  return snapshot.docs.map(serializeDoc).find((item) => !item.deletedAt && PUBLIC_STATUSES.includes(item.status)) || null;
 }
 
 export async function ensureSlugAvailable(slug, exceptId = '') {
