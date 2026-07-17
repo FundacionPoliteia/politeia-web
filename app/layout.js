@@ -2,7 +2,7 @@ import './globals.css';
 
 export const metadata = {
   title: 'Politeia - Fundación',
-  description: 'Acercar la ciudadanía a la política.',
+  description: 'Acercar la ciudadanía a la polótica.',
 };
 
 export default function RootLayout({ children }) {

@@ -52,6 +52,11 @@ components/
   Nav.js                 Navegacion principal
   NewsletterForm.js      Formulario cliente para newsletter
 
+brand/
+  politeia-brand-kit.html Guia visual navegable de marca
+  politeia-tokens.css     Tokens CSS reutilizables entre web-apps
+  politeia-tokens.json    Tokens portables para herramientas de diseno
+
 lib/
   blogApi.js             Cliente publico para la API de blogs
   wordpress.js           Cliente legado de WordPress, no usado por las rutas actuales
@@ -73,6 +78,16 @@ CHEAT-SHEET.md           Referencia rapida de comandos y patrones de Next.js
 - `/equipo`: miembros y areas del equipo.
 - `/blog`: listado de notas publicadas desde la API propia.
 - `/blog/[slug]`: pagina individual de una nota.
+
+## Sistema visual
+
+La fuente de verdad de marca vive en `brand/`.
+
+- `brand/politeia-tokens.css`: variables CSS compartibles con otras web-apps.
+- `brand/politeia-tokens.json`: tokens para herramientas de diseno o pipelines.
+- `brand/politeia-brand-kit.html`: guia visual para revisar colores, tipografia, componentes y reglas de uso.
+
+La app actual importa esos tokens desde `app/globals.css`. Para remodelar otra app, copiar o consumir `brand/politeia-tokens.css` antes de sus estilos propios.
 
 ## Flujo de datos del blog
 

@@ -1,14 +1,4 @@
-:root {
-  --tinta: #1a1a37;
-  --azul: #137a9f;
-  --rosa: #fce3da;
-  --blanco: #ffffff;
-  --hueso: #f7f5f2;
-  --gris: #5b5b6b;
-  --linea: rgba(26, 26, 55, .12);
-  --display: 'Fraunces', Georgia, serif;
-  --texto: 'Archivo', system-ui, sans-serif;
-}
+@import "../brand/politeia-tokens.css";
 
 * {
   margin: 0;
