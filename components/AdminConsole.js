@@ -82,7 +82,7 @@ const EMPTY_PROFILE = {
   focusArea: '',
   closingPhrase: '',
   photoUrl: '',
-  publicProfileEnabled: false,
+  publicProfileEnabled: true,
   canSharePublicProfile: false,
   authorSlug: '',
   fullName: '',
@@ -139,9 +139,9 @@ export default function AdminConsole() {
   const [importing, setImporting] = useState(false);
   const [googleButtonStatus, setGoogleButtonStatus] = useState(GOOGLE_CLIENT_ID ? 'loading' : 'disabled');
   const [isLocalPanelHost, setIsLocalPanelHost] = useState(false);
-  const [currentOrigin, setCurrentOrigin] = useState('');
   const [previewOpen, setPreviewOpen] = useState(false);
   const [profilePreviewOpen, setProfilePreviewOpen] = useState(false);
+  const [profileConsentOpen, setProfileConsentOpen] = useState(false);
   const [previewCardOpen, setPreviewCardOpen] = useState(true);
   const [pendingAction, setPendingAction] = useState(null);
   const [editRequestConfirmOpen, setEditRequestConfirmOpen] = useState(false);
@@ -184,6 +184,7 @@ export default function AdminConsole() {
   const [reviewCommentDialog, setReviewCommentDialog] = useState(null);
   const [useManualAuthorNote, setUseManualAuthorNote] = useState(false);
   const signInRef = useRef(null);
+  const googlePromptAttemptedRef = useRef(false);
   const userRef = useRef(null);
   const docxInputRef = useRef(null);
   const profilePhotoInputRef = useRef(null);
@@ -236,7 +237,6 @@ export default function AdminConsole() {
   );
 
   useEffect(() => {
-    setCurrentOrigin(window.location.origin);
     setIsLocalPanelHost(isLocalHostname(window.location.hostname));
   }, []);
 
@@ -368,6 +368,7 @@ export default function AdminConsole() {
   useEffect(() => {
     const hasOpenModal = previewOpen
       || profilePreviewOpen
+      || profileConsentOpen
       || pendingAction
       || editRequestConfirmOpen
       || categoryDeleteTarget
@@ -377,7 +378,7 @@ export default function AdminConsole() {
     if (!hasOpenModal) return undefined;
 
     function handleModalEscape(event) {
-      if (event.key !== 'Escape' || busy) return;
+      if (event.key !== 'Escape' || busy || savingProfile) return;
       if (reviewCommentDialog) {
         setReviewCommentDialog(null);
         return;
@@ -402,6 +403,10 @@ export default function AdminConsole() {
         setPendingAction(null);
         return;
       }
+      if (profileConsentOpen) {
+        setProfileConsentOpen(false);
+        return;
+      }
       if (profilePreviewOpen) {
         setProfilePreviewOpen(false);
         return;
@@ -411,7 +416,7 @@ export default function AdminConsole() {
 
     window.addEventListener('keydown', handleModalEscape);
     return () => window.removeEventListener('keydown', handleModalEscape);
-  }, [adminProfileDeleteTarget, busy, categoryDeleteTarget, editRequestConfirmOpen, editingReviewComment, pendingAction, previewOpen, profilePreviewOpen, reviewCommentDialog]);
+  }, [adminProfileDeleteTarget, busy, categoryDeleteTarget, editRequestConfirmOpen, editingReviewComment, pendingAction, previewOpen, profileConsentOpen, profilePreviewOpen, reviewCommentDialog, savingProfile]);
 
   function initializeGoogle() {
     if (userRef.current) {
@@ -437,6 +442,10 @@ export default function AdminConsole() {
         shape: 'pill',
         width: 260,
       });
+      if (!googlePromptAttemptedRef.current) {
+        googlePromptAttemptedRef.current = true;
+        window.google.accounts.id.prompt();
+      }
       window.setTimeout(() => {
         setGoogleButtonStatus(signInRef.current?.childElementCount ? 'ready' : 'failed');
       }, 1200);
@@ -537,9 +546,9 @@ export default function AdminConsole() {
         throw new Error(`Solo pueden ingresar cuentas habilitadas.`);
       }
       setUser(data.user);
-    } catch (err) {
+    } catch (_err) {
       setUser(null);
-      setMessage(authErrorMessage(err));
+      setMessage('No pudimos autorizar esta cuenta. Verifica que este habilitada e intenta nuevamente.');
     }
   }
 
@@ -550,6 +559,7 @@ export default function AdminConsole() {
         credentials: 'include',
       });
     } finally {
+      googlePromptAttemptedRef.current = false;
       setUser(null);
       setPosts([]);
       setCategories([]);
@@ -773,7 +783,10 @@ export default function AdminConsole() {
       const data = await api('/v1/profile');
       const nextProfile = normalizeProfile(data.item);
       setUserProfile(nextProfile);
-      setProfileDraft(nextProfile);
+      setProfileDraft({
+        ...nextProfile,
+        publicProfileEnabled: nextProfile.updatedAt ? nextProfile.publicProfileEnabled : true,
+      });
       if (profileNeedsSetup(nextProfile)) {
         setActivePanelTab('profile');
       }
@@ -907,6 +920,7 @@ export default function AdminConsole() {
       });
       setUserProfile(nextProfile);
       setProfileDraft(nextProfile);
+      setProfileConsentOpen(false);
       if (!form.id && !form.authorName && nextProfile.fullName) {
         setForm((current) => normalizeForm({
           ...current,
@@ -920,6 +934,14 @@ export default function AdminConsole() {
     } finally {
       setSavingProfile(false);
     }
+  }
+
+  function requestUserProfileSave() {
+    if (profileDraft.publicProfileEnabled) {
+      setProfileConsentOpen(true);
+      return;
+    }
+    saveUserProfile();
   }
 
   function updateProfileDraft(field, value) {
@@ -1684,23 +1706,25 @@ export default function AdminConsole() {
           </button>
         </div>
       )}
-      <section className="admin-hero">
-        <div className="wrap admin-hero-in">
-          <div>
-            <span className="eyebrow">Panel interno</span>
-            <h1>Gestor de contenido</h1>
-            <p>Crea borradores, prepara notas para revision y publica contenido editorial. Ante cambios de acceso o dudas del flujo, contacta al equipo responsable del panel.</p>
+      {user && canAccessPanel && (
+        <section className="admin-hero">
+          <div className="wrap admin-hero-in">
+            <div>
+              <span className="eyebrow">Panel interno</span>
+              <h1>Gestor de contenido</h1>
+              <p>Crea borradores, prepara notas para revision y publica contenido editorial. Ante cambios de acceso o dudas del flujo, contacta al equipo responsable del panel.</p>
+            </div>
+            <Link
+              href="https://www.politeia.ar/blog"
+              className="btn btn-ghost"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Ver blog publico
+            </Link>
           </div>
-          <Link
-            href="https://www.politeia.ar/blog"
-            className="btn btn-ghost"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Ver blog publico
-          </Link>
-        </div>
-      </section>
+        </section>
+      )}
 
       {user && canAccessPanel && notificationsOpen && (
         <div className="admin-notification-overlay" role="presentation" onMouseDown={() => setNotificationsOpen(false)}>
@@ -1765,26 +1789,22 @@ export default function AdminConsole() {
         </div>
       )}
 
-      <section className="sec">
-        <div className="wrap">
+      <section className={user && canAccessPanel ? 'sec' : 'admin-access-section'}>
+        <div className={user && canAccessPanel ? 'wrap' : 'admin-access-wrap'}>
           {!API_BASE || !GOOGLE_CLIENT_ID ? (
-            <div className="admin-empty">
-              Falta configurar `NEXT_PUBLIC_BLOG_API_BASE_URL` y `NEXT_PUBLIC_GOOGLE_CLIENT_ID`.
+            <div className="admin-access-error" role="alert">
+              <h1>No pudimos iniciar sesion</h1>
+              <p>El acceso no esta disponible en este momento. Intenta nuevamente mas tarde.</p>
             </div>
           ) : checkingSession ? (
-            <div className="admin-login">
-              <h2>Validando sesion</h2>
-              <p>Estamos revisando si ya tenes una sesion activa @{ALLOWED_EMAIL_DOMAIN}.</p>
+            <div className="admin-access-loading" aria-label="Comprobando sesion" role="status">
+              <span className="admin-spinner" aria-hidden="true" />
             </div>
           ) : !user ? (
-            <div className="admin-login">
-              <h2>Ingresa con Google</h2>
-              <p>Usa una cuenta @{ALLOWED_EMAIL_DOMAIN} o una cuenta @{ASSIGNED_EMAIL_DOMAIN} habilitada por un admin. Tu perfil se determina por grupos y asignaciones internas.</p>
-              <div ref={signInRef}></div>
+            <div className="admin-access-login" aria-label="Iniciar sesion con Google">
+              <div className="admin-google-signin" ref={signInRef}></div>
               {googleButtonStatus === 'failed' && (
-                <p className="admin-login-help">
-                  Google no pudo mostrar el boton en este origen. Agrega `{currentOrigin || 'este origin'}` como Authorized JavaScript Origin y revisa que el navegador no este bloqueando `accounts.google.com`.
-                </p>
+                <p className="admin-access-message" role="alert">No pudimos iniciar sesion. Intenta nuevamente.</p>
               )}
               {isLocalPanelHost && isLocalApiBase && (
                 <div className="admin-login-actions">
@@ -1793,19 +1813,14 @@ export default function AdminConsole() {
                   </button>
                 </div>
               )}
-              {isLocalPanelHost && !isLocalApiBase && (
-                <p className="admin-login-help">
-                  Para probar la sesion local, cambia `NEXT_PUBLIC_BLOG_API_BASE_URL` a `http://localhost:8080` y levanta el backend con `DEV_AUTH=true`.
-                </p>
-              )}
             </div>
           ) : !canAccessPanel ? (
-            <div className="admin-empty">
-              <h2>Sin permisos suficientes</h2>
-              <p>No tenes los permisos necesarios para acceder al panel interno. Si crees que esto es un error, escribi a dev@politeia.ar.</p>
+            <div className="admin-access-error">
+              <h1>Acceso no autorizado</h1>
+              <p>No tenes permisos para ingresar. Si crees que se trata de un error, escribi a dev@politeia.ar.</p>
               <div className="admin-login-actions">
                 <button className="btn btn-ghost" onClick={logout} type="button">
-                  Salir e intentar con otra cuenta
+                  Salir
                 </button>
               </div>
             </div>
@@ -1954,11 +1969,12 @@ export default function AdminConsole() {
                           />
                         </label>
                         <label>
-                          Sobre que escribo
-                          <input
+                          Sobre mi
+                          <textarea
                             maxLength="180"
                             onChange={(e) => updateProfileDraft('focusArea', e.target.value)}
-                            placeholder="Miradas o areas sobre las que queres que te identifiquen en 'Conoce a los autores'."
+                            placeholder="Conta brevemente quien sos, que mirada aportas y que te interesa compartir con los lectores. Este texto protagoniza tu card en 'Conoce a los autores'."
+                            rows="3"
                             value={profileDraft.focusArea}
                           />
                         </label>
@@ -1980,8 +1996,8 @@ export default function AdminConsole() {
                               type="checkbox"
                             />
                             <span>
-                              <strong>Mostrar mi perfil junto a mis notas</strong>
-                              <small>Permito que mi nombre, descripcion y foto se usen para armar una pagina publica de autor en el blog.</small>
+                              <strong>Publicar mi perfil de autor</strong>
+                              <small>Permito que mis datos de autor se muestren en el blog cuando mi nombre coincida con una nota.</small>
                             </span>
                           </label>
                         ) : (
@@ -1992,7 +2008,7 @@ export default function AdminConsole() {
                         )}
                         <div className="admin-manager-actions">
                           <span>{profileDraft.fullName ? `Nombre visible: ${profileDraft.fullName}` : 'Si no cargas nombre, se usa tu cuenta.'}</span>
-                          <button className="btn btn-primary" disabled={savingProfile || profilePhotoUploading || isActionLoading('profile-save')} onClick={saveUserProfile} type="button">
+                          <button className="btn btn-primary" disabled={savingProfile || profilePhotoUploading || isActionLoading('profile-save')} onClick={requestUserProfileSave} type="button">
                             {isActionLoading('profile-save') ? 'Guardando perfil...' : 'Guardar perfil'}
                             <ActionSpinner active={isActionLoading('profile-save')} />
                           </button>
@@ -2055,11 +2071,12 @@ export default function AdminConsole() {
                       />
                     </label>
                     <label>
-                      Sobre vos, para "Conoce a los autores"
-                      <input
+                      Sobre mi
+                      <textarea
                         maxLength="180"
                         onChange={(event) => updateAdminProfileDraft('focusArea', event.target.value)}
-                        placeholder="Mirada o areas sobre las que se armar el 'Conoce a los autores'."
+                        placeholder="Presentacion personal que protagoniza la card del autor en 'Conoce a los autores'."
+                        rows="3"
                         value={adminProfileDraft.focusArea}
                       />
                     </label>
@@ -2175,7 +2192,7 @@ export default function AdminConsole() {
                           <th>Perfil</th>
                           <th>Estado</th>
                           <th>Descripcion</th>
-                          <th>Mirada</th>
+                          <th>Sobre mi</th>
                           <th>Slug</th>
                           <th>Actualizado</th>
                           <th>Acciones</th>
@@ -3478,6 +3495,38 @@ export default function AdminConsole() {
                         </section>
                       )}
                     </article>
+                  </div>
+                </div>
+              )}
+              {profileConsentOpen && (
+                <div
+                  className="admin-modal-backdrop"
+                  onMouseDown={() => !savingProfile && setProfileConsentOpen(false)}
+                  role="presentation"
+                >
+                  <div
+                    aria-labelledby="profile-consent-title"
+                    aria-modal="true"
+                    className="admin-modal"
+                    onMouseDown={(event) => event.stopPropagation()}
+                    role="dialog"
+                  >
+                    <h3 id="profile-consent-title">Publicar perfil de autor</h3>
+                    <p>
+                      Al aceptar, tu nombre, foto, descripcion breve, texto "Sobre mi" y frase de cierre podran ser accesibles publicamente en el blog. Tu email no se publica.
+                    </p>
+                    <p>
+                      Podes retirar este consentimiento cuando quieras desmarcando "Publicar mi perfil de autor" y guardando nuevamente.
+                    </p>
+                    <div className="admin-modal-actions">
+                      <button className="btn btn-ghost" disabled={savingProfile || isActionLoading('profile-save')} onClick={() => setProfileConsentOpen(false)} type="button">
+                        Cancelar
+                      </button>
+                      <button className="btn btn-primary" disabled={savingProfile || isActionLoading('profile-save')} onClick={saveUserProfile} type="button">
+                        {isActionLoading('profile-save') ? 'Guardando perfil...' : 'Aceptar y guardar'}
+                        <ActionSpinner active={isActionLoading('profile-save')} />
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}

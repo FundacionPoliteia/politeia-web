@@ -8,13 +8,22 @@ export const metadata = { title: 'Blog - Politeia' };
 export default async function BlogPage({ searchParams }) {
   const params = await searchParams;
   const autorFiltro = normalizarParametro(params?.autor);
+  const categoriaFiltro = normalizarParametro(params?.categoria);
   const [posts, authorProfile, authors] = await Promise.all([
     getPosts(30),
     autorFiltro ? getPublicAuthorProfile(autorFiltro) : null,
     getPublicAuthorProfiles(8),
   ]);
 
-  return <BlogIndex posts={posts} autorFiltro={autorFiltro} authorProfile={authorProfile} authors={authors} />;
+  return (
+    <BlogIndex
+      posts={posts}
+      autorFiltro={autorFiltro}
+      categoriaFiltro={categoriaFiltro}
+      authorProfile={authorProfile}
+      authors={authors}
+    />
+  );
 }
 
 function normalizarParametro(value) {

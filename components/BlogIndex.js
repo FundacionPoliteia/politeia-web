@@ -6,18 +6,19 @@ import { taxonomyKey } from '../lib/taxonomy';
 
 const DEFAULT_PROFILE_PHOTO = '/default_profile.png';
 
-export default function BlogIndex({ posts = [], autorFiltro = '', authorProfile = null, authors = [] }) {
+export default function BlogIndex({ posts = [], autorFiltro = '', categoriaFiltro = '', authorProfile = null, authors = [] }) {
   const [query, setQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('');
   const filtrandoAutor = Boolean(autorFiltro);
+  const filtrandoCategoria = Boolean(categoriaFiltro);
   const authorName = authorProfile?.fullName || autorFiltro;
   const authorLead = authorProfile?.description || 'Publicaciones del autor, reunidas en un mismo lugar.';
   const authorFocusArea = authorProfile?.focusArea || '';
   const authorPhoto = authorProfile?.photoUrl || '';
 
   const postsPorAutor = useMemo(
-    () => filtrarPorAutor(posts, autorFiltro),
-    [posts, autorFiltro]
+    () => filtrarPorCategoria(filtrarPorAutor(posts, autorFiltro), categoriaFiltro),
+    [posts, autorFiltro, categoriaFiltro]
   );
   const postsFiltrados = useMemo(
     () => filtrarPorBusqueda(postsPorAutor, query),
@@ -27,7 +28,7 @@ export default function BlogIndex({ posts = [], autorFiltro = '', authorProfile 
     () => agruparPorCategoria(postsFiltrados),
     [postsFiltrados]
   );
-  const hasFilters = filtrandoAutor || Boolean(query.trim());
+  const hasFilters = filtrandoAutor || filtrandoCategoria || Boolean(query.trim());
 
   function scrollToCategory(sectionId, categoria) {
     setActiveCategory(categoria);
@@ -40,13 +41,21 @@ export default function BlogIndex({ posts = [], autorFiltro = '', authorProfile 
         <div className={filtrandoAutor && authorPhoto ? 'wrap blog-author-hero' : 'wrap'}>
           <div>
             <span className="eyebrow">Blog</span>
-            <h1>{filtrandoAutor ? `Notas escritas por ${authorName}.` : 'Ideas para entender mejor lo publico.'}</h1>
+            <h1>
+              {filtrandoAutor
+                ? `Notas escritas por ${authorName}.`
+                : filtrandoCategoria
+                  ? `Notas sobre ${categoriaFiltro}.`
+                  : 'Ideas para entender mejor lo publico.'}
+            </h1>
             {filtrandoAutor ? (
               <div className="blog-author-about">
                 <span>Sobre mi</span>
                 <p className="lead">{authorLead}</p>
                 {authorFocusArea && <small>Escribe sobre {authorFocusArea}</small>}
               </div>
+            ) : filtrandoCategoria ? (
+              <p className="lead">Articulos publicados dentro de esta categoria.</p>
             ) : (
               <p className="lead">Investigacion, analisis y opinion sobre politica, instituciones y participacion ciudadana.</p>
             )}
@@ -56,7 +65,7 @@ export default function BlogIndex({ posts = [], autorFiltro = '', authorProfile 
                 <img src={authorPhoto} alt="" />
               </div>
             )}
-            {filtrandoAutor ? (
+            {filtrandoAutor || filtrandoCategoria ? (
               <Link href="/blog" className="btn btn-ghost blog-filter-clear">Ver todos</Link>
             ) : (
               <Link href="/blog/autores" className="btn btn-ghost blog-filter-clear">
@@ -98,34 +107,6 @@ export default function BlogIndex({ posts = [], autorFiltro = '', authorProfile 
               {hasFilters ? ' con los filtros actuales.' : '.'}
             </p>
           </div>
-
-          {!filtrandoAutor && authors.length > 0 && (
-            <section className="authors-teaser" aria-labelledby="authors-teaser-title">
-              <div className="authors-teaser-head">
-                <div>
-                  <span>Autores</span>
-                  <h2 id="authors-teaser-title">Conoce a nuestros autores</h2>
-                  <p>Voces, temas y recorridos que le dan forma al blog.</p>
-                </div>
-                <Link href="/blog/autores" className="btn btn-ghost">Ver todos</Link>
-              </div>
-              <div className="authors-teaser-grid">
-                {authors.slice(0, 4).map((author) => (
-                  <article className="authors-teaser-card" key={author.authorSlug || author.fullName}>
-                    <Link href={hrefAutorBlog(author.fullName)} aria-label={`Ver notas de ${author.fullName}`}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={author.photoUrl || DEFAULT_PROFILE_PHOTO} alt="" />
-                      <div>
-                        {author.focusArea && <span>{author.focusArea}</span>}
-                        <h3>{author.fullName}</h3>
-                        <p>{author.postCount} {author.postCount === 1 ? 'nota publicada' : 'notas publicadas'}</p>
-                      </div>
-                    </Link>
-                  </article>
-                ))}
-              </div>
-            </section>
-          )}
 
           {postsPorAutor.length === 0 && (
             <div className="empty">
@@ -207,6 +188,31 @@ export default function BlogIndex({ posts = [], autorFiltro = '', authorProfile 
                     );
                   })}
                 </nav>
+                {!filtrandoAutor && authors.length > 0 && (
+                  <section className="blog-sidebar-authors" aria-labelledby="blog-sidebar-authors-title">
+                    <div className="blog-sidebar-authors-head">
+                      <span>Autores</span>
+                      <Link href="/blog/autores">Ver todos</Link>
+                    </div>
+                    <h3 id="blog-sidebar-authors-title">Conoce a quienes escriben</h3>
+                    <div className="blog-sidebar-authors-list">
+                      {authors.slice(0, 3).map((author) => (
+                        <Link
+                          href={hrefAutorBlog(author.fullName)}
+                          key={author.authorSlug || author.fullName}
+                          aria-label={`Ver notas de ${author.fullName}`}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={author.photoUrl || DEFAULT_PROFILE_PHOTO} alt="" />
+                          <span>
+                            <strong>{author.fullName}</strong>
+                            <small>{author.postCount} {author.postCount === 1 ? 'nota' : 'notas'}</small>
+                          </span>
+                        </Link>
+                      ))}
+                    </div>
+                  </section>
+                )}
               </aside>
             </div>
           )}
@@ -220,6 +226,12 @@ function filtrarPorAutor(posts, autor) {
   const key = taxonomyKey(autor);
   if (!key) return posts;
   return posts.filter((post) => taxonomyKey(post.autor) === key);
+}
+
+function filtrarPorCategoria(posts, categoria) {
+  const key = taxonomyKey(categoria);
+  if (!key) return posts;
+  return posts.filter((post) => taxonomyKey(post.categoria) === key);
 }
 
 function filtrarPorBusqueda(posts, query) {
