@@ -161,6 +161,7 @@ export default function AdminConsole() {
   const [activeReviewCommentNonce, setActiveReviewCommentNonce] = useState(0);
   const [editingReviewComment, setEditingReviewComment] = useState(null);
   const [reviewCommentDialog, setReviewCommentDialog] = useState(null);
+  const [useManualAuthorNote, setUseManualAuthorNote] = useState(false);
   const signInRef = useRef(null);
   const userRef = useRef(null);
   const docxInputRef = useRef(null);
@@ -343,6 +344,49 @@ export default function AdminConsole() {
     }
   }, [activePanelTab, canAccessProfilePanel, canAccessRolesMailPanel, canReviewProfiles]);
 
+  useEffect(() => {
+    const hasOpenModal = previewOpen
+      || pendingAction
+      || editRequestConfirmOpen
+      || categoryDeleteTarget
+      || adminProfileDeleteTarget
+      || reviewCommentDialog
+      || editingReviewComment;
+    if (!hasOpenModal) return undefined;
+
+    function handleModalEscape(event) {
+      if (event.key !== 'Escape' || busy) return;
+      if (reviewCommentDialog) {
+        setReviewCommentDialog(null);
+        return;
+      }
+      if (editingReviewComment) {
+        setEditingReviewComment(null);
+        return;
+      }
+      if (adminProfileDeleteTarget) {
+        setAdminProfileDeleteTarget(null);
+        return;
+      }
+      if (categoryDeleteTarget) {
+        setCategoryDeleteTarget(null);
+        return;
+      }
+      if (editRequestConfirmOpen) {
+        setEditRequestConfirmOpen(false);
+        return;
+      }
+      if (pendingAction) {
+        setPendingAction(null);
+        return;
+      }
+      if (previewOpen) setPreviewOpen(false);
+    }
+
+    window.addEventListener('keydown', handleModalEscape);
+    return () => window.removeEventListener('keydown', handleModalEscape);
+  }, [adminProfileDeleteTarget, busy, categoryDeleteTarget, editRequestConfirmOpen, editingReviewComment, pendingAction, previewOpen, reviewCommentDialog]);
+
   function initializeGoogle() {
     if (userRef.current) {
       clearGoogleSignIn();
@@ -487,6 +531,7 @@ export default function AdminConsole() {
       setPostSearch('');
       setForm(EMPTY_FORM);
       setSavedForm(EMPTY_FORM);
+      setUseManualAuthorNote(false);
       setCoverImageError('');
       setPendingAction(null);
       setCategoryDeleteTarget(null);
@@ -906,6 +951,7 @@ export default function AdminConsole() {
     const nextForm = postToForm(data.item);
     setForm(nextForm);
     setSavedForm(nextForm);
+    setUseManualAuthorNote(Boolean(nextForm.authorNote));
     if (refresh) {
       await Promise.all([loadPosts(), loadCategories()]);
     }
@@ -1192,6 +1238,7 @@ export default function AdminConsole() {
         const nextForm = postToForm(data.item);
         setForm(nextForm);
         setSavedForm(nextForm);
+        setUseManualAuthorNote(Boolean(nextForm.authorNote));
       }
       setMessage(success);
       await loadPosts();
@@ -1223,6 +1270,7 @@ export default function AdminConsole() {
         const nextForm = postToForm(data.item);
         setForm(nextForm);
         setSavedForm(nextForm);
+        setUseManualAuthorNote(Boolean(nextForm.authorNote));
       }
       setMessage('Solicitud de edición enviada.');
       setEditRequestConfirmOpen(false);
@@ -1266,6 +1314,7 @@ export default function AdminConsole() {
     const nextForm = postToForm(post);
     setForm(nextForm);
     setSavedForm(nextForm);
+    setUseManualAuthorNote(Boolean(nextForm.authorNote));
     setCategorySearchTerm('');
     setCoverImageError('');
   }
@@ -1327,6 +1376,7 @@ export default function AdminConsole() {
       if (kind === 'delete' && targetPosts.some((post) => post.id === form.id)) {
         setForm(EMPTY_FORM);
         setSavedForm(EMPTY_FORM);
+        setUseManualAuthorNote(false);
         setCategorySearchTerm('');
         setCoverImageError('');
       }
@@ -1351,6 +1401,7 @@ export default function AdminConsole() {
       if (form.id === id) {
         setForm(EMPTY_FORM);
         setSavedForm(EMPTY_FORM);
+        setUseManualAuthorNote(false);
         setCategorySearchTerm('');
         setCoverImageError('');
       }
@@ -1422,7 +1473,6 @@ export default function AdminConsole() {
     ));
     setAdminUserDrafts((current) => ({ ...current, [email]: current[email] || adminUserNewRoles }));
     setAdminUserEmail('');
-    setAdminUserSearch(email);
     setAdminUsersOpen(true);
   }
 
@@ -1571,9 +1621,11 @@ export default function AdminConsole() {
     ? profileDraft.photoUrl || userProfile.photoUrl || ''
     : '';
   const previewAuthorNote = form.showAuthorNote
-    ? form.authorNote || (previewUsesCurrentProfile ? profileClosingPhrase : '')
+    ? useManualAuthorNote
+      ? form.authorNote
+      : (previewUsesCurrentProfile ? profileClosingPhrase : '')
     : '';
-  const usingProfileClosingPhrase = form.showAuthorNote && previewUsesCurrentProfile && Boolean(profileClosingPhrase) && !form.authorNote;
+  const usingProfileClosingPhrase = form.showAuthorNote && !useManualAuthorNote && previewUsesCurrentProfile && Boolean(profileClosingPhrase);
   const openReviewCommentCount = reviewComments.filter((comment) => comment.status !== 'resolved').length;
   const filteredReviewComments = useMemo(() => {
     if (reviewCommentFilter === 'all') return reviewComments;
@@ -1601,7 +1653,14 @@ export default function AdminConsole() {
             <h1>Gestor de contenido</h1>
             <p>Crea borradores, prepara notas para revision y publica contenido editorial. Ante cambios de acceso o dudas del flujo, contacta al equipo responsable del panel.</p>
           </div>
-          <Link href="https://politeia.ar/blog" className="btn btn-ghost">Ver blog publico</Link>
+          <Link
+            href="https://www.politeia.ar/blog"
+            className="btn btn-ghost"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Ver blog publico
+          </Link>
         </div>
       </section>
 
@@ -2592,6 +2651,7 @@ export default function AdminConsole() {
                         });
                         setForm(nextForm);
                         setSavedForm(nextForm);
+                        setUseManualAuthorNote(false);
                         setCategorySearchTerm('');
                         setCoverImageError('');
                       }}
@@ -2941,29 +3001,56 @@ export default function AdminConsole() {
                   <section className="admin-author-ending">
                     <div>
                       <span>Final de nota</span>
-                      <p>Opcionalmente muestra un mini-perfil con foto, nombre y una frase breve al cierre.</p>
+                      <p>Opcionalmente muestra el cierre de autor con foto, nombre y una frase breve al final.</p>
                     </div>
                     <label className="admin-cover-toggle">
                       <input
                         checked={form.showAuthorNote}
                         disabled={publishedAuthorLocked}
-                        onChange={(e) => updateForm('showAuthorNote', e.target.checked)}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setForm((current) => normalizeForm({
+                            ...current,
+                            showAuthorNote: checked,
+                            authorNote: checked ? current.authorNote : '',
+                          }));
+                          if (!checked) setUseManualAuthorNote(false);
+                        }}
                         type="checkbox"
                       />
-                      Mostrar mini-perfil del autor al final
+                      Mostrar cierre de autor
                     </label>
-                    {form.showAuthorNote && previewUsesCurrentProfile && profileClosingPhrase && (
+                    {form.showAuthorNote && previewUsesCurrentProfile && profileClosingPhrase && !useManualAuthorNote && (
                       <label className="admin-cover-toggle">
                         <input
                           checked={usingProfileClosingPhrase}
                           disabled={publishedAuthorLocked}
-                          onChange={(e) => updateForm('authorNote', e.target.checked ? '' : profileClosingPhrase)}
+                          onChange={(e) => {
+                            if (!e.target.checked) {
+                              setUseManualAuthorNote(true);
+                              updateForm('authorNote', profileClosingPhrase);
+                            }
+                          }}
                           type="checkbox"
                         />
                         Usar mi frase de cierre guardada en el perfil
                       </label>
                     )}
-                    {form.showAuthorNote && !usingProfileClosingPhrase && (
+                    {form.showAuthorNote && (
+                      <label className="admin-cover-toggle">
+                        <input
+                          checked={useManualAuthorNote}
+                          disabled={publishedAuthorLocked}
+                          onChange={(e) => {
+                            setUseManualAuthorNote(e.target.checked);
+                            if (!e.target.checked) updateForm('authorNote', '');
+                          }}
+                          type="checkbox"
+                        />
+                        Escribir un cierre manual para esta nota
+                      </label>
+                    )}
+                    {form.showAuthorNote && useManualAuthorNote && (
                       <label>
                         Texto de cierre manual
                         <textarea
@@ -3459,7 +3546,7 @@ function buildPayload(form, canChooseSlug = false) {
     coverImage: form.coverImage || undefined,
     showCoverInPost: form.coverImage ? form.showCoverInPost !== false : true,
     authorName: form.authorName || undefined,
-    authorNote: form.authorNote || undefined,
+    authorNote: form.showAuthorNote === true ? form.authorNote || '' : '',
     showAuthorNote: form.showAuthorNote === true,
     category: sanitizeCategory(form.category) || undefined,
     tags: parseTagsText(form.tagsText),
