@@ -51,8 +51,12 @@ export default function BlogIndex({ posts = [], autorFiltro = '', authorProfile 
                 <img src={authorPhoto} alt="" />
               </div>
             )}
-            {filtrandoAutor && (
+            {filtrandoAutor ? (
               <Link href="/blog" className="btn btn-ghost blog-filter-clear">Ver todos</Link>
+            ) : (
+              <Link href="/blog/autores" className="btn btn-ghost blog-filter-clear">
+                Conoce a nuestros autores
+              </Link>
             )}
           </div>
           {filtrandoAutor && authorPhoto && (
