@@ -7,3 +7,4 @@ services/blog-api/.secrets/
 *.service-account.json
 *service-account*.json
 .yaml
+*.yaml
