@@ -96,7 +96,7 @@ const EMPTY_MANAGED_AUTHOR_PROFILE = {
   focusArea: '',
   closingPhrase: '',
   photoUrl: '',
-  publicProfileEnabled: false,
+  publicProfileEnabled: true,
 };
 
 function ActionSpinner({ active }) {
