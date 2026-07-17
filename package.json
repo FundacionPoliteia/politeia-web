@@ -11,6 +11,8 @@
     "blog-api:start": "npm --prefix services/blog-api start",
     "blog-api:test": "npm --prefix services/blog-api test",
     "blog-api:check": "npm --prefix services/blog-api run check",
+    "blog-api:mail:check": "npm --prefix services/blog-api run mail:check",
+    "blog-api:mail:test": "npm --prefix services/blog-api run mail:test",
     "blog-api:cloud:build": "gcloud builds submit services/blog-api --tag us-central1-docker.pkg.dev/quick-function-500420-v6/politeia/blog-api:latest",
     "blog-api:cloud:deploy": "gcloud run deploy politeia-blog-api --image us-central1-docker.pkg.dev/quick-function-500420-v6/politeia/blog-api:latest --region us-central1 --allow-unauthenticated",
     "blog-api:cloud:redeploy": "npm run blog-api:cloud:deploy",

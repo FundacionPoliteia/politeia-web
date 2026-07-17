@@ -230,26 +230,48 @@ No pegar el JSON ni sus valores en chats, tickets o commits. Si una key se expon
 
 ## Probar emails en desarrollo
 
-El sistema de notificaciones es opt-in por usuario: cada cuenta debe activar "Recibir emails del panel" y los eventos que quiere recibir. Ademas, el mail se envia al `authorEmail` del post. Si estas probando con una cuenta `@gmail.com`, el post tambien debe tener esa cuenta como autor.
+El correo esta dividido en tres canales configurables:
 
-Por defecto el backend local usa:
+```text
+internal    avisos del flujo editorial, siempre sujetos al opt-in del usuario
+updates     mensajes puntuales y pruebas operativas
+newsletter newsletter publico, con confirmacion doble antes del alta
+```
+
+Copiar `services/blog-api/.env.example` a `services/blog-api/.env` y empezar con `MAIL_PROVIDER=console`. Ese modo ejecuta el ciclo completo, guarda entregas en Firestore y escribe `mail delivery` en la terminal, pero no contacta a ningun destinatario.
+
+Configuracion local recomendada:
 
 ```text
 MAIL_PROVIDER=console
-```
-
-Ese modo no manda emails reales. Solo deja entregas en Firestore y escribe en la consola del backend una linea `mail delivery`; el estado queda como `logged`, no `sent`.
-
-Para probar envio real, configurar un proveedor en `services/blog-api/.env` y reiniciar `npm run blog-api:dev`:
-
-```text
-MAIL_PROVIDER=resend
-MAIL_FROM="Politeia <no-reply@politeia.ar>"
-RESEND_API_KEY=tu_api_key_de_resend
+MAIL_PROJECT_KEY=politeia
+MAIL_BRAND_NAME=Politeia
+MAIL_FROM_INTERNAL=Politeia Interno <notificaciones@politeia.ar>
+MAIL_FROM_UPDATES=Politeia Updates <updates@politeia.ar>
+MAIL_FROM_NEWSLETTER=Politeia Newsletter <newsletter@politeia.ar>
+MAIL_REPLY_TO=info@politeia.ar
+NEWSLETTER_AUDIENCE_KEY=politeia-newsletter
+NEWSLETTER_TOKEN_SECRET=una-cadena-larga-distinta-de-session-secret
 APP_BASE_URL=http://admin.localhost:3000
+PUBLIC_SITE_URL=http://localhost:3000
+API_PUBLIC_URL=http://localhost:8080
 ```
 
-`MAIL_FROM` debe usar un dominio/remitente verificado en Resend. Si falta `RESEND_API_KEY`, la entrega queda como fallida con un error claro.
+Validar la configuracion sin mostrar secretos:
+
+```bash
+npm run blog-api:mail:check
+```
+
+Para una prueba manual, definir `MAIL_TEST_TO` en `services/blog-api/.env` y ejecutar:
+
+```bash
+npm run blog-api:mail:test
+```
+
+Con `MAIL_PROVIDER=console` solo se imprime el correo. Para una prueba real, cambiar a `MAIL_PROVIDER=resend`, cargar `RESEND_API_KEY`, `RESEND_SEGMENT_ID` y opcionalmente `RESEND_TOPIC_ID`, reiniciar el backend y repetir el comando.
+
+El formulario de `/blog` crea una suscripcion pendiente. El usuario debe abrir el link de confirmacion antes de quedar activo. En el panel, cada cuenta configura sus avisos internos desde `Mi perfil`; el administrador crea pruebas, borradores o envios desde `Roles`.
 
 No pegues keys reales en tickets, chats o capturas. Si una `RESEND_API_KEY` queda expuesta, revocarla en Resend y crear una nueva antes de seguir probando.
 

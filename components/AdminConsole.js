@@ -5,13 +5,14 @@ import Link from 'next/link';
 import { marked } from 'marked';
 import RichTextEditor from './RichTextEditor';
 import AuthorCard from './AuthorCard';
+import NewsletterAdminPanel from './NewsletterAdminPanel';
 import { parseTagsText, sanitizeCategory, sanitizeTags, taxonomyKey } from '../lib/taxonomy';
 
 const API_BASE = process.env.NEXT_PUBLIC_BLOG_API_BASE_URL || '';
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
 const ALLOWED_EMAIL_DOMAIN = 'politeia.ar';
 const ASSIGNED_EMAIL_DOMAIN = 'gmail.com';
-const SHOW_EMAIL_SETTINGS_UI = false;
+const SHOW_EMAIL_SETTINGS_UI = process.env.NEXT_PUBLIC_EMAIL_SETTINGS_ENABLED !== 'false';
 
 const EMPTY_FORM = {
   id: '',
@@ -2016,6 +2017,43 @@ export default function AdminConsole() {
                       </div>
                     </div>
                   </section>
+                  {SHOW_EMAIL_SETTINGS_UI && notificationPreferences && (
+                    <section className="admin-manager admin-notifications admin-profile-email-settings">
+                      <div className="admin-manager-head">
+                        <div>
+                          <span>Email</span>
+                          <h2>Avisos del flujo editorial</h2>
+                          <p>Elegis si queres recibir por email los movimientos internos que tambien aparecen en notificaciones.</p>
+                        </div>
+                        <button aria-expanded={notificationPreferencesOpen} className="btn btn-ghost" onClick={() => setNotificationPreferencesOpen((open) => !open)} type="button">
+                          {notificationPreferencesOpen ? 'Ocultar opciones' : 'Configurar avisos'}
+                        </button>
+                      </div>
+                      {notificationPreferencesOpen && (
+                        <div className="admin-notification-body">
+                          <label className="admin-switch-row">
+                            <input checked={notificationPreferences.enabled} onChange={(event) => updateNotificationPreference('enabled', event.target.checked)} type="checkbox" />
+                            <span><strong>Recibir emails del panel</strong><small>El opt-in se guarda para {notificationPreferences.email || user.email}.</small></span>
+                          </label>
+                          <div className="admin-notification-options">
+                            {NOTIFICATION_EVENT_LABELS.filter((event) => event.roles.some((role) => roles.includes(role))).map((event) => (
+                              <label key={event.value}>
+                                <input checked={notificationPreferences.events[event.value] !== false} disabled={!notificationPreferences.enabled} onChange={() => toggleNotificationEvent(event.value)} type="checkbox" />
+                                {event.label}
+                              </label>
+                            ))}
+                          </div>
+                          <div className="admin-manager-actions">
+                            <span>{notificationPreferences.enabled ? 'Emails activos para eventos seleccionados.' : 'Emails desactivados.'}</span>
+                            <button className="btn btn-primary" disabled={savingNotificationPreferences || isActionLoading('notification-save')} onClick={saveNotificationPreferences} type="button">
+                              {isActionLoading('notification-save') ? 'Guardando preferencias...' : 'Guardar preferencias'}
+                              <ActionSpinner active={isActionLoading('notification-save')} />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </section>
+                  )}
                 </>
               )}
 
@@ -2280,6 +2318,9 @@ export default function AdminConsole() {
 
               {activePanelTab === 'access' && (
                 <>
+              {canManageUsers && SHOW_EMAIL_SETTINGS_UI && (
+                <NewsletterAdminPanel apiBase={API_BASE} currentEmail={user.email} />
+              )}
               {SHOW_EMAIL_SETTINGS_UI && notificationPreferences && (
                 <section className="admin-manager admin-notifications">
                   <div className="admin-manager-head">

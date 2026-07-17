@@ -210,7 +210,7 @@ Para produccion, cambiar `ALLOWED_ORIGIN=http://localhost:3000` por `https://pol
 `SESSION_SECRET` debe ser una cadena larga y privada. Idealmente guardarla en Secret Manager y pasarla a Cloud Run como secret; si se usa el comando completo directo, reemplazar `CAMBIAR_POR_SECRETO_LARGO` antes de desplegar.
 Si no se usa un grupo separado de revisores, se puede omitir `REVIEWER_GROUP_EMAIL`; los admins ya tienen permiso para elegir slug.
 
-### Emails transaccionales
+### Correo: Resend, newsletter y avisos internos
 
 El backend soporta estos modos:
 
@@ -220,13 +220,33 @@ MAIL_PROVIDER=resend    # envia emails reales por Resend
 MAIL_PROVIDER=disabled  # saltea envios
 ```
 
-Para produccion usar `MAIL_PROVIDER=resend`, configurar `MAIL_FROM` con un remitente verificado y exponer `RESEND_API_KEY` como secreto de Cloud Run:
+Antes de activar envios, verificar `politeia.ar` en Resend y crear:
+
+- un Segment para el newsletter; copiar su ID a `RESEND_SEGMENT_ID`;
+- opcionalmente un Topic de preferencias; copiar su ID a `RESEND_TOPIC_ID`;
+- un webhook HTTPS apuntando a `https://URL_DE_CLOUD_RUN/v1/mail/webhooks/resend` para `email.delivered`, `email.failed`, `email.bounced`, `email.complained` y `email.suppressed`;
+- copiar el Signing Secret del webhook a Secret Manager como `resend-webhook-secret`.
+
+Crear los secretos sin pegarlos en comandos ni commits:
 
 ```bash
 gcloud secrets create resend-api-key --replication-policy=automatic
 gcloud secrets versions add resend-api-key --data-file=-
-gcloud run services update politeia-blog-api --region us-central1 --set-env-vars MAIL_PROVIDER=resend,MAIL_FROM="Politeia <no-reply@politeia.ar>",APP_BASE_URL=https://admin.politeia.ar --set-secrets RESEND_API_KEY=resend-api-key:latest
+gcloud secrets create resend-webhook-secret --replication-policy=automatic
+gcloud secrets versions add resend-webhook-secret --data-file=-
+gcloud secrets create newsletter-token-secret --replication-policy=automatic
+gcloud secrets versions add newsletter-token-secret --data-file=-
 ```
+
+Copiar `services/blog-api/cloudrun.mail.env.yaml.example` como `services/blog-api/cloudrun.mail.env.yaml`, reemplazar los IDs y la URL real del servicio, y mantener ese archivo fuera del commit si se agregara informacion sensible. Usar un archivo evita los problemas de escape de comas y espacios de `gcloud.cmd` en Windows.
+
+```bash
+gcloud.cmd run services update politeia-blog-api --region us-central1 --env-vars-file services/blog-api/cloudrun.mail.env.yaml --set-secrets "RESEND_API_KEY=resend-api-key:latest,RESEND_WEBHOOK_SECRET=resend-webhook-secret:latest,NEWSLETTER_TOKEN_SECRET=newsletter-token-secret:latest"
+```
+
+La cuenta de servicio de Cloud Run necesita `roles/secretmanager.secretAccessor` sobre esos tres secretos. En Vercel configurar `NEXT_PUBLIC_EMAIL_SETTINGS_ENABLED=true` cuando el backend ya tenga Resend listo.
+
+Para reutilizar el modulo en otro proyecto o branch, cambiar `MAIL_PROJECT_KEY`, `MAIL_BRAND_NAME`, los tres `MAIL_FROM_*`, `NEWSLETTER_AUDIENCE_KEY`, `RESEND_SEGMENT_ID`, `RESEND_TOPIC_ID`, `PUBLIC_SITE_URL` y `APP_BASE_URL`. Las colecciones de Firestore quedan particionadas por `projectKey` y `audienceKey`.
 
 Despues de actualizar variables o secretos, revisar:
 

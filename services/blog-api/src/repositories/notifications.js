@@ -1,6 +1,11 @@
 import { db, serializeDoc, serverTimestamp } from '../firestore.js';
 import { config } from '../config.js';
+import { MAIL_CHANNELS, sendMail } from '../mail/provider.js';
+import { renderEditorialMail } from '../mail/templates.js';
 import { writeAuditLog } from './audit.js';
+import { createMailDelivery } from './mail.js';
+
+export { sendMail };
 
 export const NOTIFICATION_EVENTS = {
   postSubmittedReview: 'postSubmittedReview',
@@ -28,7 +33,6 @@ const DEFAULT_EVENTS = {
 
 const preferences = () => db().collection('notificationPreferences');
 const events = () => db().collection('notificationEvents');
-const deliveries = () => db().collection('emailDeliveries');
 const reads = () => db().collection('notificationReads');
 const INBOX_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
 
@@ -416,112 +420,25 @@ async function queueNotification({
   await eventRef.set(event);
 
   const createdDeliveries = [];
+  const rendered = renderEditorialMail({
+    subject,
+    text,
+    actionUrl: post?.id ? adminPostUrl(post.id) : `${config.appBaseUrl}/admin`,
+  });
   for (const recipient of cleanEmailRecipients) {
-    createdDeliveries.push(await createDelivery({
+    createdDeliveries.push(await createMailDelivery({
+      channel: MAIL_CHANNELS.internal,
       eventId: eventRef.id,
       eventKey,
       type,
       recipient,
       subject,
-      text,
+      text: rendered.text,
+      html: rendered.html,
+      idempotencyKey: `${eventRef.id}:${recipient.email}`,
     }));
   }
   return { eventId: eventRef.id, deliveries: createdDeliveries };
-}
-
-async function createDelivery({ eventId, eventKey, type, recipient, subject, text }) {
-  const deliveryRef = deliveries().doc();
-  const base = {
-    eventId,
-    eventKey,
-    type,
-    recipientEmail: recipient.email,
-    recipientName: recipient.name || recipient.email,
-    from: config.mailFrom,
-    replyTo: config.mailReplyTo || '',
-    subject,
-    text,
-    status: 'pending',
-    provider: config.mailProvider,
-    attempts: 0,
-    lastError: '',
-    providerMessageId: '',
-    createdAt: serverTimestamp(),
-    sentAt: null,
-  };
-  await deliveryRef.set(base);
-
-  const result = await sendMail({ to: recipient.email, subject, text });
-  const patch = result.ok
-    ? {
-        status: result.status,
-        attempts: 1,
-        providerMessageId: result.providerMessageId || '',
-        sentAt: serverTimestamp(),
-      }
-    : {
-        status: 'failed',
-        attempts: 1,
-        lastError: result.error || 'Mail provider failed',
-      };
-  await deliveryRef.update(patch);
-  return serializeDoc(await deliveryRef.get());
-}
-
-export async function sendMail({ to, subject, text }) {
-  if (config.mailProvider === 'disabled') {
-    return { ok: true, status: 'skipped', providerMessageId: 'disabled' };
-  }
-
-  if (config.mailProvider === 'resend') {
-    return sendResendMail({ to, subject, text });
-  }
-
-  if (config.mailProvider !== 'console') {
-    return { ok: false, error: `Unknown MAIL_PROVIDER: ${config.mailProvider}` };
-  }
-
-  console.info(JSON.stringify({
-    severity: 'INFO',
-    message: 'mail delivery',
-    provider: config.mailProvider,
-    from: config.mailFrom,
-    to,
-    subject,
-    text,
-  }));
-  return { ok: true, status: 'logged', providerMessageId: `console-${Date.now()}` };
-}
-
-async function sendResendMail({ to, subject, text }) {
-  if (!config.resendApiKey) {
-    return { ok: false, error: 'Missing RESEND_API_KEY for MAIL_PROVIDER=resend' };
-  }
-
-  const payload = {
-    from: config.mailFrom,
-    to: [to],
-    subject,
-    text,
-  };
-  if (config.mailReplyTo) payload.reply_to = config.mailReplyTo;
-
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${config.resendApiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
-  const data = await res.json().catch(() => ({}));
-
-  if (!res.ok) {
-    const message = data?.message || data?.error || `Resend returned ${res.status}`;
-    return { ok: false, error: message };
-  }
-
-  return { ok: true, status: 'sent', providerMessageId: data?.id || '' };
 }
 
 async function listOptedInEmails({ eventKey, emails = [], excludeEmails = [] }) {

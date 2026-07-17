@@ -11,10 +11,12 @@ import { categoriesRouter } from './routes/categories.js';
 import { importRouter } from './routes/import.js';
 import { mediaRouter } from './routes/media.js';
 import { notificationsRouter } from './routes/notifications.js';
+import { newsletterRouter } from './routes/newsletter.js';
 import { postsRouter } from './routes/posts.js';
 import { profileRouter } from './routes/profile.js';
 import { usersRouter } from './routes/users.js';
 import { openApiSpec } from './openapi.js';
+import { handleResendWebhook } from './routes/mailWebhook.js';
 
 export function createApp() {
   const app = express();
@@ -30,6 +32,7 @@ export function createApp() {
   app.use(attachRequestContext);
   app.use(cors(corsOptions));
   app.options('*', cors(corsOptions));
+  app.post('/v1/mail/webhooks/resend', express.raw({ type: 'application/json', limit: '256kb' }), handleResendWebhook);
   app.use(express.json({ limit: '1mb' }));
 
   const writeLimiter = rateLimit({
@@ -53,6 +56,7 @@ export function createApp() {
   app.use('/v1/media', writeLimiter, requireAuth, requireAnyRole(['blog', 'reviewer']), requireGoogleCloudCredentials, mediaRouter);
   app.use('/v1/import', writeLimiter, requireAuth, requireAnyRole(['blog', 'reviewer']), requireGoogleCloudCredentials, importRouter);
   app.use('/v1/notifications', requireGoogleCloudCredentials, notificationsRouter({ writeLimiter }));
+  app.use('/v1/newsletter', requireGoogleCloudCredentials, newsletterRouter({ writeLimiter }));
   app.use('/v1/profile', requireGoogleCloudCredentials, profileRouter({ writeLimiter }));
 
   app.get('/v1/me', requireAuth, (req, res) => {

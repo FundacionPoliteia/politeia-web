@@ -2,6 +2,7 @@ import { Firestore, FieldValue, Timestamp } from '@google-cloud/firestore';
 import { config } from './config.js';
 
 let firestore;
+let firestoreOverride = false;
 
 export function db() {
   if (!firestore) {
@@ -12,6 +13,11 @@ export function db() {
 
 export function setFirestoreForTests(instance) {
   firestore = instance;
+  firestoreOverride = Boolean(instance);
+}
+
+export function hasFirestoreTestOverride() {
+  return firestoreOverride;
 }
 
 export const serverTimestamp = FieldValue.serverTimestamp;

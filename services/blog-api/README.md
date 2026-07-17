@@ -26,6 +26,14 @@ REVIEWER_GROUP_EMAIL=politeia-reviewer@dominio
 DEV_AUTH=true
 DEV_AUTH_EMAIL=dev@politeia.ar
 DEV_AUTH_ROLES=admin
+MAIL_PROVIDER=console
+MAIL_PROJECT_KEY=politeia
+MAIL_FROM_INTERNAL=Politeia Interno <notificaciones@politeia.ar>
+MAIL_FROM_UPDATES=Politeia Updates <updates@politeia.ar>
+MAIL_FROM_NEWSLETTER=Politeia Newsletter <newsletter@politeia.ar>
+NEWSLETTER_TOKEN_SECRET=change-me
+PUBLIC_SITE_URL=http://localhost:3000
+API_PUBLIC_URL=http://localhost:8080
 ```
 
 `DEV_AUTH=true` solo debe usarse en local. En produccion los roles se resuelven con Google Identity + Google Groups. Para probar ownership de autores, cambia `DEV_AUTH_EMAIL` y reinicia el backend: el rol `blog` solo ve y opera posts propios.
@@ -44,6 +52,13 @@ DEV_AUTH_ROLES=admin
 - `POST /v1/posts/:id/archive`
 - `POST /v1/media`
 - `POST /v1/import/docx`
+- `POST /v1/newsletter/subscribe`
+- `GET /v1/newsletter/confirm`
+- `GET /v1/newsletter/unsubscribe`
+- `GET /v1/newsletter/admin/overview`
+- `POST /v1/newsletter/admin/test`
+- `POST /v1/newsletter/admin/campaigns`
+- `POST /v1/mail/webhooks/resend`
 
 ## Roles
 

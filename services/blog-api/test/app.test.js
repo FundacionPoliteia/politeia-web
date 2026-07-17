@@ -31,6 +31,14 @@ import {
 } from '../src/repositories/profiles.js';
 import { updatePostCommentStatus } from '../src/repositories/comments.js';
 import { isAllowedRoleEmail, sanitizeAssignedRoles } from '../src/repositories/users.js';
+import {
+  confirmNewsletterSubscription,
+  createNewsletterCampaign,
+  getNewsletterOverview,
+  requestNewsletterSubscription,
+} from '../src/repositories/newsletter.js';
+import { MAIL_CHANNELS, sendMail, syncResendContact } from '../src/mail/provider.js';
+import { processResendWebhook } from '../src/repositories/mailWebhooks.js';
 
 test('GET /healthz returns service health', async () => {
   const res = await request(createApp()).get('/healthz').expect(200);
@@ -670,6 +678,208 @@ test('protected cloud routes fail clearly when local ADC is missing', async () =
   }
 
   assert.equal(res.status, 200);
+});
+
+test('newsletter subscription uses double opt-in and becomes active only after confirmation', async () => {
+  const firestore = createMemoryFirestore();
+  const previous = {
+    mailProvider: config.mailProvider,
+    newsletterTokenSecret: config.newsletterTokenSecret,
+    apiPublicUrl: config.apiPublicUrl,
+  };
+  setFirestoreForTests(firestore);
+  config.mailProvider = 'console';
+  config.newsletterTokenSecret = 'test-newsletter-secret-with-enough-entropy';
+  config.apiPublicUrl = 'http://localhost:8080';
+
+  try {
+    const requested = await requestNewsletterSubscription({ email: 'Reader@Example.com', source: 'test' });
+    assert.equal(requested.accepted, true);
+
+    const pending = await getNewsletterOverview();
+    assert.equal(pending.counts.pending, 1);
+    assert.equal(pending.counts.subscribed, 0);
+
+    const deliveries = await firestore.collection('emailDeliveries').get();
+    assert.equal(deliveries.docs.length, 1);
+    const delivery = deliveries.docs[0].data();
+    assert.equal(delivery.status, 'logged');
+    assert.equal(delivery.channel, 'newsletter');
+    const tokenMatch = delivery.html.match(/\/v1\/newsletter\/confirm\?token=([^"<]+)/);
+    assert.ok(tokenMatch);
+
+    const confirmed = await confirmNewsletterSubscription(decodeURIComponent(tokenMatch[1]));
+    assert.equal(confirmed.email, 'reader@example.com');
+    assert.equal(confirmed.status, 'subscribed');
+
+    const active = await getNewsletterOverview();
+    assert.equal(active.counts.pending, 0);
+    assert.equal(active.counts.subscribed, 1);
+
+    await requestNewsletterSubscription({ email: 'reader@example.com', source: 'repeat' });
+    const repeatedDeliveries = await firestore.collection('emailDeliveries').get();
+    assert.equal(repeatedDeliveries.docs.length, 1);
+  } finally {
+    Object.assign(config, previous);
+    setFirestoreForTests(null);
+  }
+});
+
+test('newsletter campaigns are project-scoped and remain drafts in console mode', async () => {
+  const firestore = createMemoryFirestore();
+  const previousProvider = config.mailProvider;
+  setFirestoreForTests(firestore);
+  config.mailProvider = 'console';
+
+  try {
+    const item = await createNewsletterCampaign({
+      name: 'Resumen semanal',
+      subject: 'Novedades de Politeia',
+      previewText: 'Las notas de esta semana',
+      content: 'Una nota nueva.\n\nGracias por leer.',
+      send: false,
+    }, 'admin@politeia.ar');
+    assert.equal(item.projectKey, config.mailProjectKey);
+    assert.equal(item.status, 'draft');
+    assert.match(item.contentHtml, /<p>Una nota nueva\.<\/p>/);
+  } finally {
+    config.mailProvider = previousProvider;
+    setFirestoreForTests(null);
+  }
+});
+
+test('resend provider uses channel sender and idempotency header', async () => {
+  const previous = {
+    mailProvider: config.mailProvider,
+    resendApiKey: config.resendApiKey,
+    mailFromUpdates: config.mailFromUpdates,
+  };
+  const previousFetch = global.fetch;
+  let requestOptions;
+  config.mailProvider = 'resend';
+  config.resendApiKey = 're_test';
+  config.mailFromUpdates = 'Politeia Updates <updates@politeia.ar>';
+  global.fetch = async (_url, options) => {
+    requestOptions = options;
+    return { ok: true, json: async () => ({ id: 'email-1' }) };
+  };
+
+  try {
+    const result = await sendMail({
+      channel: MAIL_CHANNELS.updates,
+      to: 'reader@example.com',
+      subject: 'Actualizacion',
+      text: 'Contenido',
+      idempotencyKey: 'updates/post-1',
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.providerMessageId, 'email-1');
+    assert.equal(requestOptions.headers['Idempotency-Key'], 'updates/post-1');
+    assert.equal(JSON.parse(requestOptions.body).from, 'Politeia Updates <updates@politeia.ar>');
+  } finally {
+    Object.assign(config, previous);
+    global.fetch = previousFetch;
+  }
+});
+
+test('resend contact sync creates a contact without undeclared custom properties', async () => {
+  const previous = {
+    mailProvider: config.mailProvider,
+    resendApiKey: config.resendApiKey,
+    resendSegmentId: config.resendSegmentId,
+    resendTopicId: config.resendTopicId,
+  };
+  const previousFetch = global.fetch;
+  let requestBody;
+  config.mailProvider = 'resend';
+  config.resendApiKey = 're_test';
+  config.resendSegmentId = 'segment-1';
+  config.resendTopicId = 'topic-1';
+  global.fetch = async (_url, options) => {
+    requestBody = JSON.parse(options.body);
+    return { ok: true, json: async () => ({ id: 'contact-1' }) };
+  };
+
+  try {
+    const result = await syncResendContact({ email: 'reader@example.com', subscribed: true });
+    assert.equal(result.ok, true);
+    assert.equal(Object.hasOwn(requestBody, 'properties'), false);
+    assert.deepEqual(requestBody.segments, [{ id: 'segment-1' }]);
+    assert.deepEqual(requestBody.topics, [{ id: 'topic-1', subscription: 'opt_in' }]);
+  } finally {
+    Object.assign(config, previous);
+    global.fetch = previousFetch;
+  }
+});
+
+test('resend contact sync updates existing contact topic through its dedicated endpoint', async () => {
+  const previous = {
+    mailProvider: config.mailProvider,
+    resendApiKey: config.resendApiKey,
+    resendSegmentId: config.resendSegmentId,
+    resendTopicId: config.resendTopicId,
+  };
+  const previousFetch = global.fetch;
+  const requests = [];
+  config.mailProvider = 'resend';
+  config.resendApiKey = 're_test';
+  config.resendSegmentId = 'segment-1';
+  config.resendTopicId = 'topic-1';
+  global.fetch = async (url, options) => {
+    requests.push({ url, options });
+    if (requests.length === 1) {
+      return { ok: false, status: 409, json: async () => ({ message: 'Contact already exists' }) };
+    }
+    return { ok: true, status: 200, json: async () => ({ id: 'contact-1' }) };
+  };
+
+  try {
+    const result = await syncResendContact({ email: 'reader@example.com', subscribed: true });
+    assert.equal(result.ok, true);
+    assert.equal(requests[1].url, 'https://api.resend.com/contacts/reader%40example.com');
+    assert.equal(requests[2].url, 'https://api.resend.com/contacts/reader%40example.com/segments/segment-1');
+    assert.equal(requests[3].url, 'https://api.resend.com/contacts/reader%40example.com/topics');
+    assert.deepEqual(JSON.parse(requests[3].options.body), [{ id: 'topic-1', subscription: 'opt_in' }]);
+  } finally {
+    Object.assign(config, previous);
+    global.fetch = previousFetch;
+  }
+});
+
+test('resend webhooks are idempotent and suppress bounced newsletter recipients', async () => {
+  const firestore = createMemoryFirestore();
+  setFirestoreForTests(firestore);
+  await firestore.collection('newsletterSubscriptions').doc('subscriber-1').set({
+    projectKey: config.mailProjectKey,
+    audienceKey: config.newsletterAudienceKey,
+    email: 'reader@example.com',
+    status: 'subscribed',
+  });
+  await firestore.collection('emailDeliveries').doc('delivery-1').set({
+    providerMessageId: 'email-1',
+    status: 'sent',
+  });
+
+  try {
+    const event = {
+      type: 'email.bounced',
+      created_at: new Date().toISOString(),
+      data: {
+        email_id: 'email-1',
+        to: ['reader@example.com'],
+        subject: 'Newsletter',
+        bounce: { message: 'Mailbox unavailable' },
+      },
+    };
+    const first = await processResendWebhook('msg-1', event);
+    const repeated = await processResendWebhook('msg-1', event);
+    assert.equal(first.duplicate, false);
+    assert.equal(repeated.duplicate, true);
+    assert.equal((await firestore.collection('newsletterSubscriptions').doc('subscriber-1').get()).data().status, 'suppressed');
+    assert.equal((await firestore.collection('emailDeliveries').doc('delivery-1').get()).data().status, 'bounced');
+  } finally {
+    setFirestoreForTests(null);
+  }
 });
 
 function createMemoryFirestore() {
