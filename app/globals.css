@@ -2211,12 +2211,17 @@ a {
 .admin-panel-tabsbar {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 12px;
+  width: 100%;
   margin-bottom: 22px
 }
 
 .admin-panel-tabsbar .admin-session-actions {
+  margin-left: 4px
+}
+
+.admin-panel-tabsbar .admin-profile-nav-button {
   margin-left: auto
 }
 
@@ -4402,7 +4407,9 @@ a {
 
 .admin-comment-thread-modal {
   width: min(920px, calc(100vw - 32px));
-  max-width: none
+  max-width: none;
+  display: flex;
+  flex-direction: column
 }
 
 .admin-comment-thread-head {
@@ -4426,7 +4433,9 @@ a {
 .admin-comment-thread {
   display: grid;
   gap: 10px;
-  max-height: min(62vh, 640px);
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: min(52vh, 520px);
   overflow: auto;
   margin: 14px 0;
   padding-right: 4px
@@ -4740,6 +4749,9 @@ a {
 
 .admin-modal {
   width: min(460px, 100%);
+  max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px);
+  overflow: auto;
   border: 1px solid var(--linea);
   border-radius: 16px;
   background: var(--blanco);
@@ -4877,7 +4889,8 @@ a {
   }
 
   .admin-panel-tabsbar {
-    margin-bottom: 16px
+    margin-bottom: 16px;
+    width: 100%
   }
 
   .admin-panel-user span {
@@ -4959,6 +4972,7 @@ a {
     height: 52px;
     justify-content: center;
     gap: 0;
+    margin-left: 0;
     padding: 5px;
     box-shadow: 0 16px 40px rgba(26, 26, 55, .18)
   }
