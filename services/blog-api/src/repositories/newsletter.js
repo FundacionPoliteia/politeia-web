@@ -54,7 +54,18 @@ export async function confirmNewsletterSubscription(token) {
   if (!doc.exists) throw new HttpError(400, 'La solicitud de suscripcion no existe o vencio');
 
   const provider = await syncResendContact({ email: payload.email, subscribed: true });
-  if (!provider.ok) throw new HttpError(502, 'No pudimos confirmar la suscripcion en este momento');
+  if (!provider.ok) {
+    throw new HttpError(
+      502,
+      'No pudimos confirmar la suscripcion en este momento',
+      config.nodeEnv === 'production'
+        ? undefined
+        : {
+            providerError: provider.error || 'Unknown provider error',
+            providerStatusCode: provider.statusCode || 0,
+          },
+    );
+  }
   await ref.set({
     status: 'subscribed',
     confirmedAt: serverTimestamp(),
@@ -69,7 +80,18 @@ export async function unsubscribeNewsletter(token) {
   const payload = verifyNewsletterToken(token, 'unsubscribe', { allowExpired: true });
   const ref = subscriptions().doc(subscriptionId(payload.email));
   const provider = await syncResendContact({ email: payload.email, subscribed: false });
-  if (!provider.ok) throw new HttpError(502, 'No pudimos procesar la baja en este momento');
+  if (!provider.ok) {
+    throw new HttpError(
+      502,
+      'No pudimos procesar la baja en este momento',
+      config.nodeEnv === 'production'
+        ? undefined
+        : {
+            providerError: provider.error || 'Unknown provider error',
+            providerStatusCode: provider.statusCode || 0,
+          },
+    );
+  }
   await ref.set({
     projectKey: config.mailProjectKey,
     audienceKey: config.newsletterAudienceKey,

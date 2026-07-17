@@ -8,3 +8,4 @@ services/blog-api/.secrets/
 *service-account*.json
 .yaml
 *.yaml
+services/blog-api/.env
