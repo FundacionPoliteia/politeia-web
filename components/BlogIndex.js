@@ -12,6 +12,7 @@ export default function BlogIndex({ posts = [], autorFiltro = '', authorProfile 
   const filtrandoAutor = Boolean(autorFiltro);
   const authorName = authorProfile?.fullName || autorFiltro;
   const authorLead = authorProfile?.description || 'Publicaciones del autor, reunidas en un mismo lugar.';
+  const authorFocusArea = authorProfile?.focusArea || '';
   const authorPhoto = authorProfile?.photoUrl || '';
 
   const postsPorAutor = useMemo(
@@ -40,11 +41,15 @@ export default function BlogIndex({ posts = [], autorFiltro = '', authorProfile 
           <div>
             <span className="eyebrow">Blog</span>
             <h1>{filtrandoAutor ? `Notas escritas por ${authorName}.` : 'Ideas para entender mejor lo publico.'}</h1>
-            <p className="lead">
-              {filtrandoAutor
-                ? authorLead
-                : 'Investigacion, analisis y opinion sobre politica, instituciones y participacion ciudadana.'}
-            </p>
+            {filtrandoAutor ? (
+              <div className="blog-author-about">
+                <span>Sobre mi</span>
+                <p className="lead">{authorLead}</p>
+                {authorFocusArea && <small>Escribe sobre {authorFocusArea}</small>}
+              </div>
+            ) : (
+              <p className="lead">Investigacion, analisis y opinion sobre politica, instituciones y participacion ciudadana.</p>
+            )}
             {filtrandoAutor && authorPhoto && (
               <div className="blog-author-mobile-card" aria-hidden="true">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -61,6 +66,7 @@ export default function BlogIndex({ posts = [], autorFiltro = '', authorProfile 
           </div>
           {filtrandoAutor && authorPhoto && (
             <aside className="blog-author-card" aria-label={`Perfil de ${authorName}`}>
+              <span>Autor de Politeia</span>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={authorPhoto} alt="" />
             </aside>

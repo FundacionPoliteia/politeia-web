@@ -82,7 +82,7 @@ export default async function NotaPage({ params }) {
             <img src={autorFoto} alt="" />
           )}
           <div>
-            <span>Por</span>
+            <span>Sobre el autor</span>
             {autorNombre ? (
               <h2>
                 <Link href={hrefAutorBlog(autorNombre)} className="art-author">{autorNombre}</Link>

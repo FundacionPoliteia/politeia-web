@@ -1,10 +1,8 @@
 'use client';
 
-import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { taxonomyKey } from '../lib/taxonomy';
-
-const DEFAULT_PROFILE_PHOTO = '/default_profile.png';
+import AuthorCard from './AuthorCard';
 
 export default function AuthorsIndex({ authors = [] }) {
   const [query, setQuery] = useState('');
@@ -62,43 +60,6 @@ export default function AuthorsIndex({ authors = [] }) {
         </div>
       </section>
     </main>
-  );
-}
-
-function AuthorCard({ author }) {
-  return (
-    <article className="author-card">
-      <div className="author-card-photo">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={author.photoUrl || DEFAULT_PROFILE_PHOTO} alt="" />
-      </div>
-      <div className="author-card-body">
-        {author.focusArea && <span>{author.focusArea}</span>}
-        <h2>{author.fullName}</h2>
-        {author.description && <p>{author.description}</p>}
-        <div className="author-card-meta">
-          <strong>{author.postCount} {author.postCount === 1 ? 'nota publicada' : 'notas publicadas'}</strong>
-          {author.latestPostTitle && (
-            <small>
-              Ultima nota:{' '}
-              {author.latestPostSlug ? (
-                <Link href={`/blog/${author.latestPostSlug}`}>{author.latestPostTitle}</Link>
-              ) : author.latestPostTitle}
-            </small>
-          )}
-        </div>
-        {author.categories?.length > 0 && (
-          <div className="author-card-tags" aria-label="Categorias principales">
-            {author.categories.slice(0, 3).map((category) => (
-              <em key={category}>{category}</em>
-            ))}
-          </div>
-        )}
-        <Link href={`/blog?autor=${encodeURIComponent(author.fullName)}`} className="btn btn-ghost">
-          Ver sus notas
-        </Link>
-      </div>
-    </article>
   );
 }
 

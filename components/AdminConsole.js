@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { marked } from 'marked';
 import RichTextEditor from './RichTextEditor';
+import AuthorCard from './AuthorCard';
 import { parseTagsText, sanitizeCategory, sanitizeTags, taxonomyKey } from '../lib/taxonomy';
 
 const API_BASE = process.env.NEXT_PUBLIC_BLOG_API_BASE_URL || '';
@@ -99,6 +100,25 @@ const EMPTY_MANAGED_AUTHOR_PROFILE = {
   publicProfileEnabled: true,
 };
 
+const PROFILE_PREVIEW_AUTHORS = [
+  {
+    fullName: 'Autora de ejemplo',
+    description: 'Investiga como las instituciones transforman la vida cotidiana y las formas de participacion.',
+    focusArea: 'Instituciones y ciudadania',
+    postCount: 6,
+    latestPostTitle: 'Nuevas formas de participar',
+    categories: ['Democracia', 'Ciudadania'],
+  },
+  {
+    fullName: 'Autor de ejemplo',
+    description: 'Escribe sobre los debates publicos que conectan tecnologia, derechos y democracia.',
+    focusArea: 'Tecnologia y derechos',
+    postCount: 4,
+    latestPostTitle: 'Tecnologia para lo publico',
+    categories: ['Innovacion', 'Derechos'],
+  },
+];
+
 function ActionSpinner({ active }) {
   return active ? <span className="admin-button-spinner" aria-hidden="true" /> : null;
 }
@@ -121,6 +141,7 @@ export default function AdminConsole() {
   const [isLocalPanelHost, setIsLocalPanelHost] = useState(false);
   const [currentOrigin, setCurrentOrigin] = useState('');
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [profilePreviewOpen, setProfilePreviewOpen] = useState(false);
   const [previewCardOpen, setPreviewCardOpen] = useState(true);
   const [pendingAction, setPendingAction] = useState(null);
   const [editRequestConfirmOpen, setEditRequestConfirmOpen] = useState(false);
@@ -272,12 +293,12 @@ export default function AdminConsole() {
   }, [canManageUsers]);
 
   useEffect(() => {
-    if (canReviewProfiles) {
+    if (canReviewProfiles && activePanelTab === 'profiles') {
       loadAdminProfiles();
-    } else {
+    } else if (!canReviewProfiles) {
       setAdminProfiles([]);
     }
-  }, [canReviewProfiles]);
+  }, [activePanelTab, canReviewProfiles]);
 
   useEffect(() => {
     if (canAccessPanel) {
@@ -346,6 +367,7 @@ export default function AdminConsole() {
 
   useEffect(() => {
     const hasOpenModal = previewOpen
+      || profilePreviewOpen
       || pendingAction
       || editRequestConfirmOpen
       || categoryDeleteTarget
@@ -380,12 +402,16 @@ export default function AdminConsole() {
         setPendingAction(null);
         return;
       }
+      if (profilePreviewOpen) {
+        setProfilePreviewOpen(false);
+        return;
+      }
       if (previewOpen) setPreviewOpen(false);
     }
 
     window.addEventListener('keydown', handleModalEscape);
     return () => window.removeEventListener('keydown', handleModalEscape);
-  }, [adminProfileDeleteTarget, busy, categoryDeleteTarget, editRequestConfirmOpen, editingReviewComment, pendingAction, previewOpen, reviewCommentDialog]);
+  }, [adminProfileDeleteTarget, busy, categoryDeleteTarget, editRequestConfirmOpen, editingReviewComment, pendingAction, previewOpen, profilePreviewOpen, reviewCommentDialog]);
 
   function initializeGoogle() {
     if (userRef.current) {
@@ -868,7 +894,7 @@ export default function AdminConsole() {
         focusArea: profileDraft.focusArea,
         closingPhrase: profileDraft.closingPhrase,
         photoUrl: profileDraft.photoUrl,
-        publicProfileEnabled: canShowProfileOptIn && profileDraft.publicProfileEnabled,
+        publicProfileEnabled: profileDraft.publicProfileEnabled,
       };
       const data = await withActionLoading('profile-save', () => api('/v1/profile', {
         method: 'PATCH',
@@ -1626,6 +1652,18 @@ export default function AdminConsole() {
       : (previewUsesCurrentProfile ? profileClosingPhrase : '')
     : '';
   const usingProfileClosingPhrase = form.showAuthorNote && !useManualAuthorNote && previewUsesCurrentProfile && Boolean(profileClosingPhrase);
+  const profilePreviewName = profileDraft.fullName || user?.name || user?.email || 'Tu nombre';
+  const profilePreviewPosts = posts.filter((post) => taxonomyKey(post.authorName) === taxonomyKey(profilePreviewName));
+  const profilePreviewAuthor = {
+    fullName: profilePreviewName,
+    description: profileDraft.description || 'Tu presentacion personal aparecera aca para que los lectores conozcan tu recorrido y tu mirada.',
+    focusArea: profileDraft.focusArea || 'Tus temas y areas de interes',
+    closingPhrase: profileDraft.closingPhrase || '',
+    photoUrl: profileDraft.photoUrl || DEFAULT_PROFILE_PHOTO,
+    postCount: profilePreviewPosts.length || 3,
+    latestPostTitle: profilePreviewPosts[0]?.title || 'Una mirada sobre los debates de nuestro tiempo',
+    categories: [...new Set(profilePreviewPosts.map((post) => post.category).filter(Boolean))].slice(0, 3),
+  };
   const openReviewCommentCount = reviewComments.filter((comment) => comment.status !== 'resolved').length;
   const filteredReviewComments = useMemo(() => {
     if (reviewCommentFilter === 'all') return reviewComments;
@@ -1804,34 +1842,36 @@ export default function AdminConsole() {
                     </button>
                   )}
                 </nav>
-                {canAccessProfilePanel && (
-                  <button
-                    aria-label="Abrir mi perfil"
-                    aria-pressed={activePanelTab === 'profile'}
-                    className={`admin-profile-nav-button ${activePanelTab === 'profile' ? 'selected' : ''}`}
-                    onClick={() => setActivePanelTab('profile')}
-                    type="button"
-                  >
-                    <span>Mi perfil</span>
-                    <img alt="" onError={handleProfilePhotoError} src={profileNavPhoto} />
-                  </button>
-                )}
-                <div className="admin-session-actions">
-                  <button
-                    aria-expanded={notificationsOpen}
-                    aria-label={`Notificaciones${unreadNotificationCount ? `, ${unreadNotificationCount} sin leer` : ''}`}
-                    className={`admin-notification-button ${notificationsOpen ? 'active' : ''} ${unreadNotificationCount ? 'has-unread' : ''}`}
-                    onClick={() => {
-                      setNotificationsOpen((open) => !open);
-                      if (!notificationsOpen) loadInAppNotifications({ silent: true });
-                    }}
-                    type="button"
-                  >
-                    <span aria-hidden="true" className="material-symbols-outlined">notifications</span>
-                    {unreadNotificationCount > 0 && (
-                      <strong>{unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}</strong>
-                    )}
-                  </button>
+                <div className="admin-tabs-secondary">
+                  {canAccessProfilePanel && (
+                    <button
+                      aria-label="Abrir mi perfil"
+                      aria-pressed={activePanelTab === 'profile'}
+                      className={`admin-profile-nav-button ${activePanelTab === 'profile' ? 'selected' : ''}`}
+                      onClick={() => setActivePanelTab('profile')}
+                      type="button"
+                    >
+                      <span>Mi perfil</span>
+                      <img alt="" onError={handleProfilePhotoError} src={profileNavPhoto} />
+                    </button>
+                  )}
+                  <div className="admin-session-actions">
+                    <button
+                      aria-expanded={notificationsOpen}
+                      aria-label={`Notificaciones${unreadNotificationCount ? `, ${unreadNotificationCount} sin leer` : ''}`}
+                      className={`admin-notification-button ${notificationsOpen ? 'active' : ''} ${unreadNotificationCount ? 'has-unread' : ''}`}
+                      onClick={() => {
+                        setNotificationsOpen((open) => !open);
+                        if (!notificationsOpen) loadInAppNotifications({ silent: true });
+                      }}
+                      type="button"
+                    >
+                      <span aria-hidden="true" className="material-symbols-outlined">notifications</span>
+                      {unreadNotificationCount > 0 && (
+                        <strong>{unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}</strong>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
               {activePanelTab === 'profile' && (
@@ -1852,6 +1892,10 @@ export default function AdminConsole() {
                         <h2>Usuario y perfil</h2>
                         <p>Estos datos se guardan separados de los roles. Se usan para firmar comentarios y prellenar el autor de nuevos blogs.</p>
                       </div>
+                      <button className="btn btn-ghost" onClick={() => setProfilePreviewOpen(true)} type="button">
+                        <span aria-hidden="true" className="material-symbols-outlined">visibility</span>
+                        Previsualizar perfil
+                      </button>
                     </div>
                     <div className="admin-profile-body">
                       {profileNeedsSetup(profileDraft) && (
@@ -2142,7 +2186,20 @@ export default function AdminConsole() {
                           <tr>
                             <td colSpan="7">Todavia no hay perfiles cargados.</td>
                           </tr>
-                        ) : adminProfiles.map((profile) => (
+                        ) : adminProfiles.map((profile) => {
+                          const profileIsPublic = profile.publicProfileEnabled && profile.canSharePublicProfile;
+                          const profileStatus = profileIsPublic
+                            ? 'Publico'
+                            : profile.publicProfileEnabled
+                              ? 'Esperando coincidencia'
+                              : 'Publicacion desactivada';
+                          const profileStatusClass = profileIsPublic
+                            ? 'published'
+                            : profile.publicProfileEnabled
+                              ? 'draft'
+                              : 'archived';
+
+                          return (
                           <tr key={profile.email || profile.id}>
                             <td>
                               <div className="admin-profile-row">
@@ -2155,15 +2212,15 @@ export default function AdminConsole() {
                               </div>
                             </td>
                             <td>
-                              <span className={`status ${profile.publicProfileEnabled ? 'published' : profile.canSharePublicProfile ? 'draft' : 'archived'}`}>
-                                {profile.publicProfileEnabled ? 'Publico' : profile.canSharePublicProfile ? 'Listo para activar' : 'Nombre sin coincidencia'}
+                              <span className={`status ${profileStatusClass}`}>
+                                {profileStatus}
                               </span>
                             </td>
                             <td>{profile.description || 'Sin descripcion'}</td>
                             <td>{profile.focusArea || 'Sin area definida'}</td>
                             <td>
                               {profile.authorSlug || 'Sin slug'}
-                              {profile.publicProfileEnabled && profile.fullName && (
+                              {profileIsPublic && profile.fullName && (
                                 <small>
                                   <Link href={`/blog?autor=${encodeURIComponent(profile.fullName)}`} target="_blank">Ver pagina</Link>
                                 </small>
@@ -2196,7 +2253,8 @@ export default function AdminConsole() {
                               )}
                             </td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -3255,6 +3313,126 @@ export default function AdminConsole() {
               </div>
                 </>
               )}
+              {profilePreviewOpen && (
+                <div
+                  className="admin-preview-modal-backdrop profile-preview-backdrop"
+                  onMouseDown={() => setProfilePreviewOpen(false)}
+                  role="presentation"
+                >
+                  <div
+                    aria-labelledby="profile-preview-title"
+                    aria-modal="true"
+                    className="admin-preview-modal profile-preview-modal"
+                    onMouseDown={(event) => event.stopPropagation()}
+                    role="dialog"
+                  >
+                    <div className="admin-preview-modal-bar">
+                      <div>
+                        <span>Vista previa</span>
+                        <p id="profile-preview-title">Asi se presenta tu perfil en las distintas partes del blog.</p>
+                      </div>
+                      <button className="btn btn-ghost" onClick={() => setProfilePreviewOpen(false)} type="button">
+                        Cerrar
+                      </button>
+                    </div>
+
+                    <div className="profile-preview-content">
+                      <header className="profile-preview-intro">
+                        <span>Perfil publico</span>
+                        <h2>Tu voz, dentro del universo editorial de Politeia.</h2>
+                        <p>Esta simulacion usa los datos que estas editando. Los otros perfiles y notas son ejemplos para mostrar el contexto final.</p>
+                      </header>
+
+                      <section className="profile-preview-section" aria-labelledby="profile-preview-card-title">
+                        <div className="profile-preview-section-head">
+                          <div>
+                            <span>Directorio de autores</span>
+                            <h3 id="profile-preview-card-title">Tu card junto a otros autores</h3>
+                          </div>
+                          <small>Tu perfil aparece destacado en esta vista previa.</small>
+                        </div>
+                        <div className="authors-grid profile-preview-authors-grid">
+                          <AuthorCard author={profilePreviewAuthor} featured preview />
+                          {PROFILE_PREVIEW_AUTHORS.map((author) => (
+                            <AuthorCard author={author} key={author.fullName} preview />
+                          ))}
+                        </div>
+                      </section>
+
+                      <section className="profile-preview-section" aria-labelledby="profile-preview-ending-title">
+                        <div className="profile-preview-section-head">
+                          <div>
+                            <span>Cierre de nota</span>
+                            <h3 id="profile-preview-ending-title">Tu firma al terminar un articulo</h3>
+                          </div>
+                          <small>La frase solo aparece cuando existe en el perfil o fue escrita manualmente en la nota.</small>
+                        </div>
+                        <article className="profile-preview-article-tail">
+                          <h4>Una democracia que tambien se construye en lo cotidiano</h4>
+                          <p>
+                            Comprender lo publico exige mirar mas alla de las instituciones y reconocer las decisiones, conversaciones y acuerdos que sostienen la vida en comun.
+                          </p>
+                          <p>
+                            Esa tarea no termina con una respuesta definitiva: abre nuevas preguntas y nos invita a participar con informacion, criterio y responsabilidad.
+                          </p>
+                          <section className="art-author-end" aria-label="Vista previa del cierre de autor">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={profilePreviewAuthor.photoUrl} alt="" />
+                            <div>
+                              <span>Sobre el autor</span>
+                              <h2>{profilePreviewAuthor.fullName}</h2>
+                              {profilePreviewAuthor.closingPhrase && <p>{profilePreviewAuthor.closingPhrase}</p>}
+                            </div>
+                          </section>
+                        </article>
+                      </section>
+
+                      <section className="profile-preview-section" aria-labelledby="profile-preview-page-title">
+                        <div className="profile-preview-section-head">
+                          <div>
+                            <span>Blog por autor</span>
+                            <h3 id="profile-preview-page-title">Tu pagina de notas filtradas</h3>
+                          </div>
+                          <small>Es la vista que abre el lector al elegir tu nombre.</small>
+                        </div>
+                        <div className="profile-preview-author-page">
+                          <header>
+                            <div>
+                              <span>Blog</span>
+                              <h4>Notas escritas por {profilePreviewAuthor.fullName}.</h4>
+                              <div className="profile-preview-author-about">
+                                <small>Sobre mi</small>
+                                <p>{profilePreviewAuthor.description}</p>
+                                <strong>Escribe sobre {profilePreviewAuthor.focusArea}</strong>
+                              </div>
+                            </div>
+                            <aside>
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={profilePreviewAuthor.photoUrl} alt="" />
+                            </aside>
+                          </header>
+                          <div className="profile-preview-search">
+                            <span aria-hidden="true" className="material-symbols-outlined">search</span>
+                            Buscar entre las notas de {profilePreviewAuthor.fullName}
+                          </div>
+                          <div className="profile-preview-posts">
+                            <article>
+                              <span>{profilePreviewAuthor.categories[0] || 'Analisis'}</span>
+                              <h5>{profilePreviewAuthor.latestPostTitle}</h5>
+                              <p>Una introduccion breve que ayuda a comprender el enfoque y las preguntas principales de la nota.</p>
+                            </article>
+                            <article>
+                              <span>{profilePreviewAuthor.categories[1] || 'Democracia'}</span>
+                              <h5>Ideas para comprender una conversacion publica en movimiento</h5>
+                              <p>Otra nota de ejemplo para mostrar como se organiza la produccion del autor.</p>
+                            </article>
+                          </div>
+                        </div>
+                      </section>
+                    </div>
+                  </div>
+                </div>
+              )}
               {previewOpen && (
                 <div className="admin-preview-modal-backdrop" role="presentation">
                   <div aria-modal="true" className="admin-preview-modal" role="dialog">
@@ -3293,7 +3471,7 @@ export default function AdminConsole() {
                             <img src={previewAuthorPhoto} alt="" />
                           )}
                           <div>
-                            <span>Por</span>
+                            <span>Sobre el autor</span>
                             {form.authorName && <h2>{form.authorName}</h2>}
                             {previewAuthorNote && <p>{previewAuthorNote}</p>}
                           </div>

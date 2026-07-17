@@ -220,6 +220,75 @@ test('admin managed author profiles can be created and deleted', async () => {
   }
 });
 
+test('managed author public opt-in activates when a matching post appears and respects opt-out', async () => {
+  const firestore = createMemoryFirestore();
+  setFirestoreForTests(firestore);
+
+  try {
+    const created = await createManagedAuthorProfile({
+      firstName: 'Autora',
+      lastName: 'Pendiente',
+      description: 'Perfil listo antes de su primera nota.',
+      publicProfileEnabled: true,
+    }, 'dev@politeia.ar');
+
+    assert.equal(created.publicProfileEnabled, true);
+    assert.equal(created.canSharePublicProfile, false);
+    assert.equal(await getPublicAuthorProfileBySlug('autora-pendiente'), null);
+
+    await firestore.collection('posts').doc('post-pendiente').set({
+      authorName: 'Autora Pendiente',
+      title: 'Primera nota',
+      status: 'published',
+      publishedAt: '2026-07-17T12:00:00.000Z',
+    });
+
+    const activated = await getPublicAuthorProfileBySlug('autora-pendiente');
+    assert.equal(activated.fullName, 'Autora Pendiente');
+
+    const disabled = await updateManagedAuthorProfile(created.id, {
+      publicProfileEnabled: false,
+    }, 'dev@politeia.ar');
+    assert.equal(disabled.publicProfileEnabled, false);
+    assert.equal(await getPublicAuthorProfileBySlug('autora-pendiente'), null);
+  } finally {
+    setFirestoreForTests(null);
+  }
+});
+
+test('legacy managed profiles recover the default opt-in until an admin explicitly disables it', async () => {
+  const firestore = createMemoryFirestore();
+  setFirestoreForTests(firestore);
+
+  try {
+    await firestore.collection('userProfiles').doc('managed-author-autora-legada').set({
+      firstName: 'Autora',
+      lastName: 'Legada',
+      fullName: 'Autora Legada',
+      authorSlug: 'autora-legada',
+      managedAuthor: true,
+      publicProfileEnabled: false,
+    });
+    await firestore.collection('posts').doc('post-legado').set({
+      authorName: 'Autora Legada',
+      title: 'Nota legada',
+      status: 'published',
+      publishedAt: '2026-07-17T12:00:00.000Z',
+    });
+
+    const recovered = await getPublicAuthorProfileBySlug('autora-legada');
+    assert.equal(recovered.fullName, 'Autora Legada');
+
+    const disabled = await updateManagedAuthorProfile('managed-author-autora-legada', {
+      publicProfileEnabled: false,
+    }, 'dev@politeia.ar');
+    assert.equal(disabled.publicProfileEnabled, false);
+    assert.equal(await getPublicAuthorProfileBySlug('autora-legada'), null);
+  } finally {
+    setFirestoreForTests(null);
+  }
+});
+
 test('admin managed author profiles can be edited', async () => {
   const firestore = createMemoryFirestore();
   setFirestoreForTests(firestore);

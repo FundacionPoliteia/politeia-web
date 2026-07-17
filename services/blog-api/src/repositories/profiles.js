@@ -25,11 +25,10 @@ export async function updateUserProfile(user, data) {
   const before = beforeDoc.exists ? await toUserProfile(serializeDoc(beforeDoc), user) : null;
   const clean = sanitizeProfile({ ...(before || {}), ...(data || {}) });
   const fullName = buildFullName(clean.firstName, clean.lastName);
-  const canSharePublicProfile = await authorNameExists(fullName);
-  const publicProfileEnabled = canSharePublicProfile && clean.publicProfileEnabled;
   const patch = {
     ...clean,
-    publicProfileEnabled,
+    publicProfileEnabled: clean.publicProfileEnabled,
+    publicProfilePreferenceSet: true,
     email,
     fullName,
     authorSlug: slugify(fullName),
@@ -79,13 +78,13 @@ export async function createManagedAuthorProfile(data, actorEmail = '') {
     throw new HttpError(409, 'Author profile already exists');
   }
 
-  const canSharePublicProfile = await authorNameExists(fullName);
   const ref = profiles().doc(`managed-author-${authorSlug}`);
   const patch = {
     ...clean,
     email: '',
     managedAuthor: true,
-    publicProfileEnabled: canSharePublicProfile && clean.publicProfileEnabled,
+    publicProfileEnabled: clean.publicProfileEnabled,
+    publicProfilePreferenceSet: true,
     fullName,
     authorSlug,
     createdAt: serverTimestamp(),
@@ -135,12 +134,12 @@ export async function updateManagedAuthorProfile(id = '', data, actorEmail = '')
     .find((item) => item?.id !== cleanId);
   if (duplicate) throw new HttpError(409, 'Author profile already exists');
 
-  const canSharePublicProfile = await authorNameExists(fullName);
   const patch = {
     ...clean,
     email: '',
     managedAuthor: true,
-    publicProfileEnabled: canSharePublicProfile && clean.publicProfileEnabled,
+    publicProfileEnabled: clean.publicProfileEnabled,
+    publicProfilePreferenceSet: true,
     fullName,
     authorSlug,
     updatedAt: serverTimestamp(),
@@ -274,12 +273,13 @@ async function toUserProfile(item, user) {
   const clean = sanitizeProfile(item || {});
   const fullName = buildFullName(clean.firstName, clean.lastName);
   const canSharePublicProfile = await authorNameExists(fullName);
+  const publicProfileEnabled = resolvePublicProfilePreference(item, clean);
   return {
     id: item?.id || profileId(user?.email),
     email: normalizeEmail(item?.email || user?.email),
     ...clean,
     managedAuthor: item?.managedAuthor === true,
-    publicProfileEnabled: canSharePublicProfile && clean.publicProfileEnabled,
+    publicProfileEnabled,
     canSharePublicProfile,
     fullName,
     authorSlug: slugify(item?.authorSlug || fullName),
@@ -291,7 +291,7 @@ async function toUserProfile(item, user) {
 async function toPublicAuthorProfile(item) {
   const clean = sanitizeProfile(item || {});
   const fullName = buildFullName(clean.firstName, clean.lastName);
-  if (!clean.publicProfileEnabled || !fullName || !(await authorNameExists(fullName))) return null;
+  if (!resolvePublicProfilePreference(item, clean) || !fullName || !(await authorNameExists(fullName))) return null;
 
   return {
     fullName,
@@ -307,7 +307,7 @@ function toPublicAuthorProfileFromStats(item, authorStats) {
   const clean = sanitizeProfile(item || {});
   const fullName = buildFullName(clean.firstName, clean.lastName);
   const stats = authorStats.get(authorKey(fullName));
-  if (!clean.publicProfileEnabled || !fullName || !stats) return null;
+  if (!resolvePublicProfilePreference(item, clean) || !fullName || !stats) return null;
 
   return {
     fullName,
@@ -369,6 +369,12 @@ function normalizeUrl(value) {
 
 function normalizeBoolean(value) {
   return value === true || value === 'true' || value === 1 || value === '1';
+}
+
+function resolvePublicProfilePreference(item = {}, clean = sanitizeProfile(item)) {
+  if (item?.publicProfilePreferenceSet === true) return clean.publicProfileEnabled;
+  if (item?.managedAuthor === true) return true;
+  return clean.publicProfileEnabled;
 }
 
 async function authorNameExists(fullName = '') {

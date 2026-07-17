@@ -625,28 +625,85 @@ a {
 
 .blog-author-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 240px;
-  gap: 42px;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 56px;
   align-items: center
 }
 
+.blog-author-about {
+  max-width: 700px;
+  margin-top: 24px;
+  padding-left: 18px;
+  border-left: 3px solid var(--azul)
+}
+
+.blog-author-about>span {
+  display: block;
+  color: var(--azul);
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  margin-bottom: 8px
+}
+
+.blog-author-about .lead {
+  color: var(--tinta);
+  font-family: var(--display);
+  font-size: 1.25rem;
+  line-height: 1.45;
+  margin: 0
+}
+
+.blog-author-about small {
+  display: block;
+  color: var(--gris);
+  font-size: .88rem;
+  font-weight: 700;
+  margin-top: 12px
+}
+
 .blog-author-card {
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  padding: 0;
+  position: relative;
+  min-height: 260px;
+  border: 1px solid rgba(19, 122, 159, .2);
+  border-radius: 8px;
+  background: #e7f1f4;
+  padding: 54px 28px 28px;
   display: grid;
+  align-content: center;
   justify-items: center;
   text-align: center;
+  overflow: hidden
+}
+
+.blog-author-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 7px;
+  background: var(--azul)
+}
+
+.blog-author-card span {
+  position: absolute;
+  top: 18px;
+  left: 26px;
+  color: var(--azul);
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase
 }
 
 .blog-author-card img {
-  width: 182px;
-  height: 182px;
+  width: 168px;
+  height: 168px;
   border-radius: 999px;
-  border: 1px solid var(--linea);
+  border: 7px solid var(--blanco);
   background: var(--blanco);
-  object-fit: cover
+  object-fit: cover;
+  box-shadow: 0 18px 34px rgba(26, 26, 55, .14)
 }
 
 .blog-author-mobile-card {
@@ -821,8 +878,7 @@ a {
   margin-bottom: 20px
 }
 
-.authors-teaser-head span,
-.author-card-body>span {
+.authors-teaser-head span {
   display: block;
   color: var(--azul);
   font-size: .72rem;
@@ -910,51 +966,122 @@ a {
 .authors-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 22px
+  gap: 22px;
+  align-items: stretch
 }
 
 .author-card {
+  position: relative;
   border: 1px solid var(--linea);
-  border-radius: 18px;
+  border-radius: 8px;
   background: var(--blanco);
   overflow: hidden;
   min-height: 100%;
   display: grid;
-  grid-template-rows: auto 1fr
+  grid-template-rows: auto 1fr;
+  box-shadow: 0 16px 36px rgba(26, 26, 55, .05);
+  transition: border-color .18s, box-shadow .18s, transform .18s
+}
+
+.author-card:hover {
+  border-color: rgba(19, 122, 159, .28);
+  box-shadow: 0 22px 46px rgba(26, 26, 55, .1);
+  transform: translateY(-3px)
+}
+
+.author-card.featured {
+  border-color: rgba(19, 122, 159, .4);
+  box-shadow: 0 22px 48px rgba(19, 122, 159, .12)
 }
 
 .author-card-photo {
-  background: linear-gradient(180deg, rgba(19, 122, 159, .12), rgba(26, 26, 55, .04));
-  padding: 28px 28px 16px
+  position: relative;
+  min-height: 198px;
+  background: #e7f1f4;
+  border-bottom: 1px solid rgba(19, 122, 159, .12);
+  padding: 46px 28px 24px;
+  display: grid;
+  place-items: center;
+  overflow: hidden
+}
+
+.author-card-photo::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 7px;
+  background: var(--azul)
+}
+
+.author-card-photo>span {
+  position: absolute;
+  top: 17px;
+  left: 22px;
+  color: var(--azul);
+  font-size: .66rem;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase
 }
 
 .author-card-photo img {
-  width: 132px;
-  height: 132px;
-  border: 1px solid var(--linea);
+  width: 142px;
+  height: 142px;
+  border: 7px solid var(--blanco);
   border-radius: 999px;
   background: var(--blanco);
   object-fit: cover;
-  box-shadow: 0 18px 34px rgba(26, 26, 55, .1)
+  box-shadow: 0 18px 34px rgba(26, 26, 55, .14)
 }
 
 .author-card-body {
-  padding: 24px 28px 28px;
+  padding: 26px 28px 28px;
   display: flex;
   flex-direction: column;
-  gap: 14px
+  gap: 17px
 }
 
 .author-card-body h2 {
   font-family: var(--display);
-  font-size: 1.75rem;
+  font-size: 1.9rem;
   font-weight: 600;
-  line-height: 1.08
+  line-height: 1.08;
+  margin: 0
 }
 
-.author-card-body p {
+.author-card-about {
+  padding-left: 14px;
+  border-left: 3px solid var(--azul)
+}
+
+.author-card-about>span,
+.author-card-focus>span {
+  display: block;
+  color: var(--azul);
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  margin-bottom: 6px
+}
+
+.author-card-about p {
+  color: var(--tinta);
+  font-family: var(--display);
+  font-size: 1.08rem;
+  line-height: 1.48
+}
+
+.author-card-focus {
+  padding-top: 14px;
+  border-top: 1px solid var(--linea)
+}
+
+.author-card-focus strong {
+  display: block;
   color: var(--gris);
-  line-height: 1.58
+  font-size: .9rem;
+  line-height: 1.45
 }
 
 .author-card-meta {
@@ -1000,7 +1127,7 @@ a {
   padding: 6px 10px
 }
 
-.author-card .btn {
+.author-card .author-card-action {
   align-self: flex-start;
   margin-top: auto
 }
@@ -1149,7 +1276,7 @@ a {
   }
 
   .authors-teaser-head .btn,
-  .author-card .btn {
+  .author-card .author-card-action {
     width: 100%;
     justify-content: center
   }
@@ -1169,12 +1296,13 @@ a {
   }
 
   .author-card-photo {
-    padding: 24px 22px 12px
+    min-height: 174px;
+    padding: 42px 22px 20px
   }
 
   .author-card-photo img {
-    width: 112px;
-    height: 112px
+    width: 120px;
+    height: 120px
   }
 
   .author-card-body {
@@ -1937,22 +2065,27 @@ a {
 
 /* ===== PÁGINAS INSTITUCIONALES ===== */
 .art-author-end {
+  position: relative;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 18px;
+  gap: 22px;
   align-items: center;
   margin-top: 56px;
-  padding-top: 28px;
-  border-top: 1px solid var(--linea)
+  padding: 24px 28px;
+  border: 1px solid rgba(19, 122, 159, .2);
+  border-left: 6px solid var(--azul);
+  border-radius: 8px;
+  background: #eef5f6
 }
 
 .art-author-end img {
-  width: 84px;
-  height: 84px;
+  width: 92px;
+  height: 92px;
   border-radius: 999px;
-  border: 1px solid var(--linea);
-  background: var(--hueso);
-  object-fit: cover
+  border: 5px solid var(--blanco);
+  background: var(--blanco);
+  object-fit: cover;
+  box-shadow: 0 12px 26px rgba(26, 26, 55, .12)
 }
 
 .art-author-end span {
@@ -1967,22 +2100,23 @@ a {
 
 .art-author-end h2 {
   font-family: var(--display);
-  font-size: 1.35rem;
+  font-size: 1.5rem;
   font-weight: 600;
   line-height: 1.15;
   margin-bottom: 8px
 }
 
 .art-author-end p {
-  color: var(--gris);
-  font-size: .98rem;
+  color: var(--tinta);
+  font-size: 1rem;
   line-height: 1.55
 }
 
 @media(max-width:640px) {
   .art-author-end {
     grid-template-columns: 1fr;
-    justify-items: start
+    justify-items: start;
+    padding: 22px
   }
 }
 
@@ -2211,17 +2345,28 @@ a {
 .admin-panel-tabsbar {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
   gap: 12px;
   width: 100%;
-  margin-bottom: 22px
+  margin-bottom: 22px;
+  background: var(--hueso);
+  border: 1px solid rgba(26, 26, 55, .06);
+  border-radius: 999px;
+  padding: 5px
 }
 
 .admin-panel-tabsbar .admin-session-actions {
-  margin-left: 4px
+  margin-left: 0
 }
 
 .admin-panel-tabsbar .admin-profile-nav-button {
+  margin-left: 0
+}
+
+.admin-tabs-secondary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-left: auto
 }
 
@@ -2377,11 +2522,11 @@ a {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: var(--hueso);
-  border: 1px solid rgba(26, 26, 55, .06);
+  background: transparent;
+  border: 0;
   border-radius: 999px;
-  padding: 5px;
-  margin: 0 auto
+  padding: 0;
+  margin: 0
 }
 
 .admin-tabs button {
@@ -2539,6 +2684,15 @@ a {
   font-size: .9rem;
   line-height: 1.45;
   margin-top: 5px
+}
+
+.admin-manager-head .btn .material-symbols-outlined {
+  display: inline-block;
+  color: currentColor;
+  font-size: 19px;
+  letter-spacing: normal;
+  text-transform: none;
+  margin: 0 7px 0 0
 }
 
 .admin-manager-body {
@@ -4581,6 +4735,291 @@ a {
   background: var(--blanco)
 }
 
+.profile-preview-modal {
+  min-height: 100vh;
+  background: var(--hueso)
+}
+
+.profile-preview-content {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 58px 32px 96px
+}
+
+.profile-preview-intro {
+  max-width: 760px;
+  margin-bottom: 58px
+}
+
+.profile-preview-intro>span,
+.profile-preview-section-head span {
+  display: block;
+  color: var(--azul);
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  margin-bottom: 8px
+}
+
+.profile-preview-intro h2 {
+  max-width: 18ch;
+  font-family: var(--display);
+  font-size: clamp(2.2rem, 5vw, 4rem);
+  font-weight: 500;
+  line-height: 1.03
+}
+
+.profile-preview-intro p {
+  max-width: 65ch;
+  color: var(--gris);
+  font-size: 1rem;
+  line-height: 1.6;
+  margin-top: 18px
+}
+
+.profile-preview-section {
+  padding: 48px 0;
+  border-top: 1px solid var(--linea)
+}
+
+.profile-preview-section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 28px;
+  margin-bottom: 26px
+}
+
+.profile-preview-section-head h3 {
+  font-family: var(--display);
+  font-size: clamp(1.7rem, 3vw, 2.35rem);
+  font-weight: 600;
+  line-height: 1.1
+}
+
+.profile-preview-section-head>small {
+  max-width: 42ch;
+  color: var(--gris);
+  font-size: .88rem;
+  line-height: 1.45;
+  text-align: right
+}
+
+.profile-preview-authors-grid .author-card.is-preview {
+  pointer-events: none
+}
+
+.profile-preview-article-tail {
+  max-width: 820px;
+  margin: 0 auto;
+  border: 1px solid var(--linea);
+  border-radius: 8px;
+  background: var(--blanco);
+  padding: 42px
+}
+
+.profile-preview-article-tail h4 {
+  max-width: 20ch;
+  font-family: var(--display);
+  font-size: 2rem;
+  font-weight: 600;
+  line-height: 1.12;
+  margin-bottom: 24px
+}
+
+.profile-preview-article-tail>p {
+  font-size: 1.02rem;
+  line-height: 1.75;
+  margin-bottom: 18px
+}
+
+.profile-preview-author-page {
+  overflow: hidden;
+  border: 1px solid var(--linea);
+  border-radius: 8px;
+  background: var(--blanco)
+}
+
+.profile-preview-author-page>header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 230px;
+  gap: 44px;
+  align-items: center;
+  padding: 48px;
+  border-bottom: 1px solid var(--linea)
+}
+
+.profile-preview-author-page>header>div>span,
+.profile-preview-author-about small,
+.profile-preview-posts article>span {
+  display: block;
+  color: var(--azul);
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase
+}
+
+.profile-preview-author-page h4 {
+  max-width: 18ch;
+  font-family: var(--display);
+  font-size: clamp(2rem, 4vw, 3.25rem);
+  font-weight: 500;
+  line-height: 1.05;
+  margin-top: 10px
+}
+
+.profile-preview-author-about {
+  max-width: 650px;
+  margin-top: 24px;
+  padding-left: 16px;
+  border-left: 3px solid var(--azul)
+}
+
+.profile-preview-author-about p {
+  font-family: var(--display);
+  font-size: 1.15rem;
+  line-height: 1.45;
+  margin-top: 7px
+}
+
+.profile-preview-author-about strong {
+  display: block;
+  color: var(--gris);
+  font-size: .84rem;
+  margin-top: 10px
+}
+
+.profile-preview-author-page aside {
+  min-height: 240px;
+  border-left: 7px solid var(--azul);
+  background: #e7f1f4;
+  display: grid;
+  place-items: center;
+  padding: 24px
+}
+
+.profile-preview-author-page aside img {
+  width: 150px;
+  height: 150px;
+  border: 7px solid var(--blanco);
+  border-radius: 999px;
+  background: var(--blanco);
+  object-fit: cover;
+  box-shadow: 0 18px 34px rgba(26, 26, 55, .14)
+}
+
+.profile-preview-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 32px 48px 0;
+  border: 1px solid var(--linea);
+  border-radius: 8px;
+  color: var(--gris);
+  padding: 13px 16px
+}
+
+.profile-preview-search .material-symbols-outlined {
+  color: var(--azul)
+}
+
+.profile-preview-posts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  padding: 28px 48px 48px
+}
+
+.profile-preview-posts article {
+  min-height: 190px;
+  border-top: 5px solid var(--azul);
+  background: var(--hueso);
+  padding: 24px
+}
+
+.profile-preview-posts h5 {
+  font-family: var(--display);
+  font-size: 1.35rem;
+  font-weight: 600;
+  line-height: 1.18;
+  margin: 12px 0 10px
+}
+
+.profile-preview-posts p {
+  color: var(--gris);
+  font-size: .9rem;
+  line-height: 1.5
+}
+
+@media(max-width:860px) {
+  .profile-preview-content {
+    padding: 42px 22px 72px
+  }
+
+  .profile-preview-section-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px
+  }
+
+  .profile-preview-section-head>small {
+    text-align: left
+  }
+
+  .profile-preview-author-page>header {
+    grid-template-columns: 1fr;
+    padding: 32px
+  }
+
+  .profile-preview-author-page aside {
+    min-height: 210px;
+    order: -1
+  }
+
+  .profile-preview-search {
+    margin: 26px 32px 0
+  }
+
+  .profile-preview-posts {
+    grid-template-columns: 1fr;
+    padding: 24px 32px 32px
+  }
+}
+
+@media(max-width:560px) {
+  .profile-preview-content {
+    padding: 34px 16px 64px
+  }
+
+  .profile-preview-intro {
+    margin-bottom: 38px
+  }
+
+  .profile-preview-section {
+    padding: 36px 0
+  }
+
+  .profile-preview-article-tail {
+    padding: 24px 20px
+  }
+
+  .profile-preview-author-page>header {
+    gap: 26px;
+    padding: 24px 20px
+  }
+
+  .profile-preview-search {
+    margin: 20px 20px 0;
+    font-size: .84rem
+  }
+
+  .profile-preview-posts {
+    padding: 20px
+  }
+}
+
 .admin-editor-lock {
   display: flex;
   align-items: flex-start;
@@ -4890,7 +5329,16 @@ a {
 
   .admin-panel-tabsbar {
     margin-bottom: 16px;
-    width: 100%
+    width: 100%;
+    min-height: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    padding: 0
+  }
+
+  .admin-tabs-secondary {
+    display: contents
   }
 
   .admin-panel-user span {
@@ -4946,6 +5394,8 @@ a {
     width: auto;
     max-width: none;
     overflow-x: auto;
+    background: var(--hueso);
+    border: 1px solid rgba(26, 26, 55, .06);
     border-radius: 999px;
     padding: 6px;
     box-shadow: 0 16px 40px rgba(26, 26, 55, .18);
