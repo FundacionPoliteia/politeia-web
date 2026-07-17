@@ -1,0 +1,41 @@
+:root {
+  /* Brand colors */
+  --tinta: #1a1a37;
+  --azul: #137a9f;
+  --rosa: #fce3da;
+
+  /* Neutral colors */
+  --blanco: #ffffff;
+  --hueso: #f7f5f2;
+  --gris: #5b5b6b;
+  --linea: rgba(26, 26, 55, .12);
+
+  /* Semantic aliases */
+  --color-text: var(--tinta);
+  --color-text-muted: var(--gris);
+  --color-action: var(--azul);
+  --color-surface: var(--blanco);
+  --color-page: var(--hueso);
+  --color-border: var(--linea);
+  --color-soft-accent: var(--rosa);
+
+  /* Typography */
+  --display: 'Fraunces', Georgia, serif;
+  --texto: 'Archivo', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Radius */
+  --radius-pill: 999px;
+  --radius-card: 16px;
+  --radius-control: 14px;
+  --radius-panel: 18px;
+
+  /* Layout */
+  --wrap: 1180px;
+  --space-page-x: 32px;
+  --nav-height: 72px;
+
+  /* Shadows */
+  --shadow-soft: 0 18px 40px rgba(26, 26, 55, .10);
+  --shadow-panel: 0 24px 70px rgba(26, 26, 55, .18);
+}

@@ -35,6 +35,12 @@ const PROYECTOS = [
   },
 ];
 
+const ESTADO_BADGE = {
+  Activo: 'badge-active',
+  'En desarrollo': 'badge-development',
+  Publicación: 'badge-publication',
+};
+
 export default function ProyectosPage() {
   return (
     <main>
@@ -52,14 +58,14 @@ export default function ProyectosPage() {
             {PROYECTOS.map((p) => {
               const inner = (
                 <>
-                  <span className="badge" style={{ position: 'static', display: 'inline-block', marginBottom: '16px' }}>{p.estado}</span>
+                  <span className={`badge project-badge ${ESTADO_BADGE[p.estado] || ''}`}>{p.estado}</span>
                   <h3>{p.nombre}</h3>
                   <p>{p.desc}</p>
                   {p.link && <span className="go">{p.externo ? 'Abrir →' : 'Ver más →'}</span>}
                 </>
               );
               if (!p.link) {
-                return <div key={p.nombre} className="card soon">{inner}</div>;
+                return <div key={p.nombre} className="card soon" aria-disabled="true">{inner}</div>;
               }
               if (p.externo) {
                 return <a key={p.nombre} className="card" href={p.link} target="_blank" rel="noopener">{inner}</a>;

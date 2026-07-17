@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Politeia - Brand Kit</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400&family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./politeia-tokens.css">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0 }
+    html { scroll-behavior: smooth }
+    body { background: var(--hueso); color: var(--tinta); font-family: var(--texto); line-height: 1.6; -webkit-font-smoothing: antialiased }
+    a { color: inherit }
+    .wrap { max-width: var(--wrap); margin: 0 auto; padding: 0 var(--space-page-x) }
+    .hero { border-bottom: 1px solid var(--linea); background: var(--blanco); padding: 82px 0 56px }
+    .eyebrow { display: inline-flex; align-items: center; gap: 10px; color: var(--azul); font-size: .76rem; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; margin-bottom: 18px }
+    .eyebrow::before { content: ""; width: 28px; height: 1.5px; background: var(--azul) }
+    h1, h2, h3 { font-family: var(--display); line-height: 1.08; letter-spacing: -.02em }
+    h1 { max-width: 14ch; font-size: clamp(2.7rem, 6vw, 5.4rem); font-weight: 500; margin-bottom: 18px }
+    h1 em { color: var(--azul); font-style: italic }
+    h2 { font-size: clamp(2rem, 3.4vw, 3rem); font-weight: 500; margin-bottom: 12px }
+    h3 { font-size: 1.35rem; font-weight: 600; margin: 34px 0 14px }
+    .sub, .lead, .muted { color: var(--gris) }
+    .sub { max-width: 66ch; font-size: 1.12rem }
+    .lead { max-width: 66ch; margin-bottom: 34px }
+    .toc { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 32px }
+    .toc a { border: 1px solid var(--linea); border-radius: var(--radius-pill); color: var(--gris); font-size: .86rem; font-weight: 700; padding: 9px 15px; text-decoration: none }
+    .toc a:hover { border-color: var(--azul); color: var(--azul) }
+    section { border-bottom: 1px solid var(--linea); padding: 72px 0 }
+    .grid { display: grid; gap: 18px }
+    .swatches { grid-template-columns: repeat(3, minmax(0, 1fr)) }
+    .swatch { border: 1px solid var(--linea); border-radius: var(--radius-card); background: var(--blanco); overflow: hidden }
+    .chip { display: grid; place-items: center; height: 128px; cursor: pointer; font-family: var(--mono); font-size: .78rem; font-weight: 700 }
+    .chip.dark { color: var(--blanco) }
+    .chip.light { color: var(--tinta) }
+    .meta { padding: 18px }
+    .meta strong { display: block; font-size: 1rem; margin-bottom: 2px }
+    .meta code { color: var(--azul); font-family: var(--mono); font-size: .78rem }
+    .meta p { color: var(--gris); font-size: .88rem; margin-top: 10px }
+    .ratio { display: flex; min-height: 66px; border: 1px solid var(--linea); border-radius: var(--radius-control); overflow: hidden; margin-top: 18px }
+    .ratio div { display: grid; place-items: center; font-size: .7rem; font-weight: 800; letter-spacing: .08em; text-align: center; text-transform: uppercase }
+    .cards { grid-template-columns: repeat(2, minmax(0, 1fr)) }
+    .card { border: 1px solid var(--linea); border-radius: var(--radius-card); background: var(--blanco); padding: 28px }
+    .card h3 { margin-top: 0 }
+    .card p { color: var(--gris) }
+    .specimen { font-family: var(--display); font-size: clamp(2.2rem, 5vw, 4.1rem); font-weight: 500; line-height: 1.04; margin: 16px 0 20px }
+    .specimen.text { font-family: var(--texto); font-size: clamp(1.35rem, 2.4vw, 2rem); font-weight: 500; line-height: 1.35 }
+    table { width: 100%; border-collapse: collapse; overflow: hidden; border: 1px solid var(--linea); border-radius: var(--radius-card); background: var(--blanco) }
+    th, td { border-bottom: 1px solid var(--linea); padding: 14px 16px; text-align: left }
+    th { background: var(--tinta); color: var(--hueso); font-size: .76rem; letter-spacing: .09em; text-transform: uppercase }
+    tr:last-child td { border-bottom: 0 }
+    .pill { display: inline-flex; border-radius: var(--radius-pill); font-size: .72rem; font-weight: 800; padding: 4px 10px }
+    .ok { background: #d6f0e0; color: #0f5132 }
+    .warn { background: #ffe8cc; color: #7a4100 }
+    pre { overflow-x: auto; border-radius: var(--radius-card); background: var(--tinta); color: #f0eef6; font-family: var(--mono); font-size: .84rem; line-height: 1.7; padding: 24px }
+    .component-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 18px }
+    .btn { display: inline-flex; align-items: center; justify-content: center; border-radius: var(--radius-pill); border: 0; font-family: var(--texto); font-size: .94rem; font-weight: 700; min-height: 48px; padding: 13px 24px; text-decoration: none }
+    .btn-primary { background: var(--azul); color: var(--blanco) }
+    .btn-dark { background: var(--tinta); color: var(--blanco) }
+    .btn-ghost { border: 1.5px solid var(--linea); color: var(--tinta); background: transparent }
+    .badge { border-radius: var(--radius-pill); background: var(--rosa); color: var(--tinta); font-size: .72rem; font-weight: 800; letter-spacing: .09em; padding: 6px 11px; text-transform: uppercase }
+    .poster { position: relative; overflow: hidden; border-radius: 24px; background: var(--tinta); color: var(--hueso); min-height: 320px; padding: 42px }
+    .poster::before, .poster::after { content: ""; position: absolute; border-radius: 999px; filter: blur(34px); opacity: .28 }
+    .poster::before { width: 190px; height: 190px; right: -48px; top: -48px; background: var(--azul) }
+    .poster::after { width: 160px; height: 160px; left: -30px; bottom: -44px; background: var(--rosa) }
+    .poster > * { position: relative; z-index: 1 }
+    .poster h3 { color: var(--hueso); font-size: clamp(2rem, 5vw, 3.2rem); max-width: 14ch; margin: 0 0 20px }
+    .poster h3 em { color: var(--azul); font-style: italic }
+    .toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 90px); border-radius: var(--radius-pill); background: var(--tinta); color: var(--blanco); font-size: .86rem; font-weight: 800; padding: 12px 20px; transition: transform .24s ease }
+    .toast.on { transform: translate(-50%, 0) }
+    footer { color: var(--gris); padding: 44px 0 64px }
+    @media (max-width: 820px) {
+      .swatches, .cards { grid-template-columns: 1fr }
+      section { padding: 54px 0 }
+      .ratio { flex-direction: column }
+      .ratio div { min-height: 42px }
+    }
+  </style>
+</head>
+<body>
+  <header class="hero">
+    <div class="wrap">
+      <span class="eyebrow">Fundacion Politeia</span>
+      <h1>Brand kit <em>digital</em></h1>
+      <p class="sub">Sistema base para remodelar productos, paneles y sitios que conviven bajo Politeia. Define colores, tipografia, componentes y reglas de uso para mantener una identidad editorial, clara y consistente.</p>
+      <nav class="toc" aria-label="Contenido">
+        <a href="#tokens">Tokens</a>
+        <a href="#colores">Colores</a>
+        <a href="#tipografia">Tipografia</a>
+        <a href="#componentes">Componentes</a>
+        <a href="#accesibilidad">Accesibilidad</a>
+        <a href="#codigo">Codigo</a>
+        <a href="#redes">Redes</a>
+      </nav>
+    </div>
+  </header>
+
+  <section id="tokens">
+    <div class="wrap">
+      <h2>Fuente de verdad</h2>
+      <p class="lead">Los tokens viven en archivos separados para poder importarlos desde otras apps sin copiar estilos a mano.</p>
+      <div class="grid cards">
+        <article class="card"><h3>CSS</h3><p>Importar `brand/politeia-tokens.css` antes de los estilos de cada app. Es el camino directo para web-apps.</p></article>
+        <article class="card"><h3>JSON</h3><p>Usar `brand/politeia-tokens.json` para Figma, Style Dictionary o cualquier pipeline de design tokens.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <section id="colores">
+    <div class="wrap">
+      <h2>Colores</h2>
+      <p class="lead">La paleta se apoya en tinta, hueso y blanco. El azul senala accion. El rosa acompana: debe aparecer poco para conservar valor.</p>
+      <div class="grid swatches">
+        <article class="swatch"><div class="chip dark" style="background:#1a1a37" data-copy="#1a1a37">#1a1a37</div><div class="meta"><strong>Tinta</strong><code>--tinta</code><p>Texto principal, fondos oscuros y acciones de maxima jerarquia.</p></div></article>
+        <article class="swatch"><div class="chip dark" style="background:#137a9f" data-copy="#137a9f">#137a9f</div><div class="meta"><strong>Azul</strong><code>--azul</code><p>Links, botones, iconos, filtros activos y foco de interaccion.</p></div></article>
+        <article class="swatch"><div class="chip light" style="background:#fce3da" data-copy="#fce3da">#fce3da</div><div class="meta"><strong>Rosa</strong><code>--rosa</code><p>Badges, detalles y acentos blandos. Nunca como fondo dominante.</p></div></article>
+        <article class="swatch"><div class="chip light" style="background:#f7f5f2" data-copy="#f7f5f2">#f7f5f2</div><div class="meta"><strong>Hueso</strong><code>--hueso</code><p>Fondo general. Calido, editorial y menos duro que el blanco puro.</p></div></article>
+        <article class="swatch"><div class="chip light" style="background:#ffffff" data-copy="#ffffff">#ffffff</div><div class="meta"><strong>Blanco</strong><code>--blanco</code><p>Tarjetas, formularios, modales y superficies elevadas.</p></div></article>
+        <article class="swatch"><div class="chip dark" style="background:#5b5b6b" data-copy="#5b5b6b">#5b5b6b</div><div class="meta"><strong>Gris</strong><code>--gris</code><p>Texto secundario, metadatos, ayudas y descripciones.</p></div></article>
+      </div>
+      <h3>Proporcion recomendada</h3>
+      <div class="ratio">
+        <div style="background:#f7f5f2;flex:55;color:#5b5b6b">Hueso 55%</div>
+        <div style="background:#1a1a37;flex:24;color:#f7f5f2">Tinta 24%</div>
+        <div style="background:#ffffff;flex:13;color:#5b5b6b">Blanco 13%</div>
+        <div style="background:#137a9f;flex:6;color:#ffffff">Azul 6%</div>
+        <div style="background:#fce3da;flex:2;color:#1a1a37">Rosa 2%</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="tipografia">
+    <div class="wrap">
+      <h2>Tipografia</h2>
+      <p class="lead">Fraunces da tono editorial y presencia. Archivo sostiene lectura, paneles, tablas y controles. JetBrains Mono queda reservado para codigo y muestras tecnicas.</p>
+      <div class="grid cards">
+        <article class="card"><span class="badge">Display</span><div class="specimen">La politica tambien es tuya</div><p>Fraunces, pesos 400 a 700. Usar en h1, h2, h3, citas y marca.</p></article>
+        <article class="card"><span class="badge">Texto y UI</span><div class="specimen text">Informacion publica, clara y accionable para participar mejor.</div><p>Archivo, pesos 400 a 800. Usar en cuerpo, formularios, navegacion y botones.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <section id="componentes">
+    <div class="wrap">
+      <h2>Componentes base</h2>
+      <p class="lead">Patrones minimos para que las apps convivan sin perder identidad.</p>
+      <div class="grid cards">
+        <article class="card"><h3>Botones</h3><p>Primario azul para acciones principales. Tinta para acciones muy importantes. Ghost para navegacion o acciones secundarias.</p><div class="component-row"><a class="btn btn-primary" href="#">Accion principal</a><a class="btn btn-dark" href="#">Confirmar</a><a class="btn btn-ghost" href="#">Cancelar</a></div></article>
+        <article class="card"><h3>Tarjetas</h3><p>Radio 16px, borde `--linea`, superficie blanca y sombra suave solo en hover o elementos destacados.</p><div class="component-row"><span class="badge">En revision</span><span class="badge">Proximamente</span></div></article>
+      </div>
+    </div>
+  </section>
+
+  <section id="accesibilidad">
+    <div class="wrap">
+      <h2>Accesibilidad</h2>
+      <p class="lead">Combinaciones seguras para texto. Para parrafos largos, usar tinta o gris; reservar azul para accion o enfasis.</p>
+      <table>
+        <thead><tr><th>Combinacion</th><th>Uso</th><th>Estado</th></tr></thead>
+        <tbody>
+          <tr><td>Tinta sobre hueso/blanco</td><td>Texto principal</td><td><span class="pill ok">Seguro</span></td></tr>
+          <tr><td>Gris sobre hueso/blanco</td><td>Texto secundario</td><td><span class="pill ok">Seguro</span></td></tr>
+          <tr><td>Blanco sobre azul</td><td>Botones</td><td><span class="pill ok">Seguro</span></td></tr>
+          <tr><td>Azul sobre hueso</td><td>Etiquetas, links, iconos</td><td><span class="pill warn">Usar con peso</span></td></tr>
+          <tr><td>Rosa como fondo dominante</td><td>Secciones completas</td><td><span class="pill warn">Evitar</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="codigo">
+    <div class="wrap">
+      <h2>Codigo</h2>
+      <p class="lead">Import recomendado para nuevas apps.</p>
+      <pre>@import "./brand/politeia-tokens.css";
+
+.app-shell {
+  background: var(--color-page);
+  color: var(--color-text);
+  font-family: var(--texto);
+}
+
+.primary-action {
+  background: var(--color-action);
+  border-radius: var(--radius-pill);
+  color: var(--blanco);
+}</pre>
+    </div>
+  </section>
+
+  <section id="redes">
+    <div class="wrap">
+      <h2>Aplicacion editorial</h2>
+      <p class="lead">Para piezas de redes o landing pages: fondo tinta, titular Fraunces, dato clave en azul, rosa como atmosfera o detalle pequeno.</p>
+      <div class="poster"><span class="eyebrow">Informe Politeia</span><h3>Entender el dato antes de opinar sobre <em>politica</em>.</h3><p>politeia.ar</p></div>
+    </div>
+  </section>
+
+  <footer><div class="wrap"><p>Fundacion Politeia - Brand kit digital. Este documento acompana los tokens `politeia-tokens.css` y `politeia-tokens.json`.</p></div></footer>
+  <div class="toast" id="toast">Copiado</div>
+  <script>
+    document.querySelectorAll('[data-copy]').forEach(function (item) {
+      item.addEventListener('click', function () {
+        var value = item.getAttribute('data-copy');
+        navigator.clipboard.writeText(value).then(function () {
+          var toast = document.getElementById('toast');
+          toast.textContent = value + ' copiado';
+          toast.classList.add('on');
+          setTimeout(function () { toast.classList.remove('on'); }, 1400);
+        });
+      });
+    });
+  </script>
+</body>
+</html>

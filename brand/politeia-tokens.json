@@ -1,0 +1,86 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "color": {
+    "tinta": {
+      "$type": "color",
+      "$value": "#1a1a37",
+      "$description": "Color principal para texto, fondos oscuros y acciones de maxima jerarquia."
+    },
+    "azul": {
+      "$type": "color",
+      "$value": "#137a9f",
+      "$description": "Color de accion y acento para links, botones, iconos y estados activos."
+    },
+    "rosa": {
+      "$type": "color",
+      "$value": "#fce3da",
+      "$description": "Acento suave para detalles, badges y estados amables. No usar como color dominante."
+    },
+    "blanco": {
+      "$type": "color",
+      "$value": "#ffffff",
+      "$description": "Superficies elevadas, tarjetas y modales."
+    },
+    "hueso": {
+      "$type": "color",
+      "$value": "#f7f5f2",
+      "$description": "Fondo general de interfaces publicas y editoriales."
+    },
+    "gris": {
+      "$type": "color",
+      "$value": "#5b5b6b",
+      "$description": "Texto secundario, metadatos y ayudas."
+    },
+    "linea": {
+      "$type": "color",
+      "$value": "rgba(26, 26, 55, .12)",
+      "$description": "Bordes, divisores y separadores."
+    }
+  },
+  "font": {
+    "display": {
+      "$type": "fontFamily",
+      "$value": "Fraunces, Georgia, serif"
+    },
+    "text": {
+      "$type": "fontFamily",
+      "$value": "Archivo, system-ui, sans-serif"
+    },
+    "mono": {
+      "$type": "fontFamily",
+      "$value": "JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+    }
+  },
+  "radius": {
+    "pill": {
+      "$type": "dimension",
+      "$value": "999px"
+    },
+    "card": {
+      "$type": "dimension",
+      "$value": "16px"
+    },
+    "control": {
+      "$type": "dimension",
+      "$value": "14px"
+    },
+    "panel": {
+      "$type": "dimension",
+      "$value": "18px"
+    }
+  },
+  "layout": {
+    "wrap": {
+      "$type": "dimension",
+      "$value": "1180px"
+    },
+    "pageX": {
+      "$type": "dimension",
+      "$value": "32px"
+    },
+    "navHeight": {
+      "$type": "dimension",
+      "$value": "72px"
+    }
+  }
+}
