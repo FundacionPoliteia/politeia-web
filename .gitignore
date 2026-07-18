@@ -9,3 +9,4 @@ services/blog-api/.secrets/
 .yaml
 *.yaml
 services/blog-api/.env
+
