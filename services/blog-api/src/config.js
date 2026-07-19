@@ -1,10 +1,15 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 loadEnvFile();
 
+const require = createRequire(import.meta.url);
+const packageInfo = require('../package.json');
+
 export const config = {
+  appVersion: packageInfo.version || '1.0.0',
   nodeEnv: process.env.NODE_ENV || 'development',
   port: Number(process.env.PORT || 8080),
   gcpProjectId: process.env.GCP_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT || '',

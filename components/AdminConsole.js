@@ -10,6 +10,7 @@ import { parseTagsText, sanitizeCategory, sanitizeTags, taxonomyKey } from '../l
 
 const API_BASE = process.env.NEXT_PUBLIC_BLOG_API_BASE_URL || '';
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
+const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0';
 const ALLOWED_EMAIL_DOMAIN = 'politeia.ar';
 const ASSIGNED_EMAIL_DOMAIN = 'gmail.com';
 const SHOW_EMAIL_SETTINGS_UI = process.env.NEXT_PUBLIC_EMAIL_SETTINGS_ENABLED !== 'false';
@@ -1725,7 +1726,10 @@ export default function AdminConsole() {
         <section className="admin-hero">
           <div className="wrap admin-hero-in">
             <div>
-              <span className="eyebrow">Panel interno</span>
+              <span className="eyebrow admin-version-label">
+                Panel interno
+                <small>v{APP_VERSION}</small>
+              </span>
               <h1>Gestor de contenido</h1>
               <p>Crea borradores, prepara notas para revision y publica contenido editorial. Ante cambios de acceso o dudas del flujo, contacta al equipo responsable del panel.</p>
             </div>

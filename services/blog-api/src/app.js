@@ -43,7 +43,7 @@ export function createApp() {
   });
 
   app.get('/healthz', (req, res) => {
-    res.json({ ok: true, service: 'politeia-blog-api' });
+    res.json({ ok: true, service: 'politeia-blog-api', version: config.appVersion });
   });
 
   app.use('/docs', requireAuth, swaggerUi.serve, swaggerUi.setup(openApiSpec));

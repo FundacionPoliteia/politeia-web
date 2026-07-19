@@ -46,6 +46,7 @@ test('GET /healthz returns service health', async () => {
   assert.deepEqual(res.body, {
     ok: true,
     service: 'politeia-blog-api',
+    version: '1.0.0',
   });
 });
 

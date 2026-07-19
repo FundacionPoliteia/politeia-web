@@ -2601,6 +2601,18 @@ a {
   box-shadow: 0 10px 26px rgba(26, 26, 55, .04)
 }
 
+.admin-version-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px
+}
+
+.admin-version-label small {
+  color: var(--gris);
+  font-size: 10px;
+  font-weight: 700
+}
+
 .admin-panel-tabsbar {
   display: flex;
   align-items: center;
