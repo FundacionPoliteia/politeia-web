@@ -5,6 +5,7 @@ import {
   confirmNewsletterSubscription,
   createNewsletterCampaign,
   getNewsletterOverview,
+  listNewsletterSubscribers,
   requestNewsletterSubscription,
   sendNewsletterTest,
   unsubscribeNewsletter,
@@ -52,6 +53,17 @@ export function newsletterRouter({ writeLimiter }) {
   router.get('/admin/overview', async (_req, res, next) => {
     try {
       res.json(await getNewsletterOverview());
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.get('/admin/subscribers', async (req, res, next) => {
+    try {
+      res.json(await listNewsletterSubscribers({
+        status: req.query.status,
+        limit: req.query.limit,
+      }));
     } catch (err) {
       next(err);
     }

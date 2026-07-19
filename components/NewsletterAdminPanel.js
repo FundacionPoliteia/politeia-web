@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import RichTextEditor from './RichTextEditor';
 
 const EMPTY_CAMPAIGN = {
@@ -17,10 +17,23 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
   const [busyAction, setBusyAction] = useState('');
   const [message, setMessage] = useState('');
   const [confirmSendOpen, setConfirmSendOpen] = useState(false);
+  const [subscriberModal, setSubscriberModal] = useState(null);
+  const subscriberRequestRef = useRef(0);
 
   useEffect(() => {
     loadOverview();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!subscriberModal && !confirmSendOpen) return undefined;
+    function closeOnEscape(event) {
+      if (event.key !== 'Escape' || busyAction) return;
+      if (subscriberModal) closeSubscriberModal();
+      else setConfirmSendOpen(false);
+    }
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [busyAction, confirmSendOpen, subscriberModal]);
 
   async function loadOverview() {
     try {
@@ -93,6 +106,31 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
     }
   }
 
+  async function openSubscriberModal(status) {
+    const requestId = subscriberRequestRef.current + 1;
+    subscriberRequestRef.current = requestId;
+    setSubscriberModal({ status, items: [], total: 0, loading: true, error: '' });
+    try {
+      const data = await mailApi(`/v1/newsletter/admin/subscribers?status=${encodeURIComponent(status)}&limit=50`);
+      if (subscriberRequestRef.current !== requestId) return;
+      setSubscriberModal({
+        status,
+        items: data.items || [],
+        total: data.total || 0,
+        loading: false,
+        error: '',
+      });
+    } catch (err) {
+      if (subscriberRequestRef.current !== requestId) return;
+      setSubscriberModal({ status, items: [], total: 0, loading: false, error: err.message });
+    }
+  }
+
+  function closeSubscriberModal() {
+    subscriberRequestRef.current += 1;
+    setSubscriberModal(null);
+  }
+
   async function mailApi(path, options = {}) {
     const response = await fetch(`${apiBase}${path}`, {
       credentials: 'include',
@@ -120,11 +158,62 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
         </div>
         {overview && (
           <div className="admin-newsletter-counts" aria-label="Estado de suscripciones">
-            <strong>{overview.counts.subscribed}</strong><small>confirmados</small>
-            <strong>{overview.counts.pending}</strong><small>pendientes</small>
+            <button aria-haspopup="dialog" aria-label="Ver suscriptores confirmados" onClick={() => openSubscriberModal('subscribed')} type="button">
+              <strong>{overview.counts.subscribed}</strong><span>confirmados</span>
+            </button>
+            <button aria-haspopup="dialog" aria-label="Ver suscriptores pendientes" onClick={() => openSubscriberModal('pending')} type="button">
+              <strong>{overview.counts.pending}</strong><span>pendientes</span>
+            </button>
           </div>
         )}
       </div>
+
+      {subscriberModal && (
+        <div className="admin-modal-backdrop" role="presentation" onMouseDown={closeSubscriberModal}>
+          <div aria-labelledby="newsletter-subscribers-title" aria-modal="true" className="admin-modal admin-newsletter-subscribers" onMouseDown={(event) => event.stopPropagation()} role="dialog">
+            <div className="admin-newsletter-subscribers-head">
+              <div>
+                <span>Suscriptores</span>
+                <h2 id="newsletter-subscribers-title">
+                  {subscriberModal.status === 'subscribed' ? 'Confirmados' : 'Pendientes'}
+                </h2>
+                {!subscriberModal.loading && !subscriberModal.error && (
+                  <p>{subscriberModal.total} {subscriberModal.total === 1 ? 'persona' : 'personas'}</p>
+                )}
+              </div>
+              <button aria-label="Cerrar lista" className="admin-icon-button admin-modal-close" onClick={closeSubscriberModal} type="button">
+                <span aria-hidden="true" className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            {subscriberModal.loading ? (
+              <div className="admin-newsletter-subscriber-state" role="status">
+                <span className="admin-spinner" aria-hidden="true" />
+                Cargando suscriptores...
+              </div>
+            ) : subscriberModal.error ? (
+              <div className="admin-profile-notice" role="alert">{subscriberModal.error}</div>
+            ) : subscriberModal.items.length === 0 ? (
+              <div className="admin-newsletter-subscriber-state">No hay suscriptores en este estado.</div>
+            ) : (
+              <div className="admin-newsletter-subscriber-list">
+                {subscriberModal.items.map((subscriber) => (
+                  <article key={subscriber.id || subscriber.email}>
+                    <strong>{subscriber.email}</strong>
+                    <span>
+                      {subscriber.source ? `Origen: ${subscriber.source}` : 'Origen no informado'}
+                      {' · '}
+                      {formatSubscriberDate(subscriber.confirmedAt || subscriber.requestedAt || subscriber.updatedAt)}
+                    </span>
+                  </article>
+                ))}
+              </div>
+            )}
+            {subscriberModal.total > subscriberModal.items.length && (
+              <small className="admin-newsletter-subscriber-limit">Se muestran las 50 personas mas recientes.</small>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="admin-newsletter-form">
         <div className="admin-two">
@@ -173,7 +262,7 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
       </div>
 
       {confirmSendOpen && (
-        <div className="admin-modal-overlay" role="presentation" onMouseDown={() => setConfirmSendOpen(false)}>
+        <div className="admin-modal-backdrop" role="presentation" onMouseDown={() => setConfirmSendOpen(false)}>
           <div aria-labelledby="newsletter-confirm-title" aria-modal="true" className="admin-modal admin-newsletter-confirm" onMouseDown={(event) => event.stopPropagation()} role="dialog">
             <span>Confirmar envio</span>
             <h2 id="newsletter-confirm-title">Enviar a toda la lista confirmada</h2>
@@ -189,4 +278,15 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
       )}
     </section>
   );
+}
+
+function formatSubscriberDate(value) {
+  if (!value) return 'Sin fecha';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Sin fecha';
+  return new Intl.DateTimeFormat('es-AR', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(date);
 }

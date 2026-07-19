@@ -3082,6 +3082,29 @@ a {
   margin-bottom: 14px
 }
 
+.admin-inbox-policy {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 16px;
+  border: 1px solid rgba(19, 122, 159, .16);
+  border-radius: 10px;
+  background: rgba(19, 122, 159, .055);
+  color: var(--gris);
+  padding: 9px 11px
+}
+
+.admin-inbox-policy .material-symbols-outlined {
+  color: var(--azul);
+  font-size: 19px
+}
+
+.admin-inbox-policy p {
+  font-size: .78rem;
+  line-height: 1.35
+}
+
 .admin-icon-button {
   width: 38px;
   height: 38px;
@@ -3114,6 +3137,79 @@ a {
   flex: 1;
   align-content: start;
   padding-right: 2px
+}
+
+.admin-inbox-empty-recent {
+  border: 1px dashed var(--linea);
+  border-radius: 10px;
+  color: var(--gris);
+  font-size: .84rem;
+  padding: 13px;
+  text-align: center
+}
+
+.admin-inbox-previous-wrap {
+  display: grid;
+  gap: 14px;
+  padding-top: 2px
+}
+
+.admin-inbox-previous-toggle {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  border: 1px solid var(--linea);
+  border-radius: 12px;
+  background: var(--blanco);
+  color: var(--tinta);
+  font-family: var(--texto);
+  padding: 11px 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .18s, background .18s
+}
+
+.admin-inbox-previous-toggle:hover {
+  border-color: rgba(19, 122, 159, .3);
+  background: rgba(19, 122, 159, .045)
+}
+
+.admin-inbox-previous-toggle > .material-symbols-outlined:first-child {
+  color: var(--azul);
+  font-size: 21px
+}
+
+.admin-inbox-previous-toggle strong,
+.admin-inbox-previous-toggle small {
+  display: block
+}
+
+.admin-inbox-previous-toggle strong {
+  font-size: .86rem
+}
+
+.admin-inbox-previous-toggle small {
+  color: var(--gris);
+  font-size: .74rem;
+  margin-top: 2px
+}
+
+.admin-inbox-previous-chevron {
+  color: var(--gris);
+  font-size: 21px
+}
+
+.admin-inbox-previous {
+  display: grid;
+  gap: 16px;
+  padding-top: 2px
+}
+
+.admin-inbox-previous .admin-inbox-item {
+  background: #fbfbfa;
+  opacity: .92
 }
 
 .admin-inbox-day {
@@ -5864,14 +5960,32 @@ a {
 
 .admin-newsletter-counts {
   display: grid;
-  grid-template-columns: auto auto;
-  align-items: baseline;
-  gap: 2px 8px;
-  min-width: 130px;
-  padding: 10px 14px;
+  gap: 2px;
+  min-width: 150px;
+  padding: 5px;
   border: 1px solid var(--linea);
   border-radius: 8px;
   background: var(--blanco)
+}
+
+.admin-newsletter-counts button {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--tinta);
+  text-align: left;
+  cursor: pointer
+}
+
+.admin-newsletter-counts button:hover,
+.admin-newsletter-counts button:focus-visible {
+  background: rgba(20, 139, 174, .1)
 }
 
 .admin-newsletter-counts strong {
@@ -5879,8 +5993,82 @@ a {
   font-size: 1rem
 }
 
-.admin-newsletter-counts small {
+.admin-newsletter-counts span {
+  color: var(--gris);
+  font-size: .8rem
+}
+
+.admin-newsletter-subscribers {
+  display: grid;
+  gap: 18px;
+  width: min(600px, calc(100vw - 32px));
+  max-height: min(78vh, 720px);
+  overflow: hidden
+}
+
+.admin-newsletter-subscribers-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px
+}
+
+.admin-newsletter-subscribers-head>div {
+  display: grid;
+  gap: 3px
+}
+
+.admin-newsletter-subscribers-head>div>span {
+  color: var(--celeste);
+  font-size: .72rem;
+  font-weight: 800;
+  text-transform: uppercase
+}
+
+.admin-newsletter-subscribers-head h2,
+.admin-newsletter-subscribers-head p {
+  margin: 0
+}
+
+.admin-newsletter-subscribers-head p {
   color: var(--gris)
+}
+
+.admin-newsletter-subscriber-list {
+  display: grid;
+  gap: 8px;
+  min-height: 0;
+  padding-right: 4px;
+  overflow-y: auto
+}
+
+.admin-newsletter-subscriber-list article {
+  display: grid;
+  gap: 5px;
+  padding: 12px 14px;
+  border: 1px solid var(--linea);
+  border-radius: 8px;
+  background: var(--fondo)
+}
+
+.admin-newsletter-subscriber-list strong {
+  overflow-wrap: anywhere
+}
+
+.admin-newsletter-subscriber-list span,
+.admin-newsletter-subscriber-limit {
+  color: var(--gris);
+  font-size: .78rem
+}
+
+.admin-newsletter-subscriber-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 130px;
+  color: var(--gris);
+  text-align: center
 }
 
 .admin-newsletter-form {
@@ -5947,5 +6135,300 @@ a {
 
   .admin-newsletter-counts {
     width: 100%
+  }
+}
+
+.admin-operations-panel {
+  border-top: 4px solid var(--azul)
+}
+
+.admin-operations-head {
+  align-items: flex-start
+}
+
+.admin-operations-head-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px
+}
+
+.admin-operations-auto-refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--gris);
+  font-size: .78rem;
+  white-space: nowrap
+}
+
+.admin-operations-auto-refresh input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--azul)
+}
+
+.admin-operations-body {
+  display: grid;
+  gap: 14px;
+  margin-top: 20px
+}
+
+.admin-operations-tabs {
+  display: inline-flex;
+  width: fit-content;
+  padding: 4px;
+  border: 1px solid var(--linea);
+  border-radius: 8px;
+  background: var(--hueso)
+}
+
+.admin-operations-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--gris);
+  font-weight: 800;
+  padding: 9px 12px;
+  cursor: pointer
+}
+
+.admin-operations-tabs button.selected {
+  background: var(--tinta);
+  color: var(--blanco)
+}
+
+.admin-operations-tabs button span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .18);
+  font-size: .72rem
+}
+
+.admin-operations-tabs button:not(.selected) span {
+  background: rgba(19, 122, 159, .1);
+  color: var(--azul)
+}
+
+.admin-operations-filters {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(150px, auto) minmax(170px, auto);
+  gap: 10px
+}
+
+.admin-operations-search {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  border: 1px solid var(--linea);
+  border-radius: 8px;
+  background: var(--blanco);
+  padding: 0 12px
+}
+
+.admin-operations-search:focus-within {
+  border-color: rgba(19, 122, 159, .55);
+  box-shadow: 0 0 0 3px rgba(19, 122, 159, .08)
+}
+
+.admin-operations-search .material-symbols-outlined {
+  color: var(--celeste);
+  font-size: 20px
+}
+
+.admin-operations-search input,
+.admin-operations-filters select {
+  min-width: 0;
+  border: 1px solid var(--linea);
+  border-radius: 8px;
+  background: var(--blanco);
+  color: var(--tinta);
+  font: inherit;
+  padding: 11px 12px
+}
+
+.admin-operations-search input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  padding-inline: 0
+}
+
+.admin-operations-summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  color: var(--gris)
+}
+
+.admin-operations-summary span {
+  color: var(--tinta);
+  font-size: .86rem;
+  font-weight: 800
+}
+
+.admin-operations-summary small {
+  text-align: right
+}
+
+.admin-operations-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 180px;
+  border: 1px dashed var(--linea);
+  border-radius: 10px;
+  color: var(--gris);
+  text-align: center
+}
+
+.admin-operations-table {
+  min-width: 1120px
+}
+
+.admin-operations-table td {
+  max-width: 360px
+}
+
+.admin-operations-table td>strong,
+.admin-operations-table td>span,
+.admin-operations-table td>code,
+.admin-operations-table td>time {
+  display: block
+}
+
+.admin-operations-table code {
+  max-width: 42ch;
+  overflow: hidden;
+  color: var(--tinta);
+  font-size: .76rem;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap
+}
+
+.admin-method {
+  width: fit-content;
+  margin-bottom: 6px;
+  border-radius: 4px;
+  background: rgba(19, 122, 159, .1);
+  color: var(--azul);
+  font-size: .68rem;
+  letter-spacing: .04em;
+  padding: 3px 6px
+}
+
+.admin-method-post,
+.admin-method-patch,
+.admin-method-put {
+  background: rgba(31, 113, 82, .11);
+  color: #1f7152
+}
+
+.admin-method-delete {
+  background: rgba(185, 60, 60, .1);
+  color: #9b3030
+}
+
+.admin-log-status {
+  width: fit-content;
+  border-radius: 999px;
+  font-size: .72rem;
+  font-weight: 800;
+  padding: 4px 8px
+}
+
+.admin-log-status.success {
+  background: rgba(31, 113, 82, .11);
+  color: #1f7152
+}
+
+.admin-log-status.redirect {
+  background: rgba(19, 122, 159, .1);
+  color: var(--azul)
+}
+
+.admin-log-status.warning {
+  background: rgba(190, 134, 24, .14);
+  color: #7d580f
+}
+
+.admin-log-status.error {
+  background: rgba(185, 60, 60, .1);
+  color: #9b3030
+}
+
+.admin-operations-table .admin-log-error {
+  max-width: 46ch;
+  color: #9b3030;
+  overflow-wrap: anywhere
+}
+
+.admin-operations-panel .admin-profile-notice.error {
+  border-color: rgba(185, 60, 60, .25);
+  background: rgba(185, 60, 60, .08);
+  color: #7f2828
+}
+
+@media(max-width:900px) {
+  .admin-operations-head-actions {
+    width: 100%;
+    justify-content: flex-start
+  }
+
+  .admin-operations-filters {
+    grid-template-columns: 1fr 1fr
+  }
+
+  .admin-operations-search {
+    grid-column: 1/-1
+  }
+}
+
+@media(max-width:600px) {
+  .admin-operations-head-actions,
+  .admin-operations-head-actions .btn {
+    width: 100%
+  }
+
+  .admin-operations-auto-refresh {
+    width: 100%
+  }
+
+  .admin-operations-tabs,
+  .admin-operations-tabs button {
+    width: 100%
+  }
+
+  .admin-operations-tabs button {
+    justify-content: center
+  }
+
+  .admin-operations-filters {
+    grid-template-columns: 1fr
+  }
+
+  .admin-operations-search {
+    grid-column: auto
+  }
+
+  .admin-operations-summary {
+    align-items: flex-start;
+    flex-direction: column
+  }
+
+  .admin-operations-summary small {
+    text-align: left
   }
 }

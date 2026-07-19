@@ -253,6 +253,29 @@ export const openApiSpec = {
         responses: { 200: { description: 'Notifications marked as read' } },
       },
     },
+    '/admin/logs/requests': {
+      get: {
+        summary: 'List sanitized API request logs (admin only)',
+        security: [{ sessionCookie: [] }],
+        parameters: [{ name: 'limit', in: 'query', schema: { type: 'integer', default: 250, maximum: 500 } }],
+        responses: { 200: { description: 'Recent API request logs' }, 403: { description: 'Admin role required' } },
+      },
+    },
+    '/admin/logs/mail': {
+      get: {
+        summary: 'List sanitized mail delivery logs (admin only)',
+        security: [{ sessionCookie: [] }],
+        parameters: [{ name: 'limit', in: 'query', schema: { type: 'integer', default: 200, maximum: 500 } }],
+        responses: { 200: { description: 'Recent mail delivery logs' }, 403: { description: 'Admin role required' } },
+      },
+    },
+    '/admin/logs/resend-test': {
+      post: {
+        summary: 'Send a Resend test email to the authenticated admin',
+        security: [{ sessionCookie: [] }],
+        responses: { 200: { description: 'Test accepted by the provider' }, 403: { description: 'Admin role required' } },
+      },
+    },
     '/media': {
       post: {
         summary: 'Upload image or register external image URL',

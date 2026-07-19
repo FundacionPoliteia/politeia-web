@@ -123,6 +123,36 @@ export async function getNewsletterOverview() {
   };
 }
 
+export async function listNewsletterSubscribers({ status, limit = 50 } = {}) {
+  const cleanStatus = String(status || '').trim().toLowerCase();
+  if (!['subscribed', 'pending'].includes(cleanStatus)) {
+    throw new HttpError(400, 'status must be subscribed or pending');
+  }
+  const cleanLimit = Math.min(Math.max(Number(limit) || 50, 1), 100);
+  const snapshot = await subscriptions().get();
+  const items = snapshot.docs
+    .map(serializeDoc)
+    .filter((item) => item.projectKey === config.mailProjectKey
+      && item.audienceKey === config.newsletterAudienceKey
+      && item.status === cleanStatus)
+    .sort((left, right) => subscriberDate(right).localeCompare(subscriberDate(left)));
+
+  return {
+    status: cleanStatus,
+    total: items.length,
+    items: items.slice(0, cleanLimit).map((item) => ({
+      id: item.id,
+      email: item.email,
+      status: item.status,
+      source: item.source || '',
+      locale: item.locale || '',
+      requestedAt: item.requestedAt || null,
+      confirmedAt: item.confirmedAt || null,
+      updatedAt: item.updatedAt || null,
+    })),
+  };
+}
+
 export async function sendNewsletterTest({ to, subject, content, actorEmail }) {
   const cleanEmail = validateEmail(to);
   const cleanSubject = sanitizeShortText(subject, 180);
@@ -302,6 +332,10 @@ function sanitizeShortText(value = '', maxLength = 180) {
 
 function stripHtml(value = '') {
   return sanitizeHtml(value, { allowedTags: [], allowedAttributes: {} }).replace(/\s+/g, ' ').trim();
+}
+
+function subscriberDate(item = {}) {
+  return String(item.confirmedAt || item.requestedAt || item.updatedAt || '');
 }
 
 function subscriptionId(email) {

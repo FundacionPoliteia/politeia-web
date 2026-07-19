@@ -34,7 +34,12 @@ const DEFAULT_EVENTS = {
 const preferences = () => db().collection('notificationPreferences');
 const events = () => db().collection('notificationEvents');
 const reads = () => db().collection('notificationReads');
-const INBOX_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const INBOX_RECENT_DAYS = 3;
+const INBOX_RETENTION_DAYS = 7;
+const INBOX_RETENTION_MS = INBOX_RETENTION_DAYS * DAY_MS;
+const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
+let nextCleanupAt = 0;
 
 export async function getNotificationPreferences(user) {
   const email = normalizeEmail(user?.email);
@@ -91,9 +96,10 @@ export async function updateNotificationPreferences(user, body = {}) {
 
 export async function listInAppNotifications(user, { limit = 50 } = {}) {
   const email = normalizeEmail(user?.email);
-  if (!email) return { items: [], unreadCount: 0 };
+  if (!email) return inboxResult([], 0);
 
-  const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 100);
+  await cleanupExpiredNotifications().catch(logNotificationCleanupError);
+  const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 300);
   const userRoles = sanitizeRoles(user?.roles || []);
   const since = Date.now() - INBOX_RETENTION_MS;
   const [eventsSnapshot, readsSnapshot] = await Promise.all([
@@ -116,6 +122,8 @@ export async function listInAppNotifications(user, { limit = 50 } = {}) {
   return {
     items: relevant.slice(0, safeLimit),
     unreadCount: relevant.filter((item) => !item.readAt).length,
+    recentDays: INBOX_RECENT_DAYS,
+    retentionDays: INBOX_RETENTION_DAYS,
   };
 }
 
@@ -134,16 +142,48 @@ export async function markNotificationRead(eventId = '', user) {
     eventId: cleanEventId,
     userEmail: email,
     readAt: serverTimestamp(),
+    expiresAt: notificationExpiration(event),
   }, { merge: true });
   return toInboxItem(event, serializeDoc(await ref.get()).readAt || null);
 }
 
 export async function markAllNotificationsRead(user) {
-  const inbox = await listInAppNotifications(user, { limit: 100 });
+  const inbox = await listInAppNotifications(user, { limit: 300 });
   await Promise.all(inbox.items
     .filter((item) => !item.readAt)
     .map((item) => markNotificationRead(item.id, user)));
-  return listInAppNotifications(user, { limit: 50 });
+  return listInAppNotifications(user, { limit: 300 });
+}
+
+export async function cleanupExpiredNotifications({ force = false, now = Date.now() } = {}) {
+  if (!force && now < nextCleanupAt) return { deletedEvents: 0, deletedReads: 0, skipped: true };
+  nextCleanupAt = now + CLEANUP_INTERVAL_MS;
+  const cutoff = now - INBOX_RETENTION_MS;
+  const [eventsSnapshot, readsSnapshot] = await Promise.all([events().get(), reads().get()]);
+  const retainedEventIds = new Set();
+  const expiredEventDocs = [];
+
+  for (const doc of eventsSnapshot.docs) {
+    const event = serializeDoc(doc);
+    if (eventTimestamp(event) < cutoff) expiredEventDocs.push(doc);
+    else retainedEventIds.add(doc.id);
+  }
+
+  const orphanReadDocs = readsSnapshot.docs.filter((doc) => {
+    const item = serializeDoc(doc);
+    return !item?.eventId || !retainedEventIds.has(item.eventId);
+  });
+
+  await Promise.all([
+    ...expiredEventDocs.map((doc) => events().doc(doc.id).delete()),
+    ...orphanReadDocs.map((doc) => reads().doc(doc.id).delete()),
+  ]);
+
+  return {
+    deletedEvents: expiredEventDocs.length,
+    deletedReads: orphanReadDocs.length,
+    skipped: false,
+  };
 }
 
 export async function notifyPostSubmittedForReview(post, actor) {
@@ -416,7 +456,9 @@ async function queueNotification({
     status: 'processed',
     createdAt: serverTimestamp(),
     processedAt: serverTimestamp(),
+    expiresAt: new Date(Date.now() + INBOX_RETENTION_MS),
   };
+  await cleanupExpiredNotifications().catch(logNotificationCleanupError);
   await eventRef.set(event);
 
   const createdDeliveries = [];
@@ -545,6 +587,29 @@ function eventTimestamp(event) {
   if (typeof value.toDate === 'function') return value.toDate().getTime();
   if (value instanceof Date) return value.getTime();
   return Date.parse(String(value)) || 0;
+}
+
+function notificationExpiration(event) {
+  const createdAt = eventTimestamp(event) || Date.now();
+  return new Date(createdAt + INBOX_RETENTION_MS);
+}
+
+function inboxResult(items, unreadCount) {
+  return {
+    items,
+    unreadCount,
+    recentDays: INBOX_RECENT_DAYS,
+    retentionDays: INBOX_RETENTION_DAYS,
+  };
+}
+
+function logNotificationCleanupError(err) {
+  nextCleanupAt = 0;
+  console.error(JSON.stringify({
+    severity: 'ERROR',
+    message: 'notification retention cleanup failed',
+    error: err?.message || String(err),
+  }));
 }
 
 function dedupeRecipients(recipients = []) {

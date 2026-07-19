@@ -6,6 +6,7 @@ import { marked } from 'marked';
 import RichTextEditor from './RichTextEditor';
 import AuthorCard from './AuthorCard';
 import NewsletterAdminPanel from './NewsletterAdminPanel';
+import AdminOperationsPanel from './AdminOperationsPanel';
 import { parseTagsText, sanitizeCategory, sanitizeTags, taxonomyKey } from '../lib/taxonomy';
 
 const API_BASE = process.env.NEXT_PUBLIC_BLOG_API_BASE_URL || '';
@@ -14,6 +15,8 @@ const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0';
 const ALLOWED_EMAIL_DOMAIN = 'politeia.ar';
 const ASSIGNED_EMAIL_DOMAIN = 'gmail.com';
 const SHOW_EMAIL_SETTINGS_UI = process.env.NEXT_PUBLIC_EMAIL_SETTINGS_ENABLED !== 'false';
+const NOTIFICATION_REFRESH_MS = 60 * 1000;
+const DEFAULT_NOTIFICATION_POLICY = { recentDays: 3, retentionDays: 7 };
 
 
 const EMPTY_FORM = {
@@ -127,6 +130,33 @@ function ActionSpinner({ active }) {
   return active ? <span className="admin-button-spinner" aria-hidden="true" /> : null;
 }
 
+function NotificationDayGroups({ groups = [], onOpen }) {
+  return groups.map((group) => (
+    <section className="admin-inbox-day" key={group.key}>
+      <div className="admin-inbox-day-label">
+        <span>{group.label}</span>
+      </div>
+      {group.items.map((notification) => (
+        <button
+          className={`admin-inbox-item ${notification.readAt ? '' : 'unread'} ${notificationToneClass(notification)}`}
+          key={notification.id}
+          onClick={() => onOpen(notification)}
+          type="button"
+        >
+          <span className={`admin-inbox-icon ${notification.readAt ? '' : 'unread'}`}>
+            <span aria-hidden="true" className="material-symbols-outlined">{notificationIcon(notification.type)}</span>
+          </span>
+          <span>
+            <strong>{notificationTitle(notification)}</strong>
+            <small>{notification.actorName ? `${notification.actorName} - ` : ''}{formatAdminDate(notification.createdAt)}</small>
+            {notification.commentSelectedText && <q>{notification.commentSelectedText}</q>}
+          </span>
+        </button>
+      ))}
+    </section>
+  ));
+}
+
 export default function AdminConsole() {
   const [checkingSession, setCheckingSession] = useState(true);
   const [user, setUser] = useState(null);
@@ -169,6 +199,8 @@ export default function AdminConsole() {
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
+  const [showPreviousNotifications, setShowPreviousNotifications] = useState(false);
+  const [notificationPolicy, setNotificationPolicy] = useState(DEFAULT_NOTIFICATION_POLICY);
   const [mobilePostsOpen, setMobilePostsOpen] = useState(false);
   const [activePanelTab, setActivePanelTab] = useState('blogs');
   const [userProfile, setUserProfile] = useState(EMPTY_PROFILE);
@@ -239,9 +271,17 @@ export default function AdminConsole() {
     () => serializeForm(form) !== serializeForm(savedForm),
     [form, savedForm]
   );
+  const notificationBuckets = useMemo(
+    () => partitionNotifications(inAppNotifications, notificationPolicy.recentDays),
+    [inAppNotifications, notificationPolicy.recentDays]
+  );
   const notificationDayGroups = useMemo(
-    () => groupNotificationsByDay(inAppNotifications),
-    [inAppNotifications]
+    () => groupNotificationsByDay(notificationBuckets.visible),
+    [notificationBuckets.visible]
+  );
+  const previousNotificationDayGroups = useMemo(
+    () => groupNotificationsByDay(notificationBuckets.previous),
+    [notificationBuckets.previous]
   );
 
   useEffect(() => {
@@ -318,8 +358,15 @@ export default function AdminConsole() {
       loadInAppNotifications({ silent: true });
       const intervalId = window.setInterval(() => {
         loadInAppNotifications({ silent: true });
-      }, 60000);
-      return () => window.clearInterval(intervalId);
+      }, NOTIFICATION_REFRESH_MS);
+      const refreshWhenVisible = () => {
+        if (document.visibilityState === 'visible') loadInAppNotifications({ silent: true });
+      };
+      document.addEventListener('visibilitychange', refreshWhenVisible);
+      return () => {
+        window.clearInterval(intervalId);
+        document.removeEventListener('visibilitychange', refreshWhenVisible);
+      };
     } else {
       setNotificationPreferences(null);
       setUserProfile(EMPTY_PROFILE);
@@ -327,6 +374,8 @@ export default function AdminConsole() {
       setInAppNotifications([]);
       setUnreadNotificationCount(0);
       setNotificationsOpen(false);
+      setShowPreviousNotifications(false);
+      setNotificationPolicy(DEFAULT_NOTIFICATION_POLICY);
     }
   }, [canAccessPanel]);
 
@@ -684,9 +733,10 @@ export default function AdminConsole() {
   async function loadInAppNotifications({ silent = false } = {}) {
     try {
       if (!silent) setLoadingNotifications(true);
-      const data = await api('/v1/notifications/inbox?limit=50');
+      const data = await api('/v1/notifications/inbox?limit=100');
       setInAppNotifications((data.items || []).map(normalizeInAppNotification));
       setUnreadNotificationCount(Number(data.unreadCount) || 0);
+      setNotificationPolicy(normalizeNotificationPolicy(data));
     } catch (err) {
       if (!silent) setMessage(err.message);
     } finally {
@@ -714,6 +764,7 @@ export default function AdminConsole() {
       const data = await api('/v1/notifications/read-all', { method: 'POST' });
       setInAppNotifications((data.items || []).map(normalizeInAppNotification));
       setUnreadNotificationCount(Number(data.unreadCount) || 0);
+      setNotificationPolicy(normalizeNotificationPolicy(data));
     } catch (err) {
       setMessage(err.message);
     } finally {
@@ -1747,7 +1798,10 @@ export default function AdminConsole() {
       )}
 
       {user && canAccessPanel && notificationsOpen && (
-        <div className="admin-notification-overlay" role="presentation" onMouseDown={() => setNotificationsOpen(false)}>
+        <div className="admin-notification-overlay" role="presentation" onMouseDown={() => {
+          setNotificationsOpen(false);
+          setShowPreviousNotifications(false);
+        }}>
           <aside
             aria-label="Notificaciones internas"
             aria-modal="true"
@@ -1759,9 +1813,15 @@ export default function AdminConsole() {
               <div>
                 <span>Notificaciones</span>
                 <h2>Actividad editorial</h2>
-                <p>{unreadNotificationCount ? `${unreadNotificationCount} sin leer` : 'Todo al dia'}</p>
+                <p>
+                  {unreadNotificationCount ? `${unreadNotificationCount} sin leer` : 'Todo al dia'}
+                  {' · '}Historial de {notificationPolicy.retentionDays} dias
+                </p>
               </div>
-              <button aria-label="Cerrar notificaciones" className="admin-icon-button" onClick={() => setNotificationsOpen(false)} type="button">
+              <button aria-label="Cerrar notificaciones" className="admin-icon-button" onClick={() => {
+                setNotificationsOpen(false);
+                setShowPreviousNotifications(false);
+              }} type="button">
                 <span aria-hidden="true" className="material-symbols-outlined">close</span>
               </button>
             </div>
@@ -1773,36 +1833,45 @@ export default function AdminConsole() {
                 Marcar todas como leidas
               </button>
             </div>
+            <div className="admin-inbox-policy">
+              <span aria-hidden="true" className="material-symbols-outlined">schedule</span>
+              <p>Las notificaciones leidas se agrupan en Anteriores despues de {notificationPolicy.recentDays} dias.</p>
+            </div>
             {loadingNotifications ? (
               <p className="admin-muted">Cargando notificaciones...</p>
             ) : inAppNotifications.length === 0 ? (
-              <p className="admin-muted">No hay notificaciones recientes.</p>
+              <p className="admin-muted">No hay notificaciones en los ultimos {notificationPolicy.retentionDays} dias.</p>
             ) : (
               <div className="admin-inbox-list">
-                {notificationDayGroups.map((group) => (
-                  <section className="admin-inbox-day" key={group.key}>
-                    <div className="admin-inbox-day-label">
-                      <span>{group.label}</span>
-                    </div>
-                    {group.items.map((notification) => (
-                      <button
-                        className={`admin-inbox-item ${notification.readAt ? '' : 'unread'} ${notificationToneClass(notification)}`}
-                        key={notification.id}
-                        onClick={() => openInAppNotification(notification)}
-                        type="button"
-                      >
-                        <span className={`admin-inbox-icon ${notification.readAt ? '' : 'unread'}`}>
-                          <span aria-hidden="true" className="material-symbols-outlined">{notificationIcon(notification.type)}</span>
-                        </span>
-                        <span>
-                          <strong>{notificationTitle(notification)}</strong>
-                          <small>{notification.actorName ? `${notification.actorName} - ` : ''}{formatAdminDate(notification.createdAt)}</small>
-                          {notification.commentSelectedText && <q>{notification.commentSelectedText}</q>}
-                        </span>
-                      </button>
-                    ))}
-                  </section>
-                ))}
+                {notificationDayGroups.length ? (
+                  <NotificationDayGroups groups={notificationDayGroups} onOpen={openInAppNotification} />
+                ) : (
+                  <p className="admin-inbox-empty-recent">No hay actividad reciente pendiente.</p>
+                )}
+                {notificationBuckets.previous.length > 0 && (
+                  <div className="admin-inbox-previous-wrap">
+                    <button
+                      aria-expanded={showPreviousNotifications}
+                      className="admin-inbox-previous-toggle"
+                      onClick={() => setShowPreviousNotifications((current) => !current)}
+                      type="button"
+                    >
+                      <span aria-hidden="true" className="material-symbols-outlined">history</span>
+                      <span>
+                        <strong>{showPreviousNotifications ? 'Ocultar anteriores' : 'Ver anteriores'}</strong>
+                        <small>{notificationBuckets.previous.length} {notificationBuckets.previous.length === 1 ? 'notificacion leida' : 'notificaciones leidas'}</small>
+                      </span>
+                      <span aria-hidden="true" className="material-symbols-outlined admin-inbox-previous-chevron">
+                        {showPreviousNotifications ? 'expand_less' : 'expand_more'}
+                      </span>
+                    </button>
+                    {showPreviousNotifications && (
+                      <div className="admin-inbox-previous">
+                        <NotificationDayGroups groups={previousNotificationDayGroups} onOpen={openInAppNotification} />
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </aside>
@@ -2084,6 +2153,9 @@ export default function AdminConsole() {
                         </div>
                       )}
                     </section>
+                  )}
+                  {isAdmin && (
+                    <AdminOperationsPanel apiBase={API_BASE} currentEmail={user.email} />
                   )}
                 </>
               )}
@@ -3938,6 +4010,25 @@ function normalizeInAppNotification(value = {}) {
     createdAt: value.createdAt || '',
     readAt: value.readAt || '',
   };
+}
+
+function normalizeNotificationPolicy(value = {}) {
+  const recentDays = Number(value.recentDays);
+  const retentionDays = Number(value.retentionDays);
+  return {
+    recentDays: Number.isFinite(recentDays) && recentDays > 0 ? recentDays : DEFAULT_NOTIFICATION_POLICY.recentDays,
+    retentionDays: Number.isFinite(retentionDays) && retentionDays > 0 ? retentionDays : DEFAULT_NOTIFICATION_POLICY.retentionDays,
+  };
+}
+
+function partitionNotifications(notifications = [], recentDays = DEFAULT_NOTIFICATION_POLICY.recentDays) {
+  const cutoff = Date.now() - recentDays * 24 * 60 * 60 * 1000;
+  return notifications.reduce((buckets, notification) => {
+    const createdAt = parseNotificationDate(notification.createdAt)?.getTime() || 0;
+    const isPrevious = Boolean(notification.readAt && createdAt && createdAt < cutoff);
+    buckets[isPrevious ? 'previous' : 'visible'].push(notification);
+    return buckets;
+  }, { visible: [], previous: [] });
 }
 
 function normalizeReviewComment(value = {}) {

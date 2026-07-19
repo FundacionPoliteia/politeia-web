@@ -574,3 +574,57 @@ Revisar en orden:
 2. Archivar no dispara email.
 3. El post debe tener `authorEmail`.
 4. El autor debe tener opt-in de `postPublished`.
+
+## 16. Logs administrativos y prueba de Resend
+
+El panel interno registra metadatos sanitizados de cada request en `apiRequestLogs`. No guarda bodies, cookies, headers de autorizacion ni valores de query. Los tokens de confirmacion de newsletter no se persisten.
+
+### Activar el registro en Cloud Run
+
+En produccion queda activo por defecto. Se recomienda dejarlo explicito:
+
+```bash
+gcloud.cmd run services update politeia-blog-api --region us-central1 --update-env-vars API_REQUEST_LOGS_ENABLED=true,API_REQUEST_LOGS_RETENTION_DAYS=14
+```
+
+Despues de desplegar el backend, configurar Firestore TTL para eliminar registros vencidos:
+
+```bash
+gcloud.cmd firestore fields ttls update expiresAt --collection-group=apiRequestLogs --enable-ttl --project=quick-function-500420-v6
+gcloud.cmd firestore fields ttls update expiresAt --collection-group=notificationEvents --enable-ttl --project=quick-function-500420-v6
+gcloud.cmd firestore fields ttls update expiresAt --collection-group=notificationReads --enable-ttl --project=quick-function-500420-v6
+```
+
+La habilitacion del TTL puede demorar. Firestore elimina los documentos vencidos de manera asincronica, normalmente dentro de las 24 horas posteriores al vencimiento. El backend tambien limpia notificaciones con mas de 7 dias al consultar o crear actividad, por lo que el TTL funciona como una segunda garantia.
+
+### Configurar el webhook de Resend
+
+En Resend > Webhooks, registrar:
+
+```text
+https://CLOUD_RUN_URL/v1/mail/webhooks/resend
+```
+
+Seleccionar como minimo:
+
+- `email.sent`
+- `email.delivered`
+- `email.failed`
+- `email.bounced`
+- `email.complained`
+- `email.suppressed`
+
+Guardar el signing secret del webhook en Secret Manager y montarlo como `RESEND_WEBHOOK_SECRET`. No usar la API key como signing secret.
+
+### Probar desde produccion
+
+1. Desplegar primero el backend y luego el frontend.
+2. Entrar en `https://admin.politeia.ar/admin` con una cuenta `admin`.
+3. Abrir `Mi perfil` y bajar hasta `Logs y diagnostico`.
+4. Pulsar `Probar Resend` y confirmar. El destinatario siempre es el email del administrador autenticado.
+5. En `Solicitudes API`, verificar `POST /v1/admin/logs/resend-test` con estado `200`.
+6. En `Correos`, buscar el asunto `Prueba operativa de Resend - Politeia`.
+7. `sent` confirma que Resend acepto el request. `delivered` y `email.delivered` confirman que el servidor del destinatario recibio el correo mediante el webhook.
+8. Ante un error, filtrar por estado `5xx`, copiar el `requestId` y revisar `lastError` en la vista Correos.
+
+El panel muestra hasta 500 requests y 500 entregas recientes. Solo `admin` puede acceder tanto a la UI como a los endpoints `/v1/admin/logs/*`.

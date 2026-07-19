@@ -17,6 +17,8 @@ import { profileRouter } from './routes/profile.js';
 import { usersRouter } from './routes/users.js';
 import { openApiSpec } from './openapi.js';
 import { handleResendWebhook } from './routes/mailWebhook.js';
+import { apiRequestLogger } from './middleware/apiRequestLogger.js';
+import { adminOperationsRouter } from './routes/adminOperations.js';
 
 export function createApp() {
   const app = express();
@@ -30,6 +32,7 @@ export function createApp() {
 
   app.disable('x-powered-by');
   app.use(attachRequestContext);
+  app.use(apiRequestLogger);
   app.use(cors(corsOptions));
   app.options('*', cors(corsOptions));
   app.post('/v1/mail/webhooks/resend', express.raw({ type: 'application/json', limit: '256kb' }), handleResendWebhook);
@@ -58,6 +61,7 @@ export function createApp() {
   app.use('/v1/notifications', requireGoogleCloudCredentials, notificationsRouter({ writeLimiter }));
   app.use('/v1/newsletter', requireGoogleCloudCredentials, newsletterRouter({ writeLimiter }));
   app.use('/v1/profile', requireGoogleCloudCredentials, profileRouter({ writeLimiter }));
+  app.use('/v1/admin', requireGoogleCloudCredentials, adminOperationsRouter({ writeLimiter }));
 
   app.get('/v1/me', requireAuth, (req, res) => {
     res.json({ user: req.user });

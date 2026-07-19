@@ -38,6 +38,7 @@ export function errorHandler(err, req, res, _next) {
     details: err.details,
   }));
 
+  res.locals.apiErrorMessage = err.message || body.error.message;
   res.status(status).json(body);
 }
 

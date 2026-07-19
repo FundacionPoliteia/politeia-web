@@ -7,6 +7,7 @@ import { config, parseEnvValue } from '../src/config.js';
 import { setFirestoreForTests } from '../src/firestore.js';
 import { canManageAllPosts, matchesManageStatus, toBlogAuthorView } from '../src/repositories/posts.js';
 import {
+  cleanupExpiredNotifications,
   listInAppNotifications,
   markAllNotificationsRead,
   markNotificationRead,
@@ -35,10 +36,17 @@ import {
   confirmNewsletterSubscription,
   createNewsletterCampaign,
   getNewsletterOverview,
+  listNewsletterSubscribers,
   requestNewsletterSubscription,
 } from '../src/repositories/newsletter.js';
 import { MAIL_CHANNELS, sendMail, syncResendContact } from '../src/mail/provider.js';
 import { processResendWebhook } from '../src/repositories/mailWebhooks.js';
+import {
+  listApiRequestLogs,
+  listMailOperationLogs,
+  recordApiRequest,
+  sendAdminResendTest,
+} from '../src/repositories/operations.js';
 
 test('GET /healthz returns service health', async () => {
   const res = await request(createApp()).get('/healthz').expect(200);
@@ -108,6 +116,12 @@ test('newsletter administration accepts newsletter and admin roles only', async 
       .set('Cookie', sessionFor('newsletter@politeia.ar', ['newsletter']))
       .expect(200);
 
+    const subscribers = await request(app)
+      .get('/v1/newsletter/admin/subscribers?status=subscribed')
+      .set('Cookie', sessionFor('newsletter@politeia.ar', ['newsletter']))
+      .expect(200);
+    assert.deepEqual(subscribers.body, { status: 'subscribed', total: 0, items: [] });
+
     const mediaResponse = await request(app)
       .post('/v1/media')
       .set('Cookie', sessionFor('newsletter@politeia.ar', ['newsletter']))
@@ -125,8 +139,37 @@ test('newsletter administration accepts newsletter and admin roles only', async 
       .expect(403);
 
     await request(app)
+      .get('/v1/newsletter/admin/subscribers?status=pending')
+      .set('Cookie', sessionFor('reviewer@politeia.ar', ['reviewer']))
+      .expect(403);
+
+    await request(app)
       .get('/v1/newsletter/admin/overview')
       .set('Cookie', sessionFor('blog@politeia.ar', ['blog']))
+      .expect(403);
+  } finally {
+    config.devAuth = previousDevAuth;
+    setFirestoreForTests(null);
+  }
+});
+
+test('operational logs are restricted to admin users', async () => {
+  const firestore = createMemoryFirestore();
+  const previousDevAuth = config.devAuth;
+  setFirestoreForTests(firestore);
+  config.devAuth = false;
+  const sessionFor = (email, roles) => `${config.sessionCookieName}=${encodeURIComponent(buildSessionCookie({ email, name: email, roles }))}`;
+  const app = createApp();
+
+  try {
+    await request(app)
+      .get('/v1/admin/logs/requests')
+      .set('Cookie', sessionFor('admin@politeia.ar', ['admin']))
+      .expect(200);
+
+    await request(app)
+      .get('/v1/admin/logs/mail')
+      .set('Cookie', sessionFor('reviewer@politeia.ar', ['reviewer']))
       .expect(403);
   } finally {
     config.devAuth = previousDevAuth;
@@ -434,6 +477,8 @@ test('in-app notifications target roles and emails independently from email opt-
     await notifyPostSubmittedForReview(post, author);
     let reviewerInbox = await listInAppNotifications(reviewer);
     let authorInbox = await listInAppNotifications(author);
+    assert.equal(reviewerInbox.recentDays, 3);
+    assert.equal(reviewerInbox.retentionDays, 7);
     assert.equal(reviewerInbox.items.length, 1);
     assert.equal(reviewerInbox.items[0].type, 'post.submittedReview');
     assert.equal(authorInbox.items.length, 0);
@@ -485,6 +530,50 @@ test('in-app notifications target roles and emails independently from email opt-
 
     const allRead = await markAllNotificationsRead(author);
     assert.equal(allRead.unreadCount, 0);
+  } finally {
+    setFirestoreForTests(null);
+  }
+});
+
+test('notification retention removes events and read receipts older than seven days', async () => {
+  const firestore = createMemoryFirestore();
+  setFirestoreForTests(firestore);
+  const now = Date.parse('2026-07-18T12:00:00.000Z');
+  const user = { email: 'autor@politeia.ar', name: 'Autor', roles: ['blog'] };
+
+  try {
+    await firestore.collection('notificationEvents').doc('expired-event').set({
+      type: 'comment.created',
+      actorEmail: 'reviewer@politeia.ar',
+      targetEmails: [user.email],
+      createdAt: new Date(now - 8 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+    await firestore.collection('notificationEvents').doc('retained-event').set({
+      type: 'comment.created',
+      actorEmail: 'reviewer@politeia.ar',
+      targetEmails: [user.email],
+      createdAt: new Date(now - 6 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+    await firestore.collection('notificationReads').doc('expired-read').set({
+      eventId: 'expired-event',
+      userEmail: user.email,
+      readAt: new Date(now - 8 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+    await firestore.collection('notificationReads').doc('retained-read').set({
+      eventId: 'retained-event',
+      userEmail: user.email,
+      readAt: new Date(now - 6 * 24 * 60 * 60 * 1000).toISOString(),
+    });
+
+    const cleanup = await cleanupExpiredNotifications({ force: true, now });
+    assert.deepEqual(cleanup, { deletedEvents: 1, deletedReads: 1, skipped: false });
+    assert.equal((await firestore.collection('notificationEvents').doc('expired-event').get()).exists, false);
+    assert.equal((await firestore.collection('notificationEvents').doc('retained-event').get()).exists, true);
+    assert.equal((await firestore.collection('notificationReads').doc('expired-read').get()).exists, false);
+    assert.equal((await firestore.collection('notificationReads').doc('retained-read').get()).exists, true);
+
+    const inbox = await listInAppNotifications(user);
+    assert.deepEqual(inbox.items.map((item) => item.id), ['retained-event']);
   } finally {
     setFirestoreForTests(null);
   }
@@ -743,6 +832,11 @@ test('newsletter subscription uses double opt-in and becomes active only after c
     assert.equal(pending.counts.pending, 1);
     assert.equal(pending.counts.subscribed, 0);
 
+    const pendingSubscribers = await listNewsletterSubscribers({ status: 'pending' });
+    assert.equal(pendingSubscribers.total, 1);
+    assert.equal(pendingSubscribers.items[0].email, 'reader@example.com');
+    assert.equal(pendingSubscribers.items[0].source, 'test');
+
     const deliveries = await firestore.collection('emailDeliveries').get();
     assert.equal(deliveries.docs.length, 1);
     const delivery = deliveries.docs[0].data();
@@ -758,6 +852,16 @@ test('newsletter subscription uses double opt-in and becomes active only after c
     const active = await getNewsletterOverview();
     assert.equal(active.counts.pending, 0);
     assert.equal(active.counts.subscribed, 1);
+
+    const activeSubscribers = await listNewsletterSubscribers({ status: 'subscribed' });
+    assert.equal(activeSubscribers.total, 1);
+    assert.equal(activeSubscribers.items[0].email, 'reader@example.com');
+    assert.ok(activeSubscribers.items[0].confirmedAt);
+
+    await assert.rejects(
+      () => listNewsletterSubscribers({ status: 'unsubscribed' }),
+      /status must be subscribed or pending/,
+    );
 
     await requestNewsletterSubscription({ email: 'reader@example.com', source: 'repeat' });
     const repeatedDeliveries = await firestore.collection('emailDeliveries').get();
@@ -790,6 +894,69 @@ test('newsletter campaigns are project-scoped and remain drafts in console mode'
     assert.match(item.contentHtml, /<table[^>]*>/);
   } finally {
     config.mailProvider = previousProvider;
+    setFirestoreForTests(null);
+  }
+});
+
+test('api request logs retain operational metadata without query values', async () => {
+  const firestore = createMemoryFirestore();
+  const previousEnabled = config.apiRequestLogsEnabled;
+  setFirestoreForTests(firestore);
+  config.apiRequestLogsEnabled = true;
+
+  try {
+    await recordApiRequest({
+      requestId: 'request-1',
+      method: 'get',
+      path: '/v1/newsletter/confirm?token=private-token&source=blog',
+      queryKeys: ['token', 'source'],
+      status: 303,
+      durationMs: 12.6,
+      actorEmail: 'Admin@Politeia.ar',
+      origin: 'https://admin.politeia.ar',
+      errorMessage: 'Provider rejected re_secret_should_not_leak',
+    });
+
+    const result = await listApiRequestLogs({ limit: 20 });
+    assert.equal(result.items.length, 1);
+    assert.equal(result.items[0].path, '/v1/newsletter/confirm');
+    assert.deepEqual(result.items[0].queryKeys, ['token', 'source']);
+    assert.equal(result.items[0].actorEmail, 'admin@politeia.ar');
+    assert.equal(result.items[0].originHost, 'admin.politeia.ar');
+    assert.doesNotMatch(result.items[0].errorMessage, /re_secret/);
+    assert.match(result.items[0].errorMessage, /redacted-resend-key/);
+  } finally {
+    config.apiRequestLogsEnabled = previousEnabled;
+    setFirestoreForTests(null);
+  }
+});
+
+test('admin Resend test targets the authenticated admin and appears in mail logs', async () => {
+  const firestore = createMemoryFirestore();
+  const previous = {
+    mailProvider: config.mailProvider,
+    resendApiKey: config.resendApiKey,
+  };
+  const previousFetch = global.fetch;
+  setFirestoreForTests(firestore);
+  config.mailProvider = 'resend';
+  config.resendApiKey = 're_test';
+  global.fetch = async () => ({ ok: true, status: 200, json: async () => ({ id: 'resend-test-1' }) });
+
+  try {
+    const item = await sendAdminResendTest({ email: 'admin@politeia.ar', name: 'Admin' }, 'request-test-1');
+    assert.equal(item.recipientEmail, 'admin@politeia.ar');
+    assert.equal(item.status, 'sent');
+    assert.equal(item.providerMessageId, 'resend-test-1');
+
+    const logs = await listMailOperationLogs({ limit: 20 });
+    assert.equal(logs.items.length, 1);
+    assert.equal(logs.items[0].type, 'admin.resend.test');
+    assert.equal(Object.hasOwn(logs.items[0], 'html'), false);
+    assert.equal(Object.hasOwn(logs.items[0], 'text'), false);
+  } finally {
+    Object.assign(config, previous);
+    global.fetch = previousFetch;
     setFirestoreForTests(null);
   }
 });
