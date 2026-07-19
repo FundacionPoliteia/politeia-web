@@ -249,9 +249,10 @@ export function expandRoles(value) {
   if (roles.has('admin')) {
     roles.add('reviewer');
     roles.add('blog');
+    roles.add('newsletter');
   }
   if (roles.has('reviewer')) roles.add('blog');
-  return ['admin', 'reviewer', 'blog'].filter((role) => roles.has(role));
+  return ['admin', 'reviewer', 'blog', 'newsletter'].filter((role) => roles.has(role));
 }
 
 export function resolveBuiltInRoles(email) {

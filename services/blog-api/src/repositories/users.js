@@ -3,7 +3,7 @@ import { config } from '../config.js';
 import { HttpError } from '../errors.js';
 import { writeAuditLog } from './audit.js';
 
-export const ASSIGNABLE_ROLES = ['admin', 'reviewer', 'blog'];
+export const ASSIGNABLE_ROLES = ['admin', 'reviewer', 'blog', 'newsletter'];
 
 const users = () => db().collection('users');
 

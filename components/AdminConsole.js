@@ -58,6 +58,7 @@ const ASSIGNABLE_ROLES = [
   { value: 'admin', label: 'Admin' },
   { value: 'reviewer', label: 'Reviewer' },
   { value: 'blog', label: 'Blog' },
+  { value: 'newsletter', label: 'Newsletter' },
 ];
 
 const NOTIFICATION_EVENT_LABELS = [
@@ -196,10 +197,12 @@ export default function AdminConsole() {
   const isAdmin = roles.includes('admin');
   const isPrimaryDomainUser = isPrimaryDomainEmail(user?.email);
   const isReviewer = roles.includes('reviewer');
+  const isNewsletterManager = roles.includes('newsletter');
   const isBlogAuthor = roles.includes('blog') || isReviewer || isAdmin;
-  const canAccessPanel = isBlogAuthor || isReviewer || isAdmin;
+  const canAccessEditorialPanel = isBlogAuthor;
+  const canAccessPanel = canAccessEditorialPanel || isNewsletterManager;
   const canCreatePosts = isBlogAuthor;
-  const canEditPosts = canAccessPanel;
+  const canEditPosts = canAccessEditorialPanel;
   const canChooseSlug = isAdmin || isReviewer;
   const canManageCategories = isAdmin || isReviewer;
   const canSubmitReview = isBlogAuthor;
@@ -209,7 +212,9 @@ export default function AdminConsole() {
   const canManageUsers = isAdmin && isPrimaryDomainUser;
   const canReviewProfiles = isAdmin;
   const canAccessRolesMailPanel = canManageUsers;
+  const canAccessNewsletterPanel = isNewsletterManager;
   const canAccessProfilePanel = canAccessPanel;
+  const defaultPanelTab = canAccessEditorialPanel ? 'blogs' : canAccessNewsletterPanel ? 'newsletter' : 'profile';
   const accountAuthorName = user?.name || user?.email || '';
   const profileAuthorName = profileDraft.fullName || userProfile.fullName || accountAuthorName;
   const profileClosingPhrase = profileDraft.closingPhrase || userProfile.closingPhrase || '';
@@ -226,7 +231,7 @@ export default function AdminConsole() {
   const editingLivePost = form.status === 'published-edition';
   const editRequestPending = Boolean(form.editRequestedAt);
   const editorBusy = busy || publishedAuthorLocked;
-  const roleLabel = isAdmin ? 'Panel' : isReviewer ? 'Panel de revision' : 'Panel de blog';
+  const roleLabel = isAdmin ? 'Panel' : isReviewer ? 'Panel de revision' : isNewsletterManager && !isBlogAuthor ? 'Panel de newsletter' : 'Panel de blog';
   const isLocalApiBase = isLocalApiUrl(API_BASE);
   const hasUnsavedChanges = useMemo(
     () => serializeForm(form) !== serializeForm(savedForm),
@@ -283,11 +288,14 @@ export default function AdminConsole() {
   }, []);
 
   useEffect(() => {
-    if (canAccessPanel) {
+    if (canAccessEditorialPanel) {
       loadPosts();
       loadCategories();
+    } else {
+      setPosts([]);
+      setCategories([]);
     }
-  }, [canAccessPanel, activeStatusFilter]);
+  }, [canAccessEditorialPanel, activeStatusFilter]);
 
   useEffect(() => {
     if (canManageUsers) loadAdminUsers();
@@ -325,7 +333,7 @@ export default function AdminConsole() {
   }, [posts]);
 
   useEffect(() => {
-    if (form.id && canAccessPanel) {
+    if (form.id && canAccessEditorialPanel) {
       setEditingReviewComment(null);
       loadReviewComments(form.id);
     } else {
@@ -336,7 +344,7 @@ export default function AdminConsole() {
       setReviewCommentDialog(null);
       setReviewCommentDialog(null);
     }
-  }, [form.id, canAccessPanel]);
+  }, [form.id, canAccessEditorialPanel]);
 
   useEffect(() => {
     const canUseProfileAuthor = !form.id && profileAuthorName && (!form.authorName || form.authorName === accountAuthorName);
@@ -355,16 +363,22 @@ export default function AdminConsole() {
   }, [accountAuthorName, form.authorName, form.id, hasAuthorProfile, profileAuthorName]);
 
   useEffect(() => {
+    if (!canAccessEditorialPanel && activePanelTab === 'blogs') {
+      setActivePanelTab(defaultPanelTab);
+    }
     if (!canAccessRolesMailPanel && activePanelTab === 'access') {
-      setActivePanelTab('blogs');
+      setActivePanelTab(defaultPanelTab);
+    }
+    if (!canAccessNewsletterPanel && activePanelTab === 'newsletter') {
+      setActivePanelTab(defaultPanelTab);
     }
     if (!canAccessProfilePanel && activePanelTab === 'profile') {
-      setActivePanelTab('blogs');
+      setActivePanelTab(defaultPanelTab);
     }
     if (!canReviewProfiles && activePanelTab === 'profiles') {
-      setActivePanelTab('blogs');
+      setActivePanelTab(defaultPanelTab);
     }
-  }, [activePanelTab, canAccessProfilePanel, canAccessRolesMailPanel, canReviewProfiles]);
+  }, [activePanelTab, canAccessEditorialPanel, canAccessNewsletterPanel, canAccessProfilePanel, canAccessRolesMailPanel, canReviewProfiles, defaultPanelTab]);
 
   useEffect(() => {
     const hasOpenModal = previewOpen
@@ -1829,14 +1843,26 @@ export default function AdminConsole() {
             <>
               <div className="admin-panel-tabsbar">
                 <nav className="admin-tabs" aria-label="Secciones del panel">
-                  <button
-                    aria-pressed={activePanelTab === 'blogs'}
-                    className={activePanelTab === 'blogs' ? 'selected' : ''}
-                    onClick={() => setActivePanelTab('blogs')}
-                    type="button"
-                  >
-                    Gestor de blogs
-                  </button>
+                  {canAccessEditorialPanel && (
+                    <button
+                      aria-pressed={activePanelTab === 'blogs'}
+                      className={activePanelTab === 'blogs' ? 'selected' : ''}
+                      onClick={() => setActivePanelTab('blogs')}
+                      type="button"
+                    >
+                      Gestor de blogs
+                    </button>
+                  )}
+                  {canAccessNewsletterPanel && (
+                    <button
+                      aria-pressed={activePanelTab === 'newsletter'}
+                      className={activePanelTab === 'newsletter' ? 'selected' : ''}
+                      onClick={() => setActivePanelTab('newsletter')}
+                      type="button"
+                    >
+                      Newsletter
+                    </button>
+                  )}
                   {canAccessRolesMailPanel && (
                     <button
                       aria-pressed={activePanelTab === 'access'}
@@ -2316,11 +2342,12 @@ export default function AdminConsole() {
                 </section>
               )}
 
-              {activePanelTab === 'access' && (
-                <>
-              {canManageUsers && SHOW_EMAIL_SETTINGS_UI && (
+              {activePanelTab === 'newsletter' && canAccessNewsletterPanel && (
                 <NewsletterAdminPanel apiBase={API_BASE} currentEmail={user.email} />
               )}
+
+              {activePanelTab === 'access' && (
+                <>
               {SHOW_EMAIL_SETTINGS_UI && notificationPreferences && (
                 <section className="admin-manager admin-notifications">
                   <div className="admin-manager-head">
@@ -2531,7 +2558,7 @@ export default function AdminConsole() {
                 </>
               )}
 
-              {activePanelTab === 'blogs' && (
+              {activePanelTab === 'blogs' && canAccessEditorialPanel && (
                 <>
               {isAdmin && (
                 <section className="admin-manager">

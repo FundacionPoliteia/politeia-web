@@ -65,7 +65,7 @@ test('GET /v1/me accepts a valid session cookie', async () => {
       .expect(200);
 
     assert.equal(res.body.user.email, 'dev@politeia.ar');
-    assert.deepEqual(res.body.user.roles, ['admin', 'reviewer', 'blog']);
+    assert.deepEqual(res.body.user.roles, ['admin', 'reviewer', 'blog', 'newsletter']);
     assert.equal(res.body.user.authMode, 'session');
   } finally {
     config.devAuth = previousDevAuth;
@@ -75,7 +75,8 @@ test('GET /v1/me accepts a valid session cookie', async () => {
 test('role expansion keeps reviewer as blog plus review and admin as everything', () => {
   assert.deepEqual(expandRoles(['blog']), ['blog']);
   assert.deepEqual(expandRoles(['reviewer']), ['reviewer', 'blog']);
-  assert.deepEqual(expandRoles(['admin']), ['admin', 'reviewer', 'blog']);
+  assert.deepEqual(expandRoles(['newsletter']), ['newsletter']);
+  assert.deepEqual(expandRoles(['admin']), ['admin', 'reviewer', 'blog', 'newsletter']);
 });
 
 test('built-in admins do not require role assignments', () => {
@@ -85,10 +86,45 @@ test('built-in admins do not require role assignments', () => {
 });
 
 test('role assignments allow primary-domain and configured external Gmail emails', () => {
-  assert.deepEqual(sanitizeAssignedRoles(['ADMIN', 'reviewer', 'blog', 'owner', 'admin']), ['admin', 'reviewer', 'blog']);
+  assert.deepEqual(sanitizeAssignedRoles(['ADMIN', 'reviewer', 'blog', 'newsletter', 'owner', 'admin']), ['admin', 'reviewer', 'blog', 'newsletter']);
   assert.equal(isAllowedRoleEmail('persona@politeia.ar'), true);
   assert.equal(isAllowedRoleEmail('persona@gmail.com'), true);
   assert.equal(isAllowedRoleEmail('persona@example.com'), false);
+});
+
+test('newsletter administration accepts newsletter and admin roles only', async () => {
+  const firestore = createMemoryFirestore();
+  const previousDevAuth = config.devAuth;
+  setFirestoreForTests(firestore);
+  config.devAuth = false;
+
+  const sessionFor = (email, roles) => `${config.sessionCookieName}=${encodeURIComponent(buildSessionCookie({ email, name: email, roles }))}`;
+  const app = createApp();
+
+  try {
+    await request(app)
+      .get('/v1/newsletter/admin/overview')
+      .set('Cookie', sessionFor('newsletter@politeia.ar', ['newsletter']))
+      .expect(200);
+
+    await request(app)
+      .get('/v1/newsletter/admin/overview')
+      .set('Cookie', sessionFor('admin@politeia.ar', ['admin']))
+      .expect(200);
+
+    await request(app)
+      .get('/v1/newsletter/admin/overview')
+      .set('Cookie', sessionFor('reviewer@politeia.ar', ['reviewer']))
+      .expect(403);
+
+    await request(app)
+      .get('/v1/newsletter/admin/overview')
+      .set('Cookie', sessionFor('blog@politeia.ar', ['blog']))
+      .expect(403);
+  } finally {
+    config.devAuth = previousDevAuth;
+    setFirestoreForTests(null);
+  }
 });
 
 test('user profiles normalize personal fields separately from roles', () => {
@@ -539,7 +575,7 @@ test('dev auth overrides a stale local session while testing roles', async () =>
       .expect(200);
 
     assert.equal(res.body.user.email, 'local-admin@politeia.ar');
-    assert.deepEqual(res.body.user.roles, ['admin', 'reviewer', 'blog']);
+    assert.deepEqual(res.body.user.roles, ['admin', 'reviewer', 'blog', 'newsletter']);
     assert.equal(res.body.user.authMode, 'dev');
   } finally {
     config.devAuth = previousDevAuth;

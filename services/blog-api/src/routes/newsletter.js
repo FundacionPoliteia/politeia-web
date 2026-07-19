@@ -47,7 +47,7 @@ export function newsletterRouter({ writeLimiter }) {
     }
   });
 
-  router.use('/admin', requireAuth, requireRole('admin'));
+  router.use('/admin', requireAuth, requireRole('newsletter'));
 
   router.get('/admin/overview', async (_req, res, next) => {
     try {
