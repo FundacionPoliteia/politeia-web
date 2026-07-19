@@ -613,6 +613,9 @@ Seleccionar como minimo:
 - `email.bounced`
 - `email.complained`
 - `email.suppressed`
+- `contact.updated`
+
+`contact.updated` mantiene sincronizada la baja realizada desde el enlace de Resend con `newsletterSubscriptions` en Firestore. Todos los broadcasts incluyen un enlace visible de baja; las pruebas individuales usan el endpoint firmado `/v1/newsletter/unsubscribe`.
 
 Guardar el signing secret del webhook en Secret Manager y montarlo como `RESEND_WEBHOOK_SECRET`. No usar la API key como signing secret.
 

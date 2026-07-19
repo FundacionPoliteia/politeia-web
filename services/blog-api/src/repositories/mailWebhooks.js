@@ -35,6 +35,7 @@ export async function processResendWebhook(svixId, event = {}) {
     updateDeliveries(providerMessageId, type, data),
     updateCampaign(data.broadcast_id, type),
     suppressRecipients(recipientEmails, type, data),
+    syncContactUnsubscribe(type, data),
   ]);
   return { duplicate: false, item: serializeDoc(await ref.get()) };
 }
@@ -75,6 +76,24 @@ async function suppressRecipients(emails, type, data) {
     suppressionReason: webhookErrorMessage(type, data),
     suppressedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
+  }, { merge: true })));
+}
+
+async function syncContactUnsubscribe(type, data) {
+  if (type !== 'contact.updated' || data?.unsubscribed !== true) return;
+  const email = normalizeEmail(data.email);
+  if (!email) return;
+  const snapshot = await subscriptions().get();
+  const matching = snapshot.docs
+    .map(serializeDoc)
+    .filter((item) => item.projectKey === config.mailProjectKey)
+    .filter((item) => item.audienceKey === config.newsletterAudienceKey)
+    .filter((item) => normalizeEmail(item.email) === email);
+  await Promise.all(matching.map((item) => subscriptions().doc(item.id).set({
+    status: 'unsubscribed',
+    unsubscribedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    providerContactId: String(data.id || item.providerContactId || ''),
   }, { merge: true })));
 }
 

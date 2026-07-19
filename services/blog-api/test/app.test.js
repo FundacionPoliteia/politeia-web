@@ -34,10 +34,13 @@ import { updatePostCommentStatus } from '../src/repositories/comments.js';
 import { isAllowedRoleEmail, sanitizeAssignedRoles } from '../src/repositories/users.js';
 import {
   confirmNewsletterSubscription,
+  createNewsletterUnsubscribeUrl,
   createNewsletterCampaign,
   getNewsletterOverview,
   listNewsletterSubscribers,
   requestNewsletterSubscription,
+  sendNewsletterTest,
+  unsubscribeNewsletter,
 } from '../src/repositories/newsletter.js';
 import { MAIL_CHANNELS, sendMail, syncResendContact } from '../src/mail/provider.js';
 import { processResendWebhook } from '../src/repositories/mailWebhooks.js';
@@ -866,6 +869,13 @@ test('newsletter subscription uses double opt-in and becomes active only after c
     await requestNewsletterSubscription({ email: 'reader@example.com', source: 'repeat' });
     const repeatedDeliveries = await firestore.collection('emailDeliveries').get();
     assert.equal(repeatedDeliveries.docs.length, 1);
+
+    const unsubscribeUrl = new URL(createNewsletterUnsubscribeUrl('reader@example.com'));
+    const unsubscribed = await unsubscribeNewsletter(unsubscribeUrl.searchParams.get('token'));
+    assert.equal(unsubscribed.status, 'unsubscribed');
+    const inactive = await getNewsletterOverview();
+    assert.equal(inactive.counts.subscribed, 0);
+    assert.equal(inactive.counts.unsubscribed, 1);
   } finally {
     Object.assign(config, previous);
     setFirestoreForTests(null);
@@ -894,6 +904,72 @@ test('newsletter campaigns are project-scoped and remain drafts in console mode'
     assert.match(item.contentHtml, /<table[^>]*>/);
   } finally {
     config.mailProvider = previousProvider;
+    setFirestoreForTests(null);
+  }
+});
+
+test('newsletter test emails include a signed unsubscribe link', async () => {
+  const firestore = createMemoryFirestore();
+  const previous = {
+    mailProvider: config.mailProvider,
+    newsletterTokenSecret: config.newsletterTokenSecret,
+    apiPublicUrl: config.apiPublicUrl,
+  };
+  setFirestoreForTests(firestore);
+  config.mailProvider = 'console';
+  config.newsletterTokenSecret = 'test-newsletter-secret-with-enough-entropy';
+  config.apiPublicUrl = 'https://api.example.com';
+
+  try {
+    await sendNewsletterTest({
+      to: 'reader@example.com',
+      subject: 'Prueba de novedades',
+      content: '<p>Contenido editorial.</p>',
+      actorEmail: 'admin@politeia.ar',
+    });
+    const snapshot = await firestore.collection('emailDeliveries').get();
+    assert.equal(snapshot.docs.length, 1);
+    const delivery = snapshot.docs[0].data();
+    assert.match(delivery.html, /href="https:\/\/api\.example\.com\/v1\/newsletter\/unsubscribe\?token=/);
+    assert.match(delivery.html, />darte de baja<\/a>/);
+    assert.match(delivery.text, /Darte de baja: https:\/\/api\.example\.com\/v1\/newsletter\/unsubscribe\?token=/);
+  } finally {
+    Object.assign(config, previous);
+    setFirestoreForTests(null);
+  }
+});
+
+test('Resend broadcasts receive the provider unsubscribe placeholder as a clickable link', async () => {
+  const firestore = createMemoryFirestore();
+  const previous = {
+    mailProvider: config.mailProvider,
+    resendApiKey: config.resendApiKey,
+    resendSegmentId: config.resendSegmentId,
+  };
+  const previousFetch = global.fetch;
+  let requestBody;
+  setFirestoreForTests(firestore);
+  config.mailProvider = 'resend';
+  config.resendApiKey = 're_test';
+  config.resendSegmentId = 'segment-1';
+  global.fetch = async (_url, options) => {
+    requestBody = JSON.parse(options.body);
+    return { ok: true, status: 200, json: async () => ({ id: 'broadcast-1' }) };
+  };
+
+  try {
+    await createNewsletterCampaign({
+      name: 'Resumen semanal',
+      subject: 'Novedades de Politeia',
+      content: '<p>Contenido editorial.</p>',
+      send: false,
+    }, 'admin@politeia.ar');
+    assert.match(requestBody.html, /href="\{\{\{RESEND_UNSUBSCRIBE_URL\}\}\}"/);
+    assert.match(requestBody.html, />darte de baja<\/a>/);
+    assert.match(requestBody.text, /Darte de baja: \{\{\{RESEND_UNSUBSCRIBE_URL\}\}\}/);
+  } finally {
+    Object.assign(config, previous);
+    global.fetch = previousFetch;
     setFirestoreForTests(null);
   }
 });
@@ -1090,6 +1166,19 @@ test('resend webhooks are idempotent and suppress bounced newsletter recipients'
     assert.equal(repeated.duplicate, true);
     assert.equal((await firestore.collection('newsletterSubscriptions').doc('subscriber-1').get()).data().status, 'suppressed');
     assert.equal((await firestore.collection('emailDeliveries').doc('delivery-1').get()).data().status, 'bounced');
+
+    await processResendWebhook('msg-2', {
+      type: 'contact.updated',
+      created_at: new Date().toISOString(),
+      data: {
+        id: 'contact-1',
+        email: 'reader@example.com',
+        unsubscribed: true,
+      },
+    });
+    const unsubscribed = (await firestore.collection('newsletterSubscriptions').doc('subscriber-1').get()).data();
+    assert.equal(unsubscribed.status, 'unsubscribed');
+    assert.equal(unsubscribed.providerContactId, 'contact-1');
   } finally {
     setFirestoreForTests(null);
   }

@@ -158,11 +158,13 @@ export async function sendNewsletterTest({ to, subject, content, actorEmail }) {
   const cleanSubject = sanitizeShortText(subject, 180);
   const cleanContent = sanitizeCampaignHtml(content);
   if (!cleanSubject || !stripHtml(cleanContent)) throw new HttpError(400, 'subject and content are required');
+  const unsubscribeUrl = createNewsletterUnsubscribeUrl(cleanEmail);
   const rendered = renderMailLayout({
     preheader: cleanSubject,
     heading: cleanSubject,
     bodyHtml: cleanContent,
     bodyText: stripHtml(cleanContent),
+    unsubscribeUrl,
   });
   return createMailDelivery({
     channel: MAIL_CHANNELS.newsletter,
@@ -171,6 +173,7 @@ export async function sendNewsletterTest({ to, subject, content, actorEmail }) {
     subject: `[PRUEBA] ${cleanSubject}`,
     text: rendered.text,
     html: rendered.html,
+    headers: { 'List-Unsubscribe': `<${unsubscribeUrl}>` },
     idempotencyKey: `newsletter-test:${normalizeEmail(actorEmail)}:${Date.now()}`,
   });
 }
@@ -182,12 +185,12 @@ export async function createNewsletterCampaign({ name, subject, previewText = ''
   const cleanContent = sanitizeCampaignHtml(content);
   if (!cleanSubject || !stripHtml(cleanContent)) throw new HttpError(400, 'subject and content are required');
 
-  const unsubscribe = '<p style="margin-top:32px;font-size:12px;color:#737489">Si ya no queres recibir estas novedades, podes darte de baja desde {{{RESEND_UNSUBSCRIBE_URL}}}.</p>';
   const rendered = renderMailLayout({
     preheader: cleanPreview || cleanSubject,
     heading: cleanSubject,
-    bodyHtml: `${cleanContent}${unsubscribe}`,
-    bodyText: `${stripHtml(cleanContent)}\n\nPodes darte de baja desde el enlace incluido por el proveedor.`,
+    bodyHtml: cleanContent,
+    bodyText: stripHtml(cleanContent),
+    unsubscribeUrl: '{{{RESEND_UNSUBSCRIBE_URL}}}',
   });
   const ref = campaigns().doc();
   await ref.set({
