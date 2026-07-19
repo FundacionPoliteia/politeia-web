@@ -4,8 +4,11 @@ import { config } from '../config.js';
 import {
   confirmNewsletterSubscription,
   createNewsletterCampaign,
+  createNewsletterTemplate,
+  deleteNewsletterTemplate,
   getNewsletterOverview,
   listNewsletterSubscribers,
+  listNewsletterTemplates,
   requestNewsletterSubscription,
   sendNewsletterTest,
   unsubscribeNewsletter,
@@ -64,6 +67,31 @@ export function newsletterRouter({ writeLimiter }) {
         status: req.query.status,
         limit: req.query.limit,
       }));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.get('/admin/templates', async (_req, res, next) => {
+    try {
+      res.json(await listNewsletterTemplates());
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.post('/admin/templates', writeLimiter, async (req, res, next) => {
+    try {
+      const item = await createNewsletterTemplate(req.body || {}, req.user.email);
+      res.status(201).json({ item });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.delete('/admin/templates/:templateId', writeLimiter, async (req, res, next) => {
+    try {
+      res.json({ item: await deleteNewsletterTemplate(req.params.templateId) });
     } catch (err) {
       next(err);
     }

@@ -1,14 +1,32 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 const API_BASE = process.env.NEXT_PUBLIC_BLOG_API_BASE_URL || '';
 
 export default function NewsletterForm({ initialStatus = '' }) {
+  const initialResult = newsletterResult(initialStatus);
   const [email, setEmail] = useState('');
   const [website, setWebsite] = useState('');
   const [status, setStatus] = useState('idle');
-  const [message, setMessage] = useState(() => initialStatusMessage(initialStatus));
+  const [message, setMessage] = useState('');
+  const [resultModalOpen, setResultModalOpen] = useState(Boolean(initialResult));
+
+  useEffect(() => {
+    if (!resultModalOpen) return undefined;
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') closeResultModal();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [resultModalOpen]);
+
+  function closeResultModal() {
+    setResultModalOpen(false);
+    const url = new URL(window.location.href);
+    url.searchParams.delete('newsletter');
+    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+  }
 
   async function onSubmit(event) {
     event.preventDefault();
@@ -64,13 +82,54 @@ export default function NewsletterForm({ initialStatus = '' }) {
           {message}
         </p>
       )}
+      {resultModalOpen && initialResult && (
+        <div className="newsletter-result-overlay" onMouseDown={closeResultModal} role="presentation">
+          <div
+            aria-labelledby="newsletter-result-title"
+            aria-modal="true"
+            className={`newsletter-result-modal ${initialResult.tone}`}
+            onMouseDown={(event) => event.stopPropagation()}
+            role="dialog"
+          >
+            <button aria-label="Cerrar" className="newsletter-result-close" onClick={closeResultModal} type="button">
+              <span aria-hidden="true" className="material-symbols-outlined">close</span>
+            </button>
+            <span aria-hidden="true" className="newsletter-result-icon material-symbols-outlined">{initialResult.icon}</span>
+            <span className="newsletter-result-eyebrow">Newsletter</span>
+            <h2 id="newsletter-result-title">{initialResult.title}</h2>
+            <p>{initialResult.message}</p>
+            <button className="btn btn-primary" onClick={closeResultModal} type="button">Entendido</button>
+          </div>
+        </div>
+      )}
     </form>
   );
 }
 
-function initialStatusMessage(status) {
-  if (status === 'confirmado') return 'Suscripcion confirmada. Ya podes recibir novedades de Politeia.';
-  if (status === 'baja') return 'La suscripcion fue cancelada correctamente.';
-  if (status === 'error') return 'El enlace no es valido o vencio. Podes intentarlo nuevamente.';
-  return '';
+function newsletterResult(status) {
+  if (status === 'confirmado') {
+    return {
+      tone: 'success',
+      icon: 'check_circle',
+      title: 'Listo, suscripcion confirmada',
+      message: 'A partir de ahora vas a recibir las novedades de Politeia.',
+    };
+  }
+  if (status === 'baja') {
+    return {
+      tone: 'neutral',
+      icon: 'check_circle',
+      title: 'Suscripcion cancelada',
+      message: 'Tu email fue retirado del newsletter correctamente.',
+    };
+  }
+  if (status === 'error') {
+    return {
+      tone: 'error',
+      icon: 'error',
+      title: 'No pudimos completar la accion',
+      message: 'El enlace no es valido o vencio. Podes solicitar uno nuevo desde el formulario.',
+    };
+  }
+  return null;
 }

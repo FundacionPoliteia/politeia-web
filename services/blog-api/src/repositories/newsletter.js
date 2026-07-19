@@ -10,7 +10,38 @@ import { createMailDelivery } from './mail.js';
 
 const subscriptions = () => db().collection('newsletterSubscriptions');
 const campaigns = () => db().collection('newsletterCampaigns');
+const templates = () => db().collection('newsletterTemplates');
 const TOKEN_TTL_MS = 48 * 60 * 60 * 1000;
+const MAX_CUSTOM_TEMPLATES = 20;
+const BASE_NEWSLETTER_TEMPLATES = [
+  {
+    id: 'base-weekly-summary',
+    name: 'Resumen semanal',
+    campaignName: 'Resumen semanal',
+    subject: 'Lo mas importante de la semana en Politeia',
+    previewText: 'Notas, ideas y novedades para leer con tiempo.',
+    content: '<h2>Lo mas importante de la semana</h2><p>Escribi una apertura breve que conecte los temas de esta edicion.</p><hr><h3>Para seguir leyendo</h3><p>Presenta las notas destacadas y agrega sus enlaces.</p><h3>Una idea para cerrar</h3><p>Deja una pregunta o reflexion breve para la comunidad.</p>',
+    builtIn: true,
+  },
+  {
+    id: 'base-new-article',
+    name: 'Nueva nota',
+    campaignName: 'Lanzamiento de nota',
+    subject: 'Nueva nota en Politeia: completa el titulo',
+    previewText: 'Una nueva lectura para comprender el debate publico.',
+    content: '<h2>Una nueva nota en Politeia</h2><p>Presenta el tema, la pregunta principal y por que vale la pena leerla.</p><blockquote>Agrega una frase destacada del articulo.</blockquote><p>Inclui el enlace a la nota y una invitacion breve a compartirla.</p>',
+    builtIn: true,
+  },
+  {
+    id: 'base-project-update',
+    name: 'Actualizacion de proyecto',
+    campaignName: 'Actualizacion de proyecto',
+    subject: 'Novedades de proyecto en Politeia',
+    previewText: 'Avances, proximos pasos y formas de participar.',
+    content: '<h2>En que estamos trabajando</h2><p>Resume el avance principal y su impacto.</p><h3>Lo que sigue</h3><ul><li>Proximo paso o hito.</li><li>Fecha importante.</li><li>Forma de participar.</li></ul><p>Cerra con un enlace o contacto relevante.</p>',
+    builtIn: true,
+  },
+];
 
 export async function requestNewsletterSubscription({ email, source = 'blog', locale = 'es-AR' }) {
   const cleanEmail = validateEmail(email);
@@ -153,14 +184,71 @@ export async function listNewsletterSubscribers({ status, limit = 50 } = {}) {
   };
 }
 
-export async function sendNewsletterTest({ to, subject, content, actorEmail }) {
+export async function listNewsletterTemplates() {
+  const snapshot = await templates().get();
+  const custom = snapshot.docs
+    .map(serializeDoc)
+    .filter((item) => item.projectKey === config.mailProjectKey && item.audienceKey === config.newsletterAudienceKey)
+    .sort((left, right) => String(right.updatedAt || '').localeCompare(String(left.updatedAt || '')))
+    .map(toNewsletterTemplate);
+  return { items: [...BASE_NEWSLETTER_TEMPLATES, ...custom] };
+}
+
+export async function createNewsletterTemplate(body = {}, actorEmail = '') {
+  const name = sanitizeShortText(body.name, 80);
+  const campaignName = sanitizeShortText(body.campaignName || body.name, 120);
+  const subject = sanitizeShortText(body.subject, 180);
+  const previewText = sanitizeShortText(body.previewText, 180);
+  const content = sanitizeCampaignHtml(body.content);
+  if (!name || !subject || !stripHtml(content)) throw new HttpError(400, 'name, subject and content are required');
+
+  const existing = await templates().get();
+  const customCount = existing.docs
+    .map(serializeDoc)
+    .filter((item) => item.projectKey === config.mailProjectKey && item.audienceKey === config.newsletterAudienceKey)
+    .length;
+  if (customCount >= MAX_CUSTOM_TEMPLATES) throw new HttpError(409, `Solo podes guardar hasta ${MAX_CUSTOM_TEMPLATES} plantillas`);
+
+  const ref = templates().doc();
+  await ref.set({
+    projectKey: config.mailProjectKey,
+    audienceKey: config.newsletterAudienceKey,
+    name,
+    campaignName,
+    subject,
+    previewText,
+    content,
+    builtIn: false,
+    createdBy: normalizeEmail(actorEmail),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  return toNewsletterTemplate(serializeDoc(await ref.get()));
+}
+
+export async function deleteNewsletterTemplate(templateId = '') {
+  const id = String(templateId || '').trim();
+  if (!id || BASE_NEWSLETTER_TEMPLATES.some((item) => item.id === id)) throw new HttpError(400, 'La plantilla base no se puede eliminar');
+  const ref = templates().doc(id);
+  const doc = await ref.get();
+  if (!doc.exists) throw new HttpError(404, 'Plantilla no encontrada');
+  const item = serializeDoc(doc);
+  if (item.projectKey !== config.mailProjectKey || item.audienceKey !== config.newsletterAudienceKey) {
+    throw new HttpError(404, 'Plantilla no encontrada');
+  }
+  await ref.delete();
+  return { id, deleted: true };
+}
+
+export async function sendNewsletterTest({ to, subject, previewText = '', content, actorEmail }) {
   const cleanEmail = validateEmail(to);
   const cleanSubject = sanitizeShortText(subject, 180);
+  const cleanPreview = sanitizeShortText(previewText, 180);
   const cleanContent = sanitizeCampaignHtml(content);
   if (!cleanSubject || !stripHtml(cleanContent)) throw new HttpError(400, 'subject and content are required');
   const unsubscribeUrl = createNewsletterUnsubscribeUrl(cleanEmail);
   const rendered = renderMailLayout({
-    preheader: cleanSubject,
+    preheader: cleanPreview || cleanSubject,
     heading: cleanSubject,
     bodyHtml: cleanContent,
     bodyText: stripHtml(cleanContent),
@@ -339,6 +427,21 @@ function stripHtml(value = '') {
 
 function subscriberDate(item = {}) {
   return String(item.confirmedAt || item.requestedAt || item.updatedAt || '');
+}
+
+function toNewsletterTemplate(item = {}) {
+  return {
+    id: item.id,
+    name: item.name || 'Plantilla',
+    campaignName: item.campaignName || '',
+    subject: item.subject || '',
+    previewText: item.previewText || '',
+    content: item.content || '',
+    builtIn: item.builtIn === true,
+    createdBy: item.createdBy || '',
+    createdAt: item.createdAt || null,
+    updatedAt: item.updatedAt || null,
+  };
 }
 
 function subscriptionId(email) {

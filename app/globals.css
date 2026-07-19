@@ -2057,6 +2057,107 @@ a {
   color: #a12620
 }
 
+.newsletter-result-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 180;
+  display: grid;
+  place-items: center;
+  background: rgba(17, 19, 50, .58);
+  backdrop-filter: blur(4px);
+  padding: 20px;
+  animation: admin-overlay-in .16s ease-out
+}
+
+.newsletter-result-modal {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  width: min(460px, 100%);
+  border: 1px solid var(--linea);
+  border-top: 5px solid var(--azul);
+  border-radius: 8px;
+  background: var(--blanco);
+  color: var(--tinta);
+  box-shadow: 0 28px 80px rgba(17, 19, 50, .28);
+  padding: 42px 38px 36px;
+  text-align: center
+}
+
+.newsletter-result-modal.error {
+  border-top-color: #a12620
+}
+
+.newsletter-result-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--linea);
+  border-radius: 999px;
+  background: var(--blanco);
+  color: var(--gris);
+  cursor: pointer
+}
+
+.newsletter-result-icon {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 999px;
+  background: rgba(19, 122, 159, .12);
+  color: var(--azul);
+  font-size: 32px;
+  margin-bottom: 18px
+}
+
+.newsletter-result-modal.error .newsletter-result-icon {
+  background: rgba(161, 38, 32, .1);
+  color: #a12620
+}
+
+.newsletter-result-eyebrow {
+  color: var(--azul);
+  font-size: .7rem;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase
+}
+
+.newsletter-result-modal h2 {
+  font-family: var(--display);
+  font-size: clamp(1.8rem, 6vw, 2.35rem);
+  font-weight: 500;
+  line-height: 1.1;
+  margin-top: 8px
+}
+
+.newsletter-result-modal>p {
+  max-width: 36ch;
+  color: var(--gris);
+  line-height: 1.55;
+  margin: 14px 0 24px
+}
+
+@media(max-width:520px) {
+  .newsletter-result-overlay {
+    align-items: end;
+    padding: 12px
+  }
+
+  .newsletter-result-modal {
+    padding: 38px 24px 28px
+  }
+
+  .newsletter-result-modal .btn {
+    width: 100%
+  }
+}
+
 .blog-newsletter {
   border-top: 1px solid var(--linea);
   background: #111332;
@@ -6086,6 +6187,95 @@ a {
   text-align: center
 }
 
+.admin-newsletter-template-library {
+  display: grid;
+  gap: 14px;
+  padding: 18px 24px;
+  border-top: 1px solid var(--linea);
+  border-bottom: 1px solid var(--linea);
+  background: #f8f7f5
+}
+
+.admin-newsletter-template-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px
+}
+
+.admin-newsletter-template-head>div {
+  display: grid;
+  gap: 3px
+}
+
+.admin-newsletter-template-head>div>span {
+  color: var(--azul);
+  font-size: .7rem;
+  font-weight: 800;
+  text-transform: uppercase
+}
+
+.admin-newsletter-template-head h3 {
+  margin: 0;
+  font-size: 1.1rem
+}
+
+.admin-newsletter-template-head .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px
+}
+
+.admin-newsletter-template-head .material-symbols-outlined {
+  font-size: 19px
+}
+
+.admin-newsletter-template-controls {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto auto;
+  align-items: end;
+  gap: 10px
+}
+
+.admin-newsletter-template-controls label,
+.admin-newsletter-template-name {
+  display: grid;
+  gap: 7px;
+  color: var(--tinta);
+  font-size: .75rem;
+  font-weight: 800;
+  text-transform: uppercase
+}
+
+.admin-newsletter-template-controls select,
+.admin-newsletter-template-name input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--linea);
+  border-radius: 8px;
+  background: var(--blanco);
+  color: var(--tinta);
+  font: inherit;
+  font-weight: 400;
+  text-transform: none;
+  padding: 10px 12px
+}
+
+.admin-newsletter-template-delete {
+  min-width: 44px;
+  min-height: 44px;
+  color: var(--rojo, #a22)
+}
+
+.admin-newsletter-template-library>small {
+  color: var(--gris);
+  font-size: .78rem
+}
+
+.admin-newsletter-template-name {
+  margin-top: 14px
+}
+
 .admin-newsletter-form {
   display: grid;
   gap: 18px;
@@ -6146,6 +6336,27 @@ a {
   .admin-newsletter-test-row,
   .admin-newsletter-form .admin-two {
     grid-template-columns: 1fr
+  }
+
+  .admin-newsletter-template-head {
+    align-items: stretch;
+    flex-direction: column
+  }
+
+  .admin-newsletter-template-head .btn {
+    justify-content: center
+  }
+
+  .admin-newsletter-template-controls {
+    grid-template-columns: 1fr auto
+  }
+
+  .admin-newsletter-template-controls label {
+    grid-column: 1 / -1
+  }
+
+  .admin-newsletter-template-controls .btn-primary {
+    width: 100%
   }
 
   .admin-newsletter-counts {

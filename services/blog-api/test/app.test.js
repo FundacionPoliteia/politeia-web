@@ -34,10 +34,13 @@ import { updatePostCommentStatus } from '../src/repositories/comments.js';
 import { isAllowedRoleEmail, sanitizeAssignedRoles } from '../src/repositories/users.js';
 import {
   confirmNewsletterSubscription,
-  createNewsletterUnsubscribeUrl,
   createNewsletterCampaign,
+  createNewsletterTemplate,
+  createNewsletterUnsubscribeUrl,
+  deleteNewsletterTemplate,
   getNewsletterOverview,
   listNewsletterSubscribers,
+  listNewsletterTemplates,
   requestNewsletterSubscription,
   sendNewsletterTest,
   unsubscribeNewsletter,
@@ -908,6 +911,46 @@ test('newsletter campaigns are project-scoped and remain drafts in console mode'
   }
 });
 
+test('newsletter templates provide bases and persist reusable custom drafts', async () => {
+  const firestore = createMemoryFirestore();
+  setFirestoreForTests(firestore);
+
+  try {
+    const initial = await listNewsletterTemplates();
+    assert.equal(initial.items.length, 3);
+    assert.deepEqual(initial.items.map((item) => item.name), [
+      'Resumen semanal',
+      'Nueva nota',
+      'Actualizacion de proyecto',
+    ]);
+    assert.ok(initial.items.every((item) => item.builtIn));
+
+    const custom = await createNewsletterTemplate({
+      name: 'Edicion mensual',
+      campaignName: 'Resumen de julio',
+      subject: 'Julio en Politeia',
+      previewText: 'Las lecturas y proyectos del mes.',
+      content: '<h2>Balance del mes</h2><script>alert(1)</script><p>Contenido reutilizable.</p>',
+    }, 'admin@politeia.ar');
+    assert.equal(custom.name, 'Edicion mensual');
+    assert.equal(custom.builtIn, false);
+    assert.doesNotMatch(custom.content, /script/i);
+
+    const saved = await listNewsletterTemplates();
+    assert.equal(saved.items.length, 4);
+    assert.equal(saved.items.find((item) => item.id === custom.id)?.subject, 'Julio en Politeia');
+
+    await assert.rejects(
+      () => deleteNewsletterTemplate('base-weekly-summary'),
+      /plantilla base no se puede eliminar/i,
+    );
+    await deleteNewsletterTemplate(custom.id);
+    assert.equal((await listNewsletterTemplates()).items.length, 3);
+  } finally {
+    setFirestoreForTests(null);
+  }
+});
+
 test('newsletter test emails include a signed unsubscribe link', async () => {
   const firestore = createMemoryFirestore();
   const previous = {
@@ -924,12 +967,14 @@ test('newsletter test emails include a signed unsubscribe link', async () => {
     await sendNewsletterTest({
       to: 'reader@example.com',
       subject: 'Prueba de novedades',
+      previewText: 'Una mirada breve antes de abrir el correo',
       content: '<p>Contenido editorial.</p>',
       actorEmail: 'admin@politeia.ar',
     });
     const snapshot = await firestore.collection('emailDeliveries').get();
     assert.equal(snapshot.docs.length, 1);
     const delivery = snapshot.docs[0].data();
+    assert.match(delivery.html, /Una mirada breve antes de abrir el correo/);
     assert.match(delivery.html, /href="https:\/\/api\.example\.com\/v1\/newsletter\/unsubscribe\?token=/);
     assert.match(delivery.html, />darte de baja<\/a>/);
     assert.match(delivery.text, /Darte de baja: https:\/\/api\.example\.com\/v1\/newsletter\/unsubscribe\?token=/);

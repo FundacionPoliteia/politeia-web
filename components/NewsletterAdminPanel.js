@@ -18,22 +18,33 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
   const [message, setMessage] = useState('');
   const [confirmSendOpen, setConfirmSendOpen] = useState(false);
   const [subscriberModal, setSubscriberModal] = useState(null);
+  const [templates, setTemplates] = useState([]);
+  const [templatesLoading, setTemplatesLoading] = useState(true);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [templateToLoad, setTemplateToLoad] = useState(null);
+  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
+  const [templateName, setTemplateName] = useState('');
+  const [templateDeleteTarget, setTemplateDeleteTarget] = useState(null);
   const subscriberRequestRef = useRef(0);
 
   useEffect(() => {
     loadOverview();
+    loadTemplates();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!subscriberModal && !confirmSendOpen) return undefined;
+    if (!subscriberModal && !confirmSendOpen && !templateToLoad && !saveTemplateOpen && !templateDeleteTarget) return undefined;
     function closeOnEscape(event) {
       if (event.key !== 'Escape' || busyAction) return;
       if (subscriberModal) closeSubscriberModal();
-      else setConfirmSendOpen(false);
+      else if (confirmSendOpen) setConfirmSendOpen(false);
+      else if (templateToLoad) setTemplateToLoad(null);
+      else if (saveTemplateOpen) setSaveTemplateOpen(false);
+      else setTemplateDeleteTarget(null);
     }
     window.addEventListener('keydown', closeOnEscape);
     return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [busyAction, confirmSendOpen, subscriberModal]);
+  }, [busyAction, confirmSendOpen, saveTemplateOpen, subscriberModal, templateDeleteTarget, templateToLoad]);
 
   async function loadOverview() {
     try {
@@ -50,7 +61,12 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
     try {
       await mailApi('/v1/newsletter/admin/test', {
         method: 'POST',
-        body: JSON.stringify({ to: form.testEmail, subject: form.subject, content: form.content }),
+        body: JSON.stringify({
+          to: form.testEmail,
+          subject: form.subject,
+          previewText: form.previewText,
+          content: form.content,
+        }),
       });
       setMessage('Prueba procesada. En modo console, revisa la terminal del backend.');
     } catch (err) {
@@ -82,6 +98,20 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
       setMessage(err.message);
     } finally {
       setBusyAction('');
+    }
+  }
+
+  async function loadTemplates() {
+    setTemplatesLoading(true);
+    try {
+      const data = await mailApi('/v1/newsletter/admin/templates');
+      const items = data.items || [];
+      setTemplates(items);
+      setSelectedTemplateId((current) => current || items[0]?.id || '');
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setTemplatesLoading(false);
     }
   }
 
@@ -146,7 +176,83 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
     setForm((current) => ({ ...current, [field]: value }));
   }
 
+  function requestTemplateLoad() {
+    const template = templates.find((item) => item.id === selectedTemplateId);
+    if (!template) return;
+    if (hasCampaignContent(form)) {
+      setTemplateToLoad(template);
+      return;
+    }
+    applyTemplate(template);
+  }
+
+  function applyTemplate(template) {
+    setForm((current) => ({
+      ...current,
+      name: template.campaignName || template.name || '',
+      subject: template.subject || '',
+      previewText: template.previewText || '',
+      content: template.content || '',
+    }));
+    setTemplateToLoad(null);
+    setMessage(`Plantilla "${template.name}" cargada.`);
+  }
+
+  function openSaveTemplate() {
+    setTemplateName(form.name.trim() || form.subject.trim() || 'Nueva plantilla');
+    setSaveTemplateOpen(true);
+  }
+
+  async function saveTemplate() {
+    setBusyAction('template-save');
+    setMessage('');
+    try {
+      const data = await mailApi('/v1/newsletter/admin/templates', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: templateName,
+          campaignName: form.name,
+          subject: form.subject,
+          previewText: form.previewText,
+          content: form.content,
+        }),
+      });
+      setTemplates((current) => [
+        ...current.filter((item) => item.builtIn),
+        data.item,
+        ...current.filter((item) => !item.builtIn),
+      ]);
+      setSelectedTemplateId(data.item.id);
+      setSaveTemplateOpen(false);
+      setMessage(`Plantilla "${data.item.name}" guardada.`);
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusyAction('');
+    }
+  }
+
+  async function deleteTemplate() {
+    if (!templateDeleteTarget) return;
+    setBusyAction('template-delete');
+    setMessage('');
+    try {
+      await mailApi(`/v1/newsletter/admin/templates/${encodeURIComponent(templateDeleteTarget.id)}`, { method: 'DELETE' });
+      setTemplates((current) => current.filter((item) => item.id !== templateDeleteTarget.id));
+      setSelectedTemplateId((current) => (
+        current === templateDeleteTarget.id ? templates.find((item) => item.builtIn)?.id || '' : current
+      ));
+      setMessage(`Plantilla "${templateDeleteTarget.name}" eliminada.`);
+      setTemplateDeleteTarget(null);
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusyAction('');
+    }
+  }
+
   const campaignReady = Boolean(form.subject.trim() && form.content.trim());
+  const selectedTemplate = templates.find((item) => item.id === selectedTemplateId);
 
   return (
     <section className="admin-manager admin-newsletter-manager">
@@ -201,7 +307,7 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
                     <strong>{subscriber.email}</strong>
                     <span>
                       {subscriber.source ? `Origen: ${subscriber.source}` : 'Origen no informado'}
-                      {' · '}
+                      {' - '}
                       {formatSubscriberDate(subscriber.confirmedAt || subscriber.requestedAt || subscriber.updatedAt)}
                     </span>
                   </article>
@@ -214,6 +320,51 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
           </div>
         </div>
       )}
+
+      <section className="admin-newsletter-template-library" aria-labelledby="newsletter-templates-title">
+        <div className="admin-newsletter-template-head">
+          <div>
+            <span>Plantillas</span>
+            <h3 id="newsletter-templates-title">Empezar desde una base</h3>
+          </div>
+          <button className="btn btn-ghost" disabled={!campaignReady || Boolean(busyAction)} onClick={openSaveTemplate} type="button">
+            <span aria-hidden="true" className="material-symbols-outlined">bookmark_add</span>
+            Guardar actual
+          </button>
+        </div>
+        <div className="admin-newsletter-template-controls">
+          <label>
+            Plantilla
+            <select disabled={templatesLoading || Boolean(busyAction)} onChange={(event) => setSelectedTemplateId(event.target.value)} value={selectedTemplateId}>
+              {templatesLoading && <option value="">Cargando plantillas...</option>}
+              {!templatesLoading && templates.length === 0 && <option value="">No hay plantillas disponibles</option>}
+              {templates.some((item) => item.builtIn) && (
+                <optgroup label="Plantillas base">
+                  {templates.filter((item) => item.builtIn).map((template) => (
+                    <option key={template.id} value={template.id}>{template.name}</option>
+                  ))}
+                </optgroup>
+              )}
+              {templates.some((item) => !item.builtIn) && (
+                <optgroup label="Plantillas propias">
+                  {templates.filter((item) => !item.builtIn).map((template) => (
+                    <option key={template.id} value={template.id}>{template.name}</option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+          </label>
+          <button className="btn btn-primary" disabled={!selectedTemplate || Boolean(busyAction)} onClick={requestTemplateLoad} type="button">
+            Usar plantilla
+          </button>
+          {selectedTemplate && !selectedTemplate.builtIn && (
+            <button aria-label={`Eliminar plantilla ${selectedTemplate.name}`} className="admin-icon-button admin-newsletter-template-delete" disabled={Boolean(busyAction)} onClick={() => setTemplateDeleteTarget(selectedTemplate)} title="Eliminar plantilla" type="button">
+              <span aria-hidden="true" className="material-symbols-outlined">delete</span>
+            </button>
+          )}
+        </div>
+        <small>Al cargar una plantilla se completan el nombre interno, asunto, texto de previsualizacion y contenido.</small>
+      </section>
 
       <div className="admin-newsletter-form">
         <div className="admin-two">
@@ -276,8 +427,62 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
           </div>
         </div>
       )}
+
+      {templateToLoad && (
+        <div className="admin-modal-backdrop" role="presentation" onMouseDown={() => setTemplateToLoad(null)}>
+          <div aria-labelledby="newsletter-template-load-title" aria-modal="true" className="admin-modal admin-newsletter-confirm" onMouseDown={(event) => event.stopPropagation()} role="dialog">
+            <span>Cargar plantilla</span>
+            <h2 id="newsletter-template-load-title">Reemplazar el contenido actual</h2>
+            <p>La plantilla "{templateToLoad.name}" reemplazara los datos que estas editando. Esta accion no guarda el borrador actual.</p>
+            <div className="admin-modal-actions">
+              <button className="btn btn-ghost" onClick={() => setTemplateToLoad(null)} type="button">Cancelar</button>
+              <button className="btn btn-primary" onClick={() => applyTemplate(templateToLoad)} type="button">Cargar plantilla</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {saveTemplateOpen && (
+        <div className="admin-modal-backdrop" role="presentation" onMouseDown={() => !busyAction && setSaveTemplateOpen(false)}>
+          <div aria-labelledby="newsletter-template-save-title" aria-modal="true" className="admin-modal admin-newsletter-confirm" onMouseDown={(event) => event.stopPropagation()} role="dialog">
+            <span>Nueva plantilla</span>
+            <h2 id="newsletter-template-save-title">Guardar este contenido para reutilizar</h2>
+            <label className="admin-newsletter-template-name">
+              Nombre de la plantilla
+              <input autoFocus maxLength="80" onChange={(event) => setTemplateName(event.target.value)} value={templateName} />
+            </label>
+            <p>Se guardaran el asunto, la previsualizacion y el contenido actual. Luego podras cargarlos desde esta biblioteca.</p>
+            <div className="admin-modal-actions">
+              <button className="btn btn-ghost" disabled={busyAction === 'template-save'} onClick={() => setSaveTemplateOpen(false)} type="button">Cancelar</button>
+              <button className="btn btn-primary" disabled={!templateName.trim() || busyAction === 'template-save'} onClick={saveTemplate} type="button">
+                {busyAction === 'template-save' ? 'Guardando...' : 'Guardar plantilla'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {templateDeleteTarget && (
+        <div className="admin-modal-backdrop" role="presentation" onMouseDown={() => !busyAction && setTemplateDeleteTarget(null)}>
+          <div aria-labelledby="newsletter-template-delete-title" aria-modal="true" className="admin-modal admin-newsletter-confirm" onMouseDown={(event) => event.stopPropagation()} role="dialog">
+            <span>Eliminar plantilla</span>
+            <h2 id="newsletter-template-delete-title">Eliminar "{templateDeleteTarget.name}"</h2>
+            <p>La plantilla dejara de estar disponible para el equipo. Los newsletters que ya la usaron no se modificaran.</p>
+            <div className="admin-modal-actions">
+              <button className="btn btn-ghost" disabled={busyAction === 'template-delete'} onClick={() => setTemplateDeleteTarget(null)} type="button">Cancelar</button>
+              <button className="btn btn-danger" disabled={busyAction === 'template-delete'} onClick={deleteTemplate} type="button">
+                {busyAction === 'template-delete' ? 'Eliminando...' : 'Eliminar plantilla'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
+}
+
+function hasCampaignContent(form) {
+  return Boolean(form.name.trim() || form.subject.trim() || form.previewText.trim() || form.content.trim());
 }
 
 function formatSubscriberDate(value) {
