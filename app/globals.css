@@ -2072,8 +2072,11 @@ a {
 .newsletter-result-modal {
   position: relative;
   display: grid;
+  align-content: start;
   justify-items: center;
+  gap: 0;
   width: min(460px, 100%);
+  min-height: 0;
   border: 1px solid var(--linea);
   border-top: 5px solid var(--azul);
   border-radius: 8px;
@@ -2129,17 +2132,32 @@ a {
 }
 
 .newsletter-result-modal h2 {
+  max-width: 14ch;
+  color: var(--tinta);
   font-family: var(--display);
   font-size: clamp(1.8rem, 6vw, 2.35rem);
   font-weight: 500;
   line-height: 1.1;
-  margin-top: 8px
+  margin: 8px 0 0
 }
 
 .newsletter-result-modal>p {
   max-width: 36ch;
   color: var(--gris);
   line-height: 1.55;
+  margin: 14px 0 24px
+}
+
+.blog-newsletter .newsletter-result-modal h2 {
+  max-width: 14ch;
+  color: var(--tinta);
+  font-size: clamp(1.8rem, 6vw, 2.35rem);
+  margin: 8px 0 0
+}
+
+.blog-newsletter .newsletter-result-modal>p {
+  max-width: 36ch;
+  color: var(--gris);
   margin: 14px 0 24px
 }
 

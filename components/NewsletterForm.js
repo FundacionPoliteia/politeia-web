@@ -85,6 +85,7 @@ export default function NewsletterForm({ initialStatus = '' }) {
       {resultModalOpen && initialResult && (
         <div className="newsletter-result-overlay" onMouseDown={closeResultModal} role="presentation">
           <div
+            aria-describedby="newsletter-result-message"
             aria-labelledby="newsletter-result-title"
             aria-modal="true"
             className={`newsletter-result-modal ${initialResult.tone}`}
@@ -97,7 +98,7 @@ export default function NewsletterForm({ initialStatus = '' }) {
             <span aria-hidden="true" className="newsletter-result-icon material-symbols-outlined">{initialResult.icon}</span>
             <span className="newsletter-result-eyebrow">Newsletter</span>
             <h2 id="newsletter-result-title">{initialResult.title}</h2>
-            <p>{initialResult.message}</p>
+            <p id="newsletter-result-message">{initialResult.message}</p>
             <button className="btn btn-primary" onClick={closeResultModal} type="button">Entendido</button>
           </div>
         </div>
