@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import RichTextEditor from './RichTextEditor';
 
 const EMPTY_CAMPAIGN = {
   name: '',
@@ -71,6 +72,27 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
     }
   }
 
+  async function uploadNewsletterImage(file) {
+    if (!file) return '';
+    setMessage('');
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      const response = await fetch(`${apiBase}/v1/media`, {
+        method: 'POST',
+        body,
+        credentials: 'include',
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data?.error?.message || 'No pudimos subir la imagen. Intenta nuevamente.');
+      setMessage('Imagen cargada.');
+      return data.item?.url || '';
+    } catch (err) {
+      setMessage(err.message);
+      return '';
+    }
+  }
+
   async function mailApi(path, options = {}) {
     const response = await fetch(`${apiBase}${path}`, {
       credentials: 'include',
@@ -119,10 +141,16 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
           Texto de previsualizacion
           <input maxLength="180" value={form.previewText} onChange={(event) => update('previewText', event.target.value)} placeholder="La linea que acompana al asunto en la bandeja" />
         </label>
-        <label>
-          Contenido
-          <textarea rows="8" value={form.content} onChange={(event) => update('content', event.target.value)} placeholder="Escribi el contenido del newsletter. Se respetan parrafos y enlaces." />
-        </label>
+        <div className="admin-newsletter-editor">
+          <span>Contenido</span>
+          <RichTextEditor
+            onChange={(content) => update('content', content)}
+            onUploadImage={uploadNewsletterImage}
+            placeholder="Escribi el contenido del newsletter..."
+            showCommentTools={false}
+            value={form.content}
+          />
+        </div>
         <div className="admin-newsletter-test-row">
           <label>
             Enviar prueba a

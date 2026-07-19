@@ -1,10 +1,11 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
+import { marked } from 'marked';
 import sanitizeHtml from 'sanitize-html';
 import { config } from '../config.js';
 import { HttpError } from '../errors.js';
 import { db, serializeDoc, serverTimestamp } from '../firestore.js';
 import { MAIL_CHANNELS, createResendBroadcast, syncResendContact } from '../mail/provider.js';
-import { escapeHtml, renderMailLayout, renderNewsletterConfirmation } from '../mail/templates.js';
+import { renderMailLayout, renderNewsletterConfirmation } from '../mail/templates.js';
 import { createMailDelivery } from './mail.js';
 
 const subscriptions = () => db().collection('newsletterSubscriptions');
@@ -238,13 +239,47 @@ function sanitizeCampaignHtml(value = '') {
   const raw = String(value).trim();
   const source = raw.includes('<')
     ? raw
-    : raw.split(/\n{2,}/).map((paragraph) => `<p>${escapeHtml(paragraph).replaceAll('\n', '<br>')}</p>`).join('');
+    : marked.parse(raw, { async: false, gfm: true });
   return sanitizeHtml(source, {
-    allowedTags: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 'h2', 'h3', 'ul', 'ol', 'li', 'blockquote', 'a'],
-    allowedAttributes: { a: ['href', 'target', 'rel'] },
+    allowedTags: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 'h2', 'h3', 'ul', 'ol', 'li', 'blockquote', 'a', 'hr', 'img', 'table', 'thead', 'tbody', 'tr', 'th', 'td'],
+    allowedAttributes: {
+      a: ['href', 'target', 'rel'],
+      img: ['src', 'alt', 'style'],
+      table: ['style'],
+      th: ['colspan', 'rowspan', 'style'],
+      td: ['colspan', 'rowspan', 'style'],
+    },
+    allowedStyles: {
+      img: {
+        display: [/^block$/],
+        'max-width': [/^100%$/],
+        height: [/^auto$/],
+        margin: [/^20px 0$/],
+      },
+      table: {
+        width: [/^100%$/],
+        'border-collapse': [/^collapse$/],
+        margin: [/^20px 0$/],
+      },
+      th: {
+        border: [/^1px solid #dcdde3$/],
+        padding: [/^8px$/],
+        'text-align': [/^left$/],
+        background: [/^#f5f3f1$/],
+      },
+      td: {
+        border: [/^1px solid #dcdde3$/],
+        padding: [/^8px$/],
+        'vertical-align': [/^top$/],
+      },
+    },
     allowedSchemes: ['http', 'https', 'mailto'],
     transformTags: {
       a: sanitizeHtml.simpleTransform('a', { target: '_blank', rel: 'noopener noreferrer' }),
+      img: sanitizeHtml.simpleTransform('img', { style: 'display:block;max-width:100%;height:auto;margin:20px 0' }, true),
+      table: sanitizeHtml.simpleTransform('table', { style: 'width:100%;border-collapse:collapse;margin:20px 0' }, true),
+      th: sanitizeHtml.simpleTransform('th', { style: 'border:1px solid #dcdde3;padding:8px;text-align:left;background:#f5f3f1' }, true),
+      td: sanitizeHtml.simpleTransform('td', { style: 'border:1px solid #dcdde3;padding:8px;vertical-align:top' }, true),
     },
   }).trim();
 }

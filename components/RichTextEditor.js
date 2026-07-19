@@ -72,6 +72,8 @@ export default function RichTextEditor({
   onChange,
   onUploadImage,
   onCreateComment,
+  showCommentTools = true,
+  placeholder = 'Escribi o importa el contenido de la nota...',
   activeCommentId = '',
   activeCommentNonce = 0,
   disabled = false,
@@ -118,7 +120,7 @@ export default function RichTextEditor({
       TableCell,
       ReviewComment,
       Placeholder.configure({
-        placeholder: 'Escribi o importa el contenido de la nota...',
+        placeholder,
       }),
     ],
     content: markdownToHtml(value),
@@ -245,14 +247,16 @@ export default function RichTextEditor({
         ))}
 
         <div className="rich-toolbar-group">
-          <button
-            disabled={disabled || !editor || !onCreateComment || editor.state.selection.empty || selectionHasReviewComment(editor)}
-            onClick={addReviewComment}
-            title="Comentar seleccion"
-            type="button"
-          >
-            <Icon name="add_comment" />
-          </button>
+          {showCommentTools && (
+            <button
+              disabled={disabled || !editor || !onCreateComment || editor.state.selection.empty || selectionHasReviewComment(editor)}
+              onClick={addReviewComment}
+              title="Comentar seleccion"
+              type="button"
+            >
+              <Icon name="add_comment" />
+            </button>
+          )}
           <button disabled={disabled || !editor} onClick={setLink} title="Enlace" type="button">
             <Icon name="link" />
           </button>
@@ -356,14 +360,16 @@ export default function RichTextEditor({
           >
             <Icon name="horizontal_rule" />
           </button>
-          <button
-            disabled={!onCreateComment || selectionHasReviewComment(editor)}
-            onClick={addReviewComment}
-            title="Comentar seleccion"
-            type="button"
-          >
-            <Icon name="add_comment" />
-          </button>
+          {showCommentTools && (
+            <button
+              disabled={!onCreateComment || selectionHasReviewComment(editor)}
+              onClick={addReviewComment}
+              title="Comentar seleccion"
+              type="button"
+            >
+              <Icon name="add_comment" />
+            </button>
+          )}
         </BubbleMenu>
       )}
 

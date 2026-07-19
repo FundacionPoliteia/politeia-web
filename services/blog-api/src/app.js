@@ -53,7 +53,7 @@ export function createApp() {
   app.use('/v1/categories', requireGoogleCloudCredentials, categoriesRouter({ writeLimiter }));
   app.use('/v1/posts', requireGoogleCloudCredentials, postsRouter({ writeLimiter }));
   app.use('/v1/users', requireGoogleCloudCredentials, usersRouter({ writeLimiter }));
-  app.use('/v1/media', writeLimiter, requireAuth, requireAnyRole(['blog', 'reviewer']), requireGoogleCloudCredentials, mediaRouter);
+  app.use('/v1/media', writeLimiter, requireAuth, requireAnyRole(['blog', 'reviewer', 'newsletter']), requireGoogleCloudCredentials, mediaRouter);
   app.use('/v1/import', writeLimiter, requireAuth, requireAnyRole(['blog', 'reviewer']), requireGoogleCloudCredentials, importRouter);
   app.use('/v1/notifications', requireGoogleCloudCredentials, notificationsRouter({ writeLimiter }));
   app.use('/v1/newsletter', requireGoogleCloudCredentials, newsletterRouter({ writeLimiter }));

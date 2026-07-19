@@ -108,6 +108,12 @@ test('newsletter administration accepts newsletter and admin roles only', async 
       .set('Cookie', sessionFor('newsletter@politeia.ar', ['newsletter']))
       .expect(200);
 
+    const mediaResponse = await request(app)
+      .post('/v1/media')
+      .set('Cookie', sessionFor('newsletter@politeia.ar', ['newsletter']))
+      .expect(400);
+    assert.equal(mediaResponse.body.error.message, 'file or url is required');
+
     await request(app)
       .get('/v1/newsletter/admin/overview')
       .set('Cookie', sessionFor('admin@politeia.ar', ['admin']))
@@ -773,12 +779,15 @@ test('newsletter campaigns are project-scoped and remain drafts in console mode'
       name: 'Resumen semanal',
       subject: 'Novedades de Politeia',
       previewText: 'Las notas de esta semana',
-      content: 'Una nota nueva.\n\nGracias por leer.',
+      content: '## Una nota nueva\n\n**Gracias** por leer.\n\n![Portada](https://example.com/portada.jpg)\n\n| Tema | Estado |\n| --- | --- |\n| Newsletter | Listo |',
       send: false,
     }, 'admin@politeia.ar');
     assert.equal(item.projectKey, config.mailProjectKey);
     assert.equal(item.status, 'draft');
-    assert.match(item.contentHtml, /<p>Una nota nueva\.<\/p>/);
+    assert.match(item.contentHtml, /<h2>Una nota nueva<\/h2>/);
+    assert.match(item.contentHtml, /<strong>Gracias<\/strong>/);
+    assert.match(item.contentHtml, /<img[^>]+src="https:\/\/example\.com\/portada\.jpg"/);
+    assert.match(item.contentHtml, /<table[^>]*>/);
   } finally {
     config.mailProvider = previousProvider;
     setFirestoreForTests(null);

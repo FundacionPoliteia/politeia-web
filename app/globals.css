@@ -5889,6 +5889,22 @@ a {
   padding: 24px
 }
 
+.admin-newsletter-editor {
+  display: grid;
+  gap: 8px
+}
+
+.admin-newsletter-editor>span {
+  color: var(--tinta);
+  font-size: .75rem;
+  font-weight: 800;
+  text-transform: uppercase
+}
+
+.admin-newsletter-editor .rich-editor {
+  max-height: min(72vh, 760px)
+}
+
 .admin-newsletter-form>label,
 .admin-newsletter-test-row label {
   display: grid;
