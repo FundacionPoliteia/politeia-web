@@ -15,6 +15,7 @@ const ALLOWED_EMAIL_DOMAIN = 'politeia.ar';
 const ASSIGNED_EMAIL_DOMAIN = 'gmail.com';
 const SHOW_EMAIL_SETTINGS_UI = process.env.NEXT_PUBLIC_EMAIL_SETTINGS_ENABLED !== 'false';
 
+
 const EMPTY_FORM = {
   id: '',
   title: '',
