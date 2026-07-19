@@ -3565,7 +3565,10 @@ export default function AdminConsole() {
                               <div className="profile-preview-author-about">
                                 <small>Sobre mi</small>
                                 <p>{profilePreviewAuthor.description}</p>
-                                <strong>Escribe sobre {profilePreviewAuthor.focusArea}</strong>
+                                <div className="profile-preview-author-focus">
+                                  <span>Temas y mirada</span>
+                                  <strong>{profilePreviewAuthor.focusArea}</strong>
+                                </div>
                               </div>
                             </div>
                             <aside>

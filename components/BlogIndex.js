@@ -53,7 +53,12 @@ export default function BlogIndex({ posts = [], autorFiltro = '', categoriaFiltr
               <div className="blog-author-about">
                 <span>Sobre mi</span>
                 <p className="lead">{authorLead}</p>
-                {authorFocusArea && <small>Escribe sobre {authorFocusArea}</small>}
+                {authorFocusArea && (
+                  <div className="blog-author-focus">
+                    <small>Temas y mirada</small>
+                    <p>{authorFocusArea}</p>
+                  </div>
+                )}
               </div>
             ) : filtrandoCategoria ? (
               <p className="lead">Articulos publicados dentro de esta categoria.</p>
@@ -76,7 +81,6 @@ export default function BlogIndex({ posts = [], autorFiltro = '', categoriaFiltr
           </div>
           {filtrandoAutor && authorPhoto && (
             <aside className="blog-author-card" aria-label={`Perfil de ${authorName}`}>
-              <span>Autor de Politeia</span>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={authorPhoto} alt="" />
             </aside>
