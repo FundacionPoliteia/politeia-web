@@ -35,4 +35,5 @@ credentials*.json
 *.secret.yml
 cloudrun-env.local.yaml
 cloudrun-env.local.yml
+cloudrun-env.yaml
 
