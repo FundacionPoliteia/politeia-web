@@ -266,6 +266,20 @@ export async function sendNewsletterTest({ to, subject, previewText = '', conten
   });
 }
 
+export function renderNewsletterPreview({ subject, previewText = '', content }) {
+  const cleanSubject = sanitizeShortText(subject, 180);
+  const cleanPreview = sanitizeShortText(previewText, 180);
+  const cleanContent = sanitizeCampaignHtml(content);
+  if (!cleanSubject || !stripHtml(cleanContent)) throw new HttpError(400, 'subject and content are required');
+  return renderMailLayout({
+    preheader: cleanPreview || cleanSubject,
+    heading: cleanSubject,
+    bodyHtml: cleanContent,
+    bodyText: stripHtml(cleanContent),
+    unsubscribeUrl: '#newsletter-unsubscribe-preview',
+  });
+}
+
 export async function createNewsletterCampaign({ name, subject, previewText = '', content, send = false }, actorEmail) {
   const cleanSubject = sanitizeShortText(subject, 180);
   const cleanName = sanitizeShortText(name || subject, 120);
@@ -361,46 +375,51 @@ function sanitizeCampaignHtml(value = '') {
   const source = raw.includes('<')
     ? raw
     : marked.parse(raw, { async: false, gfm: true });
-  return sanitizeHtml(source, {
-    allowedTags: ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 'h2', 'h3', 'ul', 'ol', 'li', 'blockquote', 'a', 'hr', 'img', 'table', 'thead', 'tbody', 'tr', 'th', 'td'],
+  const allowedTags = ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 'h2', 'h3', 'ul', 'ol', 'li', 'blockquote', 'a', 'hr', 'img', 'table', 'thead', 'tbody', 'tr', 'th', 'td'];
+  const clean = sanitizeHtml(source, {
+    allowedTags,
     allowedAttributes: {
-      a: ['href', 'target', 'rel'],
-      img: ['src', 'alt', 'style'],
+      a: ['href', 'title'],
+      img: ['src', 'alt', 'title'],
+      th: ['colspan', 'rowspan'],
+      td: ['colspan', 'rowspan'],
+    },
+    allowedSchemes: ['http', 'https', 'mailto'],
+  });
+  const textFont = "'Archivo','Helvetica Neue',Arial,sans-serif";
+  const displayFont = "'Fraunces',Georgia,'Times New Roman',serif";
+  return sanitizeHtml(clean, {
+    allowedTags,
+    allowedAttributes: {
+      p: ['style'],
+      h2: ['style'],
+      h3: ['style'],
+      ul: ['style'],
+      ol: ['style'],
+      li: ['style'],
+      blockquote: ['style'],
+      a: ['href', 'title', 'target', 'rel', 'style'],
+      hr: ['style'],
+      img: ['src', 'alt', 'title', 'style'],
       table: ['style'],
       th: ['colspan', 'rowspan', 'style'],
       td: ['colspan', 'rowspan', 'style'],
     },
-    allowedStyles: {
-      img: {
-        display: [/^block$/],
-        'max-width': [/^100%$/],
-        height: [/^auto$/],
-        margin: [/^20px 0$/],
-      },
-      table: {
-        width: [/^100%$/],
-        'border-collapse': [/^collapse$/],
-        margin: [/^20px 0$/],
-      },
-      th: {
-        border: [/^1px solid #dcdde3$/],
-        padding: [/^8px$/],
-        'text-align': [/^left$/],
-        background: [/^#f5f3f1$/],
-      },
-      td: {
-        border: [/^1px solid #dcdde3$/],
-        padding: [/^8px$/],
-        'vertical-align': [/^top$/],
-      },
-    },
     allowedSchemes: ['http', 'https', 'mailto'],
     transformTags: {
-      a: sanitizeHtml.simpleTransform('a', { target: '_blank', rel: 'noopener noreferrer' }),
-      img: sanitizeHtml.simpleTransform('img', { style: 'display:block;max-width:100%;height:auto;margin:20px 0' }, true),
-      table: sanitizeHtml.simpleTransform('table', { style: 'width:100%;border-collapse:collapse;margin:20px 0' }, true),
-      th: sanitizeHtml.simpleTransform('th', { style: 'border:1px solid #dcdde3;padding:8px;text-align:left;background:#f5f3f1' }, true),
-      td: sanitizeHtml.simpleTransform('td', { style: 'border:1px solid #dcdde3;padding:8px;vertical-align:top' }, true),
+      p: sanitizeHtml.simpleTransform('p', { style: `margin:0 0 18px;color:#42445b;font-family:${textFont};font-size:16px;line-height:1.65` }, true),
+      h2: sanitizeHtml.simpleTransform('h2', { style: `margin:30px 0 14px;color:#1a1a37;font-family:${displayFont};font-size:26px;line-height:1.2;font-weight:700` }, true),
+      h3: sanitizeHtml.simpleTransform('h3', { style: `margin:24px 0 12px;color:#1a1a37;font-family:${displayFont};font-size:21px;line-height:1.25;font-weight:700` }, true),
+      ul: sanitizeHtml.simpleTransform('ul', { style: `margin:0 0 20px;padding-left:24px;color:#42445b;font-family:${textFont};font-size:16px;line-height:1.6` }, true),
+      ol: sanitizeHtml.simpleTransform('ol', { style: `margin:0 0 20px;padding-left:24px;color:#42445b;font-family:${textFont};font-size:16px;line-height:1.6` }, true),
+      li: sanitizeHtml.simpleTransform('li', { style: 'margin:0 0 8px' }, true),
+      blockquote: sanitizeHtml.simpleTransform('blockquote', { style: `margin:24px 0;padding:6px 0 6px 18px;border-left:4px solid #137a9f;color:#1a1a37;font-family:${displayFont};font-size:19px;line-height:1.5` }, true),
+      a: sanitizeHtml.simpleTransform('a', { target: '_blank', rel: 'noopener noreferrer', style: `color:#137a9f;font-family:${textFont};font-weight:700;text-decoration:underline` }, true),
+      hr: sanitizeHtml.simpleTransform('hr', { style: 'margin:28px 0;border:0;border-top:1px solid #dcdde3' }, true),
+      img: sanitizeHtml.simpleTransform('img', { style: 'display:block;width:100%;max-width:100%;height:auto;margin:24px auto;border:0;border-radius:6px' }, true),
+      table: sanitizeHtml.simpleTransform('table', { style: `width:100%;margin:24px 0;border-collapse:collapse;color:#42445b;font-family:${textFont};font-size:14px;line-height:1.45` }, true),
+      th: sanitizeHtml.simpleTransform('th', { style: 'padding:10px;border:1px solid #dcdde3;background:#f7f5f2;color:#1a1a37;font-weight:700;text-align:left' }, true),
+      td: sanitizeHtml.simpleTransform('td', { style: 'padding:10px;border:1px solid #dcdde3;vertical-align:top' }, true),
     },
   }).trim();
 }

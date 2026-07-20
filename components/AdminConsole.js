@@ -236,6 +236,8 @@ export default function AdminConsole() {
   const [profileClaimConfirmOpen, setProfileClaimConfirmOpen] = useState(false);
   const [adminProfileClaims, setAdminProfileClaims] = useState([]);
   const [adminProfileClaimFilter, setAdminProfileClaimFilter] = useState('pending');
+  const [adminProfileClaimsOpen, setAdminProfileClaimsOpen] = useState(false);
+  const [adminProfileEditorOpen, setAdminProfileEditorOpen] = useState(true);
   const [adminProfileClaimDialog, setAdminProfileClaimDialog] = useState(null);
   const [adminProfileClaimReason, setAdminProfileClaimReason] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
@@ -291,6 +293,10 @@ export default function AdminConsole() {
   const adminProfileBeingEdited = useMemo(
     () => adminProfiles.find((profile) => profile.id === adminProfileEditingId) || null,
     [adminProfiles, adminProfileEditingId]
+  );
+  const pendingAdminProfileClaimCount = useMemo(
+    () => adminProfileClaims.filter((claim) => ['pending', 'processing'].includes(claim.status)).length,
+    [adminProfileClaims]
   );
   const activeStatusFilter = statusFilter;
   const publishedAuthorLocked = Boolean(form.id && !canPublishPosts && ['published', 'archived'].includes(form.status));
@@ -1036,6 +1042,7 @@ export default function AdminConsole() {
 
   function editAdminAuthorProfile(profile) {
     if (!profile?.id) return;
+    setAdminProfileEditorOpen(true);
     setAdminProfileEditingId(profile.id);
     setAdminProfileDraft({
       firstName: profile.firstName,
@@ -2368,49 +2375,64 @@ export default function AdminConsole() {
                   <div className="admin-profile-notice">
                     Si el nombre visible no coincide con el autor usado en una nota, el perfil no se va a mostrar correctamente y el usuario no podra activar la publicacion del perfil.
                   </div>
-                  <section className="admin-profile-claims">
+                  <section className={`admin-profile-claims admin-collapsible-section ${adminProfileClaimsOpen ? 'is-open' : 'is-collapsed'} ${pendingAdminProfileClaimCount > 0 ? 'has-pending' : ''}`}>
                     <div className="admin-manager-head compact">
                       <div>
                         <span>Solicitudes</span>
                         <h3>Vinculacion de perfiles</h3>
                         <p>Revisa quien solicita heredar un perfil gestionado y sus notas.</p>
                       </div>
-                      <span className="admin-claim-count">
-                        {adminProfileClaims.filter((claim) => ['pending', 'processing'].includes(claim.status)).length} pendientes
-                      </span>
-                    </div>
-                    <div className="admin-filter-chips admin-claim-filters" aria-label="Filtrar solicitudes">
-                      {[
-                        ['pending', 'Pendientes'],
-                        ['approved', 'Aprobadas'],
-                        ['blocked', 'Bloqueadas'],
-                        ['all', 'Todas'],
-                      ].map(([value, label]) => (
+                      <div className="admin-collapsible-head-actions">
+                        <span className="admin-claim-count">
+                          {pendingAdminProfileClaimCount} pendientes
+                        </span>
                         <button
-                          aria-pressed={adminProfileClaimFilter === value}
-                          className={adminProfileClaimFilter === value ? 'selected' : ''}
-                          key={value}
-                          onClick={() => setAdminProfileClaimFilter(value)}
+                          aria-expanded={adminProfileClaimsOpen}
+                          aria-label={adminProfileClaimsOpen ? 'Cerrar vinculacion de perfiles' : 'Abrir vinculacion de perfiles'}
+                          className="admin-icon-button admin-collapse-button"
+                          onClick={() => setAdminProfileClaimsOpen((open) => !open)}
                           type="button"
                         >
-                          {label}
+                          <span aria-hidden="true" className="material-symbols-outlined">{adminProfileClaimsOpen ? 'expand_less' : 'expand_more'}</span>
                         </button>
-                      ))}
+                      </div>
                     </div>
-                    <div className="admin-claim-list">
-                      {filteredAdminProfileClaims.length === 0 ? (
-                        <p className="admin-empty-copy">No hay solicitudes en esta vista.</p>
-                      ) : filteredAdminProfileClaims.map((claim) => (
-                        <button className="admin-claim-row" key={claim.id} onClick={() => setAdminProfileClaimDialog({ claim, action: 'review' })} type="button">
-                          <span className={`status ${profileClaimStatusClass(claim.status)}`}>{PROFILE_CLAIM_STATUS_LABELS[claim.status] || claim.status}</span>
-                          <span><strong>{claim.fullName}</strong><small>{claim.requesterEmail}</small></span>
-                          <span><strong>{claim.affectedPostCount}</strong><small>{claim.affectedPostCount === 1 ? 'nota afectada' : 'notas afectadas'}</small></span>
-                          <span><small>{formatAdminDate(claim.requestedAt)}</small><span className="material-symbols-outlined" aria-hidden="true">chevron_right</span></span>
-                        </button>
-                      ))}
-                    </div>
+                    {adminProfileClaimsOpen && (
+                      <div className="admin-collapsible-content">
+                        <div className="admin-filter-chips admin-claim-filters" aria-label="Filtrar solicitudes">
+                          {[
+                            ['pending', 'Pendientes'],
+                            ['approved', 'Aprobadas'],
+                            ['blocked', 'Bloqueadas'],
+                            ['all', 'Todas'],
+                          ].map(([value, label]) => (
+                            <button
+                              aria-pressed={adminProfileClaimFilter === value}
+                              className={adminProfileClaimFilter === value ? 'selected' : ''}
+                              key={value}
+                              onClick={() => setAdminProfileClaimFilter(value)}
+                              type="button"
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="admin-claim-list">
+                          {filteredAdminProfileClaims.length === 0 ? (
+                            <p className="admin-empty-copy">No hay solicitudes en esta vista.</p>
+                          ) : filteredAdminProfileClaims.map((claim) => (
+                            <button className="admin-claim-row" key={claim.id} onClick={() => setAdminProfileClaimDialog({ claim, action: 'review' })} type="button">
+                              <span className={`status ${profileClaimStatusClass(claim.status)}`}>{PROFILE_CLAIM_STATUS_LABELS[claim.status] || claim.status}</span>
+                              <span><strong>{claim.fullName}</strong><small>{claim.requesterEmail}</small></span>
+                              <span><strong>{claim.affectedPostCount}</strong><small>{claim.affectedPostCount === 1 ? 'nota afectada' : 'notas afectadas'}</small></span>
+                              <span><small>{formatAdminDate(claim.requestedAt)}</small><span className="material-symbols-outlined" aria-hidden="true">chevron_right</span></span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </section>
-                  <form className="admin-managed-profile-form" onSubmit={saveAdminAuthorProfile}>
+                  <form className={`admin-managed-profile-form admin-collapsible-section ${adminProfileEditorOpen ? 'is-open' : 'is-collapsed'}`} onSubmit={saveAdminAuthorProfile}>
                     <div className="admin-manager-head compact">
                       <div>
                         <span>{adminProfileEditingId ? (adminProfileBeingEdited?.managedAuthor ? 'Autor gestionado' : 'Cuenta de usuario') : 'Nuevo autor'}</span>
@@ -2421,7 +2443,18 @@ export default function AdminConsole() {
                             : `Corrige los datos del perfil de ${adminProfileBeingEdited?.email || 'esta cuenta'}. El email y sus permisos no se modifican.`
                           : 'Usalo para autores que no ingresan al panel, pero necesitan tener perfil en el blog.'}</p>
                       </div>
+                      <button
+                        aria-expanded={adminProfileEditorOpen}
+                        aria-label={adminProfileEditorOpen ? 'Cerrar editor de perfiles' : 'Abrir editor de perfiles'}
+                        className="admin-icon-button admin-collapse-button"
+                        onClick={() => setAdminProfileEditorOpen((open) => !open)}
+                        type="button"
+                      >
+                        <span aria-hidden="true" className="material-symbols-outlined">{adminProfileEditorOpen ? 'expand_less' : 'expand_more'}</span>
+                      </button>
                     </div>
+                    {adminProfileEditorOpen && (
+                      <div className="admin-collapsible-content admin-profile-editor-content">
                     <div className="admin-two">
                       <label>
                         Nombre
@@ -2564,6 +2597,8 @@ export default function AdminConsole() {
                         <ActionSpinner active={isActionLoading('admin-profile-create') || isActionLoading('admin-profile-update')} />
                       </button>
                     </div>
+                      </div>
+                    )}
                   </form>
                   <div className="admin-table-wrap">
                     <table className="admin-table">

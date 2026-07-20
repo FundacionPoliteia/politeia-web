@@ -51,6 +51,7 @@ import {
   getNewsletterOverview,
   listNewsletterSubscribers,
   listNewsletterTemplates,
+  renderNewsletterPreview,
   requestNewsletterSubscription,
   sendNewsletterTest,
   unsubscribeNewsletter,
@@ -948,7 +949,7 @@ test('newsletter campaigns are project-scoped and remain drafts in console mode'
     }, 'admin@politeia.ar');
     assert.equal(item.projectKey, config.mailProjectKey);
     assert.equal(item.status, 'draft');
-    assert.match(item.contentHtml, /<h2>Una nota nueva<\/h2>/);
+    assert.match(item.contentHtml, /<h2[^>]*>Una nota nueva<\/h2>/);
     assert.match(item.contentHtml, /<strong>Gracias<\/strong>/);
     assert.match(item.contentHtml, /<img[^>]+src="https:\/\/example\.com\/portada\.jpg"/);
     assert.match(item.contentHtml, /<table[^>]*>/);
@@ -956,6 +957,23 @@ test('newsletter campaigns are project-scoped and remain drafts in console mode'
     config.mailProvider = previousProvider;
     setFirestoreForTests(null);
   }
+});
+
+test('newsletter preview preserves links and images with email-safe brand styles', () => {
+  const rendered = renderNewsletterPreview({
+    subject: 'Resumen de Politeia',
+    previewText: 'Las lecturas de esta semana.',
+    content: '## Titulo editorial\n\n[Leer la nota](https://www.politeia.ar/blog/nota)\n\n![Portada](https://example.com/portada.jpg)',
+  });
+
+  assert.match(rendered.html, /font-family:'Fraunces',Georgia/);
+  assert.match(rendered.html, /font-family:'Archivo','Helvetica Neue',Arial/);
+  assert.match(rendered.html, /href="https:\/\/www\.politeia\.ar\/blog\/nota"/);
+  assert.match(rendered.html, /target="_blank"/);
+  assert.match(rendered.html, /src="https:\/\/example\.com\/portada\.jpg"/);
+  assert.match(rendered.html, /alt="Portada"/);
+  assert.match(rendered.html, /width:100%;max-width:100%;height:auto/);
+  assert.doesNotMatch(rendered.html, /<script/i);
 });
 
 test('newsletter templates provide bases and persist reusable custom drafts', async () => {

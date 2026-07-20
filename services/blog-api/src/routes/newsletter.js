@@ -10,6 +10,7 @@ import {
   listNewsletterSubscribers,
   listNewsletterTemplates,
   requestNewsletterSubscription,
+  renderNewsletterPreview,
   sendNewsletterTest,
   unsubscribeNewsletter,
 } from '../repositories/newsletter.js';
@@ -101,6 +102,14 @@ export function newsletterRouter({ writeLimiter }) {
     try {
       const item = await sendNewsletterTest({ ...req.body, actorEmail: req.user.email });
       res.json({ item });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.post('/admin/preview', async (req, res, next) => {
+    try {
+      res.json(renderNewsletterPreview(req.body || {}));
     } catch (err) {
       next(err);
     }

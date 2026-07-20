@@ -16,7 +16,8 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
   const [form, setForm] = useState(() => ({ ...EMPTY_CAMPAIGN, testEmail: currentEmail || '' }));
   const [busyAction, setBusyAction] = useState('');
   const [message, setMessage] = useState('');
-  const [confirmSendOpen, setConfirmSendOpen] = useState(false);
+  const [mailPreview, setMailPreview] = useState(null);
+  const [previewViewport, setPreviewViewport] = useState('desktop');
   const [subscriberModal, setSubscriberModal] = useState(null);
   const [templates, setTemplates] = useState([]);
   const [templatesLoading, setTemplatesLoading] = useState(true);
@@ -33,18 +34,18 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!subscriberModal && !confirmSendOpen && !templateToLoad && !saveTemplateOpen && !templateDeleteTarget) return undefined;
+    if (!subscriberModal && !mailPreview && !templateToLoad && !saveTemplateOpen && !templateDeleteTarget) return undefined;
     function closeOnEscape(event) {
       if (event.key !== 'Escape' || busyAction) return;
       if (subscriberModal) closeSubscriberModal();
-      else if (confirmSendOpen) setConfirmSendOpen(false);
+      else if (mailPreview) setMailPreview(null);
       else if (templateToLoad) setTemplateToLoad(null);
       else if (saveTemplateOpen) setSaveTemplateOpen(false);
       else setTemplateDeleteTarget(null);
     }
     window.addEventListener('keydown', closeOnEscape);
     return () => window.removeEventListener('keydown', closeOnEscape);
-  }, [busyAction, confirmSendOpen, saveTemplateOpen, subscriberModal, templateDeleteTarget, templateToLoad]);
+  }, [busyAction, mailPreview, saveTemplateOpen, subscriberModal, templateDeleteTarget, templateToLoad]);
 
   async function loadOverview() {
     try {
@@ -68,6 +69,7 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
           content: form.content,
         }),
       });
+      setMailPreview(null);
       setMessage('Prueba procesada. En modo console, revisa la terminal del backend.');
     } catch (err) {
       setMessage(err.message);
@@ -93,7 +95,7 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
       setMessage(send
         ? 'Newsletter entregado al proveedor para su envio.'
         : `Borrador creado${data.item?.providerCampaignId ? `: ${data.item.providerCampaignId}` : '.'}`);
-      setConfirmSendOpen(false);
+      if (send) setMailPreview(null);
     } catch (err) {
       setMessage(err.message);
     } finally {
@@ -112,6 +114,28 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
       setMessage(err.message);
     } finally {
       setTemplatesLoading(false);
+    }
+  }
+
+  async function openMailPreview(intent = 'preview') {
+    const action = `preview-${intent}`;
+    setBusyAction(action);
+    setMessage('');
+    try {
+      const data = await mailApi('/v1/newsletter/admin/preview', {
+        method: 'POST',
+        body: JSON.stringify({
+          subject: form.subject,
+          previewText: form.previewText,
+          content: form.content,
+        }),
+      });
+      setPreviewViewport('desktop');
+      setMailPreview({ intent, html: data.html || '', text: data.text || '' });
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusyAction('');
     }
   }
 
@@ -396,33 +420,65 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
             Enviar prueba a
             <input type="email" value={form.testEmail} onChange={(event) => update('testEmail', event.target.value)} />
           </label>
-          <button className="btn btn-ghost" disabled={!campaignReady || !form.testEmail.trim() || busyAction} onClick={sendTest} type="button">
-            {busyAction === 'test' ? 'Enviando prueba...' : 'Enviar prueba'}
+          <button className="btn btn-ghost" disabled={!campaignReady || !form.testEmail.trim() || busyAction} onClick={() => openMailPreview('test')} type="button">
+            {busyAction === 'preview-test' ? 'Preparando vista...' : 'Enviar prueba'}
           </button>
         </div>
         {message && <div className="admin-profile-notice" role="status">{message}</div>}
         <div className="admin-manager-actions">
           <span>{overview?.provider === 'console' ? 'Modo local: los envios se registran en consola.' : 'El envio usa el Segment configurado en Resend.'}</span>
+          <button className="btn btn-ghost" disabled={!campaignReady || busyAction} onClick={() => openMailPreview('preview')} type="button">
+            {busyAction === 'preview-preview' ? 'Preparando vista...' : 'Previsualizar'}
+          </button>
           <button className="btn btn-ghost" disabled={!campaignReady || busyAction} onClick={() => createCampaign(false)} type="button">
             {busyAction === 'draft' ? 'Creando borrador...' : 'Crear borrador'}
           </button>
-          <button className="btn btn-primary" disabled={!campaignReady || busyAction} onClick={() => setConfirmSendOpen(true)} type="button">
-            Enviar newsletter
+          <button className="btn btn-primary" disabled={!campaignReady || busyAction} onClick={() => openMailPreview('send')} type="button">
+            {busyAction === 'preview-send' ? 'Preparando vista...' : 'Enviar newsletter'}
           </button>
         </div>
       </div>
 
-      {confirmSendOpen && (
-        <div className="admin-modal-backdrop" role="presentation" onMouseDown={() => setConfirmSendOpen(false)}>
-          <div aria-labelledby="newsletter-confirm-title" aria-modal="true" className="admin-modal admin-newsletter-confirm" onMouseDown={(event) => event.stopPropagation()} role="dialog">
-            <span>Confirmar envio</span>
-            <h2 id="newsletter-confirm-title">Enviar a toda la lista confirmada</h2>
-            <p>Se enviara "{form.subject}" mediante Resend. Esta accion no se puede deshacer desde el panel.</p>
-            <div className="admin-modal-actions">
-              <button className="btn btn-ghost" onClick={() => setConfirmSendOpen(false)} type="button">Cancelar</button>
-              <button className="btn btn-primary" disabled={busyAction === 'send'} onClick={() => createCampaign(true)} type="button">
-                {busyAction === 'send' ? 'Enviando...' : 'Confirmar envio'}
+      {mailPreview && (
+        <div className="admin-modal-backdrop admin-newsletter-preview-backdrop" role="presentation" onMouseDown={() => !busyAction && setMailPreview(null)}>
+          <div aria-labelledby="newsletter-preview-title" aria-modal="true" className="admin-modal admin-newsletter-preview-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog">
+            <header className="admin-newsletter-preview-head">
+              <div>
+                <span>Vista previa final</span>
+                <h2 id="newsletter-preview-title">{form.subject}</h2>
+                <p>{mailPreview.intent === 'test' ? `Prueba para ${form.testEmail}` : mailPreview.intent === 'send' ? 'Envio a la lista confirmada' : 'Revision del newsletter'}</p>
+              </div>
+              <button aria-label="Cerrar vista previa" className="admin-icon-button" disabled={Boolean(busyAction)} onClick={() => setMailPreview(null)} type="button">
+                <span aria-hidden="true" className="material-symbols-outlined">close</span>
               </button>
+            </header>
+            <div className="admin-newsletter-preview-toolbar" aria-label="Tamano de vista previa">
+              <button aria-pressed={previewViewport === 'desktop'} className={previewViewport === 'desktop' ? 'selected' : ''} onClick={() => setPreviewViewport('desktop')} type="button">
+                <span aria-hidden="true" className="material-symbols-outlined">desktop_windows</span>
+                Desktop
+              </button>
+              <button aria-pressed={previewViewport === 'mobile'} className={previewViewport === 'mobile' ? 'selected' : ''} onClick={() => setPreviewViewport('mobile')} type="button">
+                <span aria-hidden="true" className="material-symbols-outlined">smartphone</span>
+                Mobile
+              </button>
+            </div>
+            <div className={`admin-newsletter-preview-stage ${previewViewport}`}>
+              <iframe sandbox="allow-popups allow-popups-to-escape-sandbox" srcDoc={mailPreview.html} title={`Vista previa de ${form.subject}`} />
+            </div>
+            <div className="admin-modal-actions admin-newsletter-preview-actions">
+              <button className="btn btn-ghost" disabled={Boolean(busyAction)} onClick={() => setMailPreview(null)} type="button">
+                {mailPreview.intent === 'preview' ? 'Cerrar' : 'Volver a editar'}
+              </button>
+              {mailPreview.intent === 'test' && (
+                <button className="btn btn-primary" disabled={busyAction === 'test'} onClick={sendTest} type="button">
+                  {busyAction === 'test' ? 'Enviando prueba...' : 'Confirmar prueba'}
+                </button>
+              )}
+              {mailPreview.intent === 'send' && (
+                <button className="btn btn-primary" disabled={busyAction === 'send'} onClick={() => createCampaign(true)} type="button">
+                  {busyAction === 'send' ? 'Enviando...' : 'Confirmar envio'}
+                </button>
+              )}
             </div>
           </div>
         </div>
