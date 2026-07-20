@@ -5429,6 +5429,19 @@ a {
   background: var(--blanco)
 }
 
+.admin-claim-filters {
+  margin-top: 14px
+}
+
+.admin-claim-filters button {
+  min-height: 36px
+}
+
+.admin-claim-filters button:focus-visible {
+  outline: 3px solid rgba(19, 122, 159, .16);
+  outline-offset: 2px
+}
+
 .admin-claim-count {
   border-radius: 999px;
   background: rgba(19, 122, 159, .1);

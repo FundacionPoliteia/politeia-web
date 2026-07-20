@@ -2375,7 +2375,7 @@ export default function AdminConsole() {
                         {adminProfileClaims.filter((claim) => ['pending', 'processing'].includes(claim.status)).length} pendientes
                       </span>
                     </div>
-                    <div className="admin-filter-tags" aria-label="Filtrar solicitudes">
+                    <div className="admin-filter-chips admin-claim-filters" aria-label="Filtrar solicitudes">
                       {[
                         ['pending', 'Pendientes'],
                         ['approved', 'Aprobadas'],
@@ -2384,7 +2384,7 @@ export default function AdminConsole() {
                       ].map(([value, label]) => (
                         <button
                           aria-pressed={adminProfileClaimFilter === value}
-                          className={adminProfileClaimFilter === value ? 'active' : ''}
+                          className={adminProfileClaimFilter === value ? 'selected' : ''}
                           key={value}
                           onClick={() => setAdminProfileClaimFilter(value)}
                           type="button"
