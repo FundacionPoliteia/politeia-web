@@ -114,7 +114,7 @@ export async function createManagedAuthorProfile(data, actorEmail = '') {
   return after;
 }
 
-export async function updateManagedAuthorProfile(id = '', data, actorEmail = '') {
+export async function updateAuthorProfileAsAdmin(id = '', data, actorEmail = '') {
   const cleanId = normalizeText(id);
   if (!cleanId) throw new HttpError(400, 'profile id is required');
 
@@ -122,14 +122,19 @@ export async function updateManagedAuthorProfile(id = '', data, actorEmail = '')
   const beforeDoc = await ref.get();
   if (!beforeDoc.exists) throw new HttpError(404, 'Author profile not found');
 
-  const before = await toUserProfile(serializeDoc(beforeDoc), { email: '' });
-  if (!before.managedAuthor) {
-    throw new HttpError(403, 'Only managed author profiles can be edited');
-  }
-  if (await hasPendingClaimForManagedProfile(cleanId)) {
+  const stored = serializeDoc(beforeDoc);
+  const storedAccountEmail = stored?.managedAuthor === true
+    ? ''
+    : normalizeEmail(stored?.email || stored?.id);
+  const before = await toUserProfile(stored, { email: storedAccountEmail });
+  const isManagedAuthor = before.managedAuthor === true;
+  const hasPendingClaim = isManagedAuthor
+    ? await hasPendingClaimForManagedProfile(cleanId)
+    : await hasPendingClaimForEmail(before.email);
+  if (hasPendingClaim) {
     const requestedName = buildFullName(data?.firstName ?? before.firstName, data?.lastName ?? before.lastName);
     if (identityNameKey(requestedName) !== identityNameKey(before.fullName)) {
-      throw new HttpError(409, 'No se puede renombrar un perfil con solicitudes de vinculacion pendientes');
+      throw new HttpError(409, 'No se puede cambiar el nombre de un perfil con solicitudes de vinculacion pendientes');
     }
   }
 
@@ -138,19 +143,21 @@ export async function updateManagedAuthorProfile(id = '', data, actorEmail = '')
   const authorSlug = slugify(fullName);
   if (!fullName || !authorSlug) throw new HttpError(400, 'firstName and lastName are required');
 
-  const existing = await profiles()
-    .where('authorSlug', '==', authorSlug)
-    .limit(10)
-    .get();
-  const duplicate = existing.docs
-    .map((doc) => serializeDoc(doc))
-    .find((item) => item?.id !== cleanId);
-  if (duplicate) throw new HttpError(409, 'Author profile already exists');
+  if (isManagedAuthor) {
+    const existing = await profiles()
+      .where('authorSlug', '==', authorSlug)
+      .limit(10)
+      .get();
+    const duplicate = existing.docs
+      .map((doc) => serializeDoc(doc))
+      .find((item) => item?.id !== cleanId);
+    if (duplicate) throw new HttpError(409, 'Author profile already exists');
+  }
 
   const patch = {
     ...clean,
-    email: '',
-    managedAuthor: true,
+    email: isManagedAuthor ? '' : before.email,
+    managedAuthor: isManagedAuthor,
     publicProfileEnabled: clean.publicProfileEnabled,
     publicProfilePreferenceSet: true,
     fullName,
@@ -160,10 +167,10 @@ export async function updateManagedAuthorProfile(id = '', data, actorEmail = '')
   };
 
   await ref.set(patch, { merge: true });
-  const after = await toUserProfile(serializeDoc(await ref.get()), { email: '' });
+  const after = await toUserProfile(serializeDoc(await ref.get()), { email: before.email });
   await writeAuditLog({
     actorEmail,
-    action: 'profile.managedAuthor.update',
+    action: isManagedAuthor ? 'profile.managedAuthor.update' : 'profile.admin.update',
     resourceType: 'userProfile',
     resourceId: cleanId,
     before,
@@ -172,6 +179,8 @@ export async function updateManagedAuthorProfile(id = '', data, actorEmail = '')
 
   return after;
 }
+
+export const updateManagedAuthorProfile = updateAuthorProfileAsAdmin;
 
 export async function deleteManagedAuthorProfile(id = '', actorEmail = '') {
   const cleanId = normalizeText(id);

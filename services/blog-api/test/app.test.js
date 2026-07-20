@@ -27,6 +27,7 @@ import {
   getUserProfile,
   listPublicAuthorProfiles,
   sanitizeProfile,
+  updateAuthorProfileAsAdmin,
   updateManagedAuthorProfile,
   updateUserProfile,
   identityNameKey,
@@ -545,6 +546,43 @@ test('in-app notifications target roles and emails independently from email opt-
 
     const allRead = await markAllNotificationsRead(author);
     assert.equal(allRead.unreadCount, 0);
+  } finally {
+    setFirestoreForTests(null);
+  }
+});
+
+test('admin can correct a user profile without changing account identity', async () => {
+  const firestore = createMemoryFirestore();
+  setFirestoreForTests(firestore);
+
+  try {
+    await updateUserProfile({ email: 'autora@politeia.ar', name: 'Autora' }, {
+      firstName: 'Autroa',
+      lastName: 'Registrada',
+      description: 'Texto con un error.',
+      publicProfileEnabled: false,
+    });
+
+    const updated = await updateAuthorProfileAsAdmin('autora@politeia.ar', {
+      firstName: 'Autora',
+      lastName: 'Registrada',
+      description: 'Texto corregido por un administrador.',
+      focusArea: 'Instituciones y ciudadania.',
+      publicProfileEnabled: true,
+    }, 'dev@politeia.ar');
+
+    assert.equal(updated.email, 'autora@politeia.ar');
+    assert.equal(updated.managedAuthor, false);
+    assert.equal(updated.fullName, 'Autora Registrada');
+    assert.equal(updated.authorSlug, 'autora-registrada');
+    assert.equal(updated.description, 'Texto corregido por un administrador.');
+    assert.equal(updated.focusArea, 'Instituciones y ciudadania.');
+    assert.equal(updated.publicProfileEnabled, true);
+
+    const stored = await firestore.collection('userProfiles').doc('autora@politeia.ar').get();
+    assert.equal(stored.data().email, 'autora@politeia.ar');
+    assert.equal(stored.data().managedAuthor, false);
+    assert.equal(stored.data().updatedBy, 'dev@politeia.ar');
   } finally {
     setFirestoreForTests(null);
   }

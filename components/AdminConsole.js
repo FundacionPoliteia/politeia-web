@@ -288,6 +288,10 @@ export default function AdminConsole() {
     return posts.some((post) => taxonomyKey(post.authorName) === key);
   }, [posts, profileDraft.fullName]);
   const canShowProfileOptIn = Boolean(profileDraft.canSharePublicProfile || profileNameMatchesLoadedAuthor);
+  const adminProfileBeingEdited = useMemo(
+    () => adminProfiles.find((profile) => profile.id === adminProfileEditingId) || null,
+    [adminProfiles, adminProfileEditingId]
+  );
   const activeStatusFilter = statusFilter;
   const publishedAuthorLocked = Boolean(form.id && !canPublishPosts && ['published', 'archived'].includes(form.status));
   const editingLivePost = form.status === 'published-edition';
@@ -1031,7 +1035,7 @@ export default function AdminConsole() {
   }
 
   function editAdminAuthorProfile(profile) {
-    if (!profile?.managedAuthor) return;
+    if (!profile?.id) return;
     setAdminProfileEditingId(profile.id);
     setAdminProfileDraft({
       firstName: profile.firstName,
@@ -2409,9 +2413,13 @@ export default function AdminConsole() {
                   <form className="admin-managed-profile-form" onSubmit={saveAdminAuthorProfile}>
                     <div className="admin-manager-head compact">
                       <div>
-                        <span>{adminProfileEditingId ? 'Autor gestionado' : 'Nuevo autor'}</span>
-                        <h3>{adminProfileEditingId ? 'Editar perfil sin cuenta' : 'Crear perfil sin cuenta'}</h3>
-                        <p>{adminProfileEditingId ? 'Actualiza los datos publicos del perfil gestionado.' : 'Usalo para autores que no ingresan al panel, pero necesitan tener perfil en el blog.'}</p>
+                        <span>{adminProfileEditingId ? (adminProfileBeingEdited?.managedAuthor ? 'Autor gestionado' : 'Cuenta de usuario') : 'Nuevo autor'}</span>
+                        <h3>{adminProfileEditingId ? 'Editar perfil' : 'Crear perfil sin cuenta'}</h3>
+                        <p>{adminProfileEditingId
+                          ? adminProfileBeingEdited?.managedAuthor
+                            ? 'Actualiza los datos publicos del perfil gestionado.'
+                            : `Corrige los datos del perfil de ${adminProfileBeingEdited?.email || 'esta cuenta'}. El email y sus permisos no se modifican.`
+                          : 'Usalo para autores que no ingresan al panel, pero necesitan tener perfil en el blog.'}</p>
                       </div>
                     </div>
                     <div className="admin-two">
@@ -2617,16 +2625,16 @@ export default function AdminConsole() {
                             </td>
                             <td>{formatAdminDate(profile.updatedAt)}</td>
                             <td>
-                              {profile.managedAuthor ? (
-                                <div className="admin-row-actions">
-                                  <button
-                                    className="btn btn-ghost"
-                                    disabled={isActionLoading(`admin-profile-delete:${profile.id}`)}
-                                    onClick={() => editAdminAuthorProfile(profile)}
-                                    type="button"
-                                  >
-                                    Editar
-                                  </button>
+                              <div className="admin-row-actions">
+                                <button
+                                  className="btn btn-ghost"
+                                  disabled={isActionLoading(`admin-profile-delete:${profile.id}`)}
+                                  onClick={() => editAdminAuthorProfile(profile)}
+                                  type="button"
+                                >
+                                  Editar
+                                </button>
+                                {profile.managedAuthor && (
                                   <button
                                     className="btn btn-ghost danger"
                                     disabled={isActionLoading(`admin-profile-delete:${profile.id}`)}
@@ -2636,10 +2644,8 @@ export default function AdminConsole() {
                                     {isActionLoading(`admin-profile-delete:${profile.id}`) ? 'Eliminando...' : 'Eliminar'}
                                     <ActionSpinner active={isActionLoading(`admin-profile-delete:${profile.id}`)} />
                                   </button>
-                                </div>
-                              ) : (
-                                <small>Cuenta de usuario</small>
-                              )}
+                                )}
+                              </div>
                             </td>
                           </tr>
                           );

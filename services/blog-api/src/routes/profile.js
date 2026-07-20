@@ -8,7 +8,7 @@ import {
   getUserProfile,
   listPublicAuthorProfiles,
   listUserProfiles,
-  updateManagedAuthorProfile,
+  updateAuthorProfileAsAdmin,
   updateUserProfile,
 } from '../repositories/profiles.js';
 import {
@@ -99,7 +99,7 @@ export function profileRouter({ writeLimiter }) {
 
   router.patch('/manage/:id', writeLimiter, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
-      const item = await updateManagedAuthorProfile(req.params.id, req.body || {}, req.user.email);
+      const item = await updateAuthorProfileAsAdmin(req.params.id, req.body || {}, req.user.email);
       res.json({ item });
     } catch (err) {
       next(err);
