@@ -80,6 +80,28 @@ const DEFAULT_NOTIFICATION_EVENTS = Object.fromEntries(
   NOTIFICATION_EVENT_LABELS.map((event) => [event.value, true])
 );
 
+const CLAIM_NOTIFICATION_EVENT_LABELS = [
+  { value: 'profileClaimRequested', label: 'Solicitudes de vinculacion de perfiles', roles: ['admin'] },
+  { value: 'profileClaimApproved', label: 'Vinculaciones de perfil aprobadas', roles: ['blog'] },
+  { value: 'profileClaimBlocked', label: 'Vinculaciones de perfil bloqueadas', roles: ['blog'] },
+  { value: 'profileClaimReleased', label: 'Vinculaciones de perfil desbloqueadas', roles: ['blog'] },
+  { value: 'profileClaimSuperseded', label: 'Perfiles reclamados por otra cuenta', roles: ['blog'] },
+];
+NOTIFICATION_EVENT_LABELS.push(...CLAIM_NOTIFICATION_EVENT_LABELS);
+Object.assign(DEFAULT_NOTIFICATION_EVENTS, Object.fromEntries(
+  CLAIM_NOTIFICATION_EVENT_LABELS.map((event) => [event.value, true])
+));
+
+const PROFILE_CLAIM_STATUS_LABELS = {
+  pending: 'Pendiente',
+  processing: 'Procesando',
+  approved: 'Aprobada',
+  blocked: 'Bloqueada',
+  released: 'Desbloqueada',
+  withdrawn: 'Cancelada',
+  superseded: 'Perfil no disponible',
+};
+
 const DEFAULT_PROFILE_PHOTO = '/default_profile.png';
 
 const EMPTY_PROFILE = {
@@ -210,6 +232,12 @@ export default function AdminConsole() {
   const [adminProfileEditingId, setAdminProfileEditingId] = useState('');
   const [adminProfilePhotoMode, setAdminProfilePhotoMode] = useState('url');
   const [adminProfileDeleteTarget, setAdminProfileDeleteTarget] = useState(null);
+  const [profileClaimMatch, setProfileClaimMatch] = useState({ candidate: null, claim: null, nameLocked: false });
+  const [profileClaimConfirmOpen, setProfileClaimConfirmOpen] = useState(false);
+  const [adminProfileClaims, setAdminProfileClaims] = useState([]);
+  const [adminProfileClaimFilter, setAdminProfileClaimFilter] = useState('pending');
+  const [adminProfileClaimDialog, setAdminProfileClaimDialog] = useState(null);
+  const [adminProfileClaimReason, setAdminProfileClaimReason] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
   const [profilePhotoUploading, setProfilePhotoUploading] = useState(false);
   const [reviewComments, setReviewComments] = useState([]);
@@ -234,7 +262,8 @@ export default function AdminConsole() {
   const isNewsletterManager = roles.includes('newsletter');
   const isBlogAuthor = roles.includes('blog') || isReviewer || isAdmin;
   const canAccessEditorialPanel = isBlogAuthor;
-  const canAccessPanel = canAccessEditorialPanel || isNewsletterManager;
+  const canAccessProfilePanel = Boolean(user) && (canAccessEditorialPanel || isNewsletterManager || isPrimaryDomainUser);
+  const canAccessPanel = canAccessEditorialPanel || isNewsletterManager || canAccessProfilePanel;
   const canCreatePosts = isBlogAuthor;
   const canEditPosts = canAccessEditorialPanel;
   const canChooseSlug = isAdmin || isReviewer;
@@ -247,7 +276,6 @@ export default function AdminConsole() {
   const canReviewProfiles = isAdmin;
   const canAccessRolesMailPanel = canManageUsers;
   const canAccessNewsletterPanel = isNewsletterManager;
-  const canAccessProfilePanel = canAccessPanel;
   const defaultPanelTab = canAccessEditorialPanel ? 'blogs' : canAccessNewsletterPanel ? 'newsletter' : 'profile';
   const accountAuthorName = user?.name || user?.email || '';
   const profileAuthorName = profileDraft.fullName || userProfile.fullName || accountAuthorName;
@@ -265,7 +293,7 @@ export default function AdminConsole() {
   const editingLivePost = form.status === 'published-edition';
   const editRequestPending = Boolean(form.editRequestedAt);
   const editorBusy = busy || publishedAuthorLocked;
-  const roleLabel = isAdmin ? 'Panel' : isReviewer ? 'Panel de revision' : isNewsletterManager && !isBlogAuthor ? 'Panel de newsletter' : 'Panel de blog';
+  const roleLabel = isAdmin ? 'Panel' : isReviewer ? 'Panel de revision' : isNewsletterManager && !isBlogAuthor ? 'Panel de newsletter' : isBlogAuthor ? 'Panel de blog' : 'Perfil';
   const isLocalApiBase = isLocalApiUrl(API_BASE);
   const hasUnsavedChanges = useMemo(
     () => serializeForm(form) !== serializeForm(savedForm),
@@ -346,8 +374,10 @@ export default function AdminConsole() {
   useEffect(() => {
     if (canReviewProfiles && activePanelTab === 'profiles') {
       loadAdminProfiles();
+      loadAdminProfileClaims();
     } else if (!canReviewProfiles) {
       setAdminProfiles([]);
+      setAdminProfileClaims([]);
     }
   }, [activePanelTab, canReviewProfiles]);
 
@@ -439,6 +469,8 @@ export default function AdminConsole() {
       || editRequestConfirmOpen
       || categoryDeleteTarget
       || adminProfileDeleteTarget
+      || profileClaimConfirmOpen
+      || adminProfileClaimDialog
       || reviewCommentDialog
       || editingReviewComment;
     if (!hasOpenModal) return undefined;
@@ -455,6 +487,15 @@ export default function AdminConsole() {
       }
       if (adminProfileDeleteTarget) {
         setAdminProfileDeleteTarget(null);
+        return;
+      }
+      if (adminProfileClaimDialog) {
+        setAdminProfileClaimDialog(null);
+        setAdminProfileClaimReason('');
+        return;
+      }
+      if (profileClaimConfirmOpen) {
+        setProfileClaimConfirmOpen(false);
         return;
       }
       if (categoryDeleteTarget) {
@@ -482,7 +523,7 @@ export default function AdminConsole() {
 
     window.addEventListener('keydown', handleModalEscape);
     return () => window.removeEventListener('keydown', handleModalEscape);
-  }, [adminProfileDeleteTarget, busy, categoryDeleteTarget, editRequestConfirmOpen, editingReviewComment, pendingAction, previewOpen, profileConsentOpen, profilePreviewOpen, reviewCommentDialog, savingProfile]);
+  }, [adminProfileClaimDialog, adminProfileDeleteTarget, busy, categoryDeleteTarget, editRequestConfirmOpen, editingReviewComment, pendingAction, previewOpen, profileClaimConfirmOpen, profileConsentOpen, profilePreviewOpen, reviewCommentDialog, savingProfile]);
 
   function initializeGoogle() {
     if (userRef.current) {
@@ -643,6 +684,11 @@ export default function AdminConsole() {
       setAdminUsers([]);
       setAdminUserDrafts({});
       setAdminUserEmail('');
+      setProfileClaimMatch({ candidate: null, claim: null, nameLocked: false });
+      setProfileClaimConfirmOpen(false);
+      setAdminProfileClaims([]);
+      setAdminProfileClaimDialog(null);
+      setAdminProfileClaimReason('');
       setAdminUserNewRoles(['blog']);
       setAdminUserSearch('');
       setAdminManagerOpen(false);
@@ -777,6 +823,23 @@ export default function AdminConsole() {
       setMessage('');
       await markNotificationRead(notification);
       setNotificationsOpen(false);
+      if (notification.profileClaimId) {
+        if (isAdmin && notification.type === 'profile.claim.requested') {
+          setActivePanelTab('profiles');
+          const claims = await loadAdminProfileClaims();
+          const claim = claims.map(normalizeProfileClaim).find((item) => item.id === notification.profileClaimId);
+          if (claim) setAdminProfileClaimDialog({ claim, action: 'review' });
+          else setMessage('La solicitud asociada ya no esta disponible.');
+        } else {
+          setActivePanelTab('profile');
+          await Promise.all([loadMe({ silent: true }), loadUserProfile()]);
+          if (notification.type === 'profile.claim.approved') {
+            setStatusFilter('');
+            await loadPosts();
+          }
+        }
+        return;
+      }
       if (!notification.postId) return;
       setActivePanelTab('blogs');
       setStatusFilter('');
@@ -858,8 +921,20 @@ export default function AdminConsole() {
       if (profileNeedsSetup(nextProfile)) {
         setActivePanelTab('profile');
       }
+      await loadProfileClaimMatch();
     } catch (err) {
       setMessage(err.message);
+    }
+  }
+
+  async function loadProfileClaimMatch() {
+    try {
+      const data = await api('/v1/profile/claim-match');
+      setProfileClaimMatch(normalizeProfileClaimMatch(data));
+      return data;
+    } catch (err) {
+      setMessage(err.message);
+      return null;
     }
   }
 
@@ -867,6 +942,73 @@ export default function AdminConsole() {
     try {
       const data = await api('/v1/profile/manage');
       setAdminProfiles((data.items || []).map(normalizeAdminProfile));
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function loadAdminProfileClaims() {
+    try {
+      const data = await api('/v1/profile/manage/claims');
+      setAdminProfileClaims((data.items || []).map(normalizeProfileClaim));
+      return data.items || [];
+    } catch (err) {
+      setMessage(err.message);
+      return [];
+    }
+  }
+
+  async function requestProfileClaim() {
+    const candidate = profileClaimMatch.candidate;
+    if (!candidate?.id) return;
+    try {
+      setMessage('');
+      await withActionLoading('profile-claim-request', () => api('/v1/profile/claims', {
+        method: 'POST',
+        body: JSON.stringify({ managedProfileId: candidate.id }),
+      }));
+      setProfileClaimConfirmOpen(false);
+      await loadProfileClaimMatch();
+      await loadInAppNotifications({ silent: true });
+      setMessage('Solicitud de vinculacion enviada. Te avisaremos cuando un administrador la revise.');
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function withdrawOwnProfileClaim() {
+    const claim = profileClaimMatch.claim;
+    if (!claim?.id) return;
+    try {
+      setMessage('');
+      await withActionLoading('profile-claim-withdraw', () => api(`/v1/profile/claims/${encodeURIComponent(claim.id)}/withdraw`, {
+        method: 'POST',
+      }));
+      await loadProfileClaimMatch();
+      setMessage('Solicitud cancelada.');
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function runAdminProfileClaimAction() {
+    const dialog = adminProfileClaimDialog;
+    if (!dialog?.claim?.id || !dialog.action) return;
+    const key = `profile-claim-${dialog.action}:${dialog.claim.id}`;
+    try {
+      setMessage('');
+      await withActionLoading(key, () => api(`/v1/profile/manage/claims/${encodeURIComponent(dialog.claim.id)}/${dialog.action}`, {
+        method: 'POST',
+        body: dialog.action === 'block' ? JSON.stringify({ reason: adminProfileClaimReason }) : undefined,
+      }));
+      setAdminProfileClaimDialog(null);
+      setAdminProfileClaimReason('');
+      await Promise.all([loadAdminProfileClaims(), loadAdminProfiles(), loadInAppNotifications({ silent: true })]);
+      setMessage(dialog.action === 'approve'
+        ? 'Perfil vinculado, rol concedido y notas transferidas.'
+        : dialog.action === 'block'
+          ? 'Solicitud bloqueada.'
+          : 'Solicitud desbloqueada.');
     } catch (err) {
       setMessage(err.message);
     }
@@ -996,6 +1138,7 @@ export default function AdminConsole() {
           showAuthorNote: current.showAuthorNote || Boolean(nextProfile.fullName),
         }));
       }
+      await loadProfileClaimMatch();
       setMessage('Perfil actualizado.');
     } catch (err) {
       setMessage(err.message);
@@ -1759,6 +1902,13 @@ export default function AdminConsole() {
     if (reviewCommentFilter === 'all') return reviewComments;
     return reviewComments.filter((comment) => comment.status === reviewCommentFilter || (reviewCommentFilter === 'open' && comment.status !== 'resolved'));
   }, [reviewComments, reviewCommentFilter]);
+  const filteredAdminProfileClaims = useMemo(() => {
+    if (adminProfileClaimFilter === 'all') return adminProfileClaims;
+    if (adminProfileClaimFilter === 'pending') {
+      return adminProfileClaims.filter((claim) => ['pending', 'processing'].includes(claim.status));
+    }
+    return adminProfileClaims.filter((claim) => claim.status === adminProfileClaimFilter);
+  }, [adminProfileClaimFilter, adminProfileClaims]);
   const messageKind = message ? adminMessageKind(message) : 'info';
 
   return (
@@ -2035,7 +2185,7 @@ export default function AdminConsole() {
                         />
                         <button
                           className="btn btn-ghost"
-                          disabled={profilePhotoUploading || isActionLoading('profile-photo')}
+                          disabled={!canAccessEditorialPanel && !canAccessNewsletterPanel || profilePhotoUploading || isActionLoading('profile-photo')}
                           onClick={() => profilePhotoInputRef.current?.click()}
                           type="button"
                         >
@@ -2052,11 +2202,11 @@ export default function AdminConsole() {
                         <div className="admin-two">
                           <label>
                             Nombre
-                            <input value={profileDraft.firstName} onChange={(e) => updateProfileDraft('firstName', e.target.value)} />
+                            <input disabled={profileClaimMatch.nameLocked} value={profileDraft.firstName} onChange={(e) => updateProfileDraft('firstName', e.target.value)} />
                           </label>
                           <label>
                             Apellido
-                            <input value={profileDraft.lastName} onChange={(e) => updateProfileDraft('lastName', e.target.value)} />
+                            <input disabled={profileClaimMatch.nameLocked} value={profileDraft.lastName} onChange={(e) => updateProfileDraft('lastName', e.target.value)} />
                           </label>
                         </div>
                         <label>
@@ -2116,6 +2266,45 @@ export default function AdminConsole() {
                         </div>
                       </div>
                     </div>
+                    {(profileClaimMatch.candidate || profileClaimMatch.claim) && (
+                      <section className={`admin-profile-claim-card ${profileClaimMatch.claim?.status || 'available'}`}>
+                        <div>
+                          <span>Identidad editorial</span>
+                          {profileClaimMatch.claim ? (
+                            <>
+                              <h3>{PROFILE_CLAIM_STATUS_LABELS[profileClaimMatch.claim.status] || 'Solicitud de vinculacion'}</h3>
+                              <p>
+                                Perfil: <strong>{profileClaimMatch.claim.fullName}</strong>.{' '}
+                                {profileClaimMatch.claim.status === 'pending' && 'Un administrador debe revisar la solicitud.'}
+                                {profileClaimMatch.claim.status === 'processing' && 'Estamos transfiriendo el perfil y sus notas.'}
+                                {profileClaimMatch.claim.status === 'approved' && `Tu cuenta heredo ${profileClaimMatch.claim.affectedPostCount} notas.`}
+                                {profileClaimMatch.claim.status === 'blocked' && (profileClaimMatch.claim.blockReason || 'Contacta a un administrador para revisar el bloqueo.')}
+                                {profileClaimMatch.claim.status === 'superseded' && 'El perfil fue vinculado con otra cuenta.'}
+                                {profileClaimMatch.claim.status === 'released' && 'Podes volver a solicitar la vinculacion.'}
+                              </p>
+                            </>
+                          ) : (
+                            <>
+                              <h3>Encontramos un perfil de autor con este nombre</h3>
+                              <p><strong>{profileClaimMatch.candidate.fullName}</strong> tiene {profileClaimMatch.candidate.postCount} {profileClaimMatch.candidate.postCount === 1 ? 'nota asociada' : 'notas asociadas'}.</p>
+                            </>
+                          )}
+                        </div>
+                        <div className="admin-row-actions">
+                          {profileClaimMatch.claim?.status === 'pending' && (
+                            <button className="btn btn-ghost danger" disabled={isActionLoading('profile-claim-withdraw')} onClick={withdrawOwnProfileClaim} type="button">
+                              {isActionLoading('profile-claim-withdraw') ? 'Cancelando...' : 'Cancelar solicitud'}
+                              <ActionSpinner active={isActionLoading('profile-claim-withdraw')} />
+                            </button>
+                          )}
+                          {profileClaimMatch.candidate && !['pending', 'processing', 'blocked', 'approved'].includes(profileClaimMatch.claim?.status || '') && (
+                            <button className="btn btn-primary" onClick={() => setProfileClaimConfirmOpen(true)} type="button">
+                              Solicitar vinculacion
+                            </button>
+                          )}
+                        </div>
+                      </section>
+                    )}
                   </section>
                   {SHOW_EMAIL_SETTINGS_UI && notificationPreferences && (
                     <section className="admin-manager admin-notifications admin-profile-email-settings">
@@ -2175,6 +2364,48 @@ export default function AdminConsole() {
                   <div className="admin-profile-notice">
                     Si el nombre visible no coincide con el autor usado en una nota, el perfil no se va a mostrar correctamente y el usuario no podra activar la publicacion del perfil.
                   </div>
+                  <section className="admin-profile-claims">
+                    <div className="admin-manager-head compact">
+                      <div>
+                        <span>Solicitudes</span>
+                        <h3>Vinculacion de perfiles</h3>
+                        <p>Revisa quien solicita heredar un perfil gestionado y sus notas.</p>
+                      </div>
+                      <span className="admin-claim-count">
+                        {adminProfileClaims.filter((claim) => ['pending', 'processing'].includes(claim.status)).length} pendientes
+                      </span>
+                    </div>
+                    <div className="admin-filter-tags" aria-label="Filtrar solicitudes">
+                      {[
+                        ['pending', 'Pendientes'],
+                        ['approved', 'Aprobadas'],
+                        ['blocked', 'Bloqueadas'],
+                        ['all', 'Todas'],
+                      ].map(([value, label]) => (
+                        <button
+                          aria-pressed={adminProfileClaimFilter === value}
+                          className={adminProfileClaimFilter === value ? 'active' : ''}
+                          key={value}
+                          onClick={() => setAdminProfileClaimFilter(value)}
+                          type="button"
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="admin-claim-list">
+                      {filteredAdminProfileClaims.length === 0 ? (
+                        <p className="admin-empty-copy">No hay solicitudes en esta vista.</p>
+                      ) : filteredAdminProfileClaims.map((claim) => (
+                        <button className="admin-claim-row" key={claim.id} onClick={() => setAdminProfileClaimDialog({ claim, action: 'review' })} type="button">
+                          <span className={`status ${profileClaimStatusClass(claim.status)}`}>{PROFILE_CLAIM_STATUS_LABELS[claim.status] || claim.status}</span>
+                          <span><strong>{claim.fullName}</strong><small>{claim.requesterEmail}</small></span>
+                          <span><strong>{claim.affectedPostCount}</strong><small>{claim.affectedPostCount === 1 ? 'nota afectada' : 'notas afectadas'}</small></span>
+                          <span><small>{formatAdminDate(claim.requestedAt)}</small><span className="material-symbols-outlined" aria-hidden="true">chevron_right</span></span>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
                   <form className="admin-managed-profile-form" onSubmit={saveAdminAuthorProfile}>
                     <div className="admin-manager-head compact">
                       <div>
@@ -3475,6 +3706,71 @@ export default function AdminConsole() {
               </div>
                 </>
               )}
+              {profileClaimConfirmOpen && profileClaimMatch.candidate && (
+                <div className="admin-modal-backdrop" onMouseDown={() => !isActionLoading('profile-claim-request') && setProfileClaimConfirmOpen(false)} role="presentation">
+                  <div aria-labelledby="profile-claim-confirm-title" aria-modal="true" className="admin-modal admin-profile-claim-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog">
+                    <span className="eyebrow">Vincular identidad editorial</span>
+                    <h3 id="profile-claim-confirm-title">Solicitar el perfil de {profileClaimMatch.candidate.fullName}</h3>
+                    <p>Un administrador revisara que esta cuenta corresponda al autor. Si se aprueba, vas a heredar los datos del perfil y el acceso a {profileClaimMatch.candidate.postCount} {profileClaimMatch.candidate.postCount === 1 ? 'nota' : 'notas'}.</p>
+                    <p>La solicitud no modifica nada hasta ser aprobada.</p>
+                    <div className="admin-modal-actions">
+                      <button className="btn btn-ghost" disabled={isActionLoading('profile-claim-request')} onClick={() => setProfileClaimConfirmOpen(false)} type="button">Cancelar</button>
+                      <button className="btn btn-primary" disabled={isActionLoading('profile-claim-request')} onClick={requestProfileClaim} type="button">
+                        {isActionLoading('profile-claim-request') ? 'Enviando solicitud...' : 'Solicitar vinculacion'}
+                        <ActionSpinner active={isActionLoading('profile-claim-request')} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {adminProfileClaimDialog && (
+                <div className="admin-modal-backdrop" onMouseDown={() => !isActionLoading('profile-claim-approve') && !isActionLoading('profile-claim-block') && !isActionLoading('profile-claim-release') && setAdminProfileClaimDialog(null)} role="presentation">
+                  <div aria-labelledby="admin-profile-claim-title" aria-modal="true" className="admin-modal admin-profile-claim-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog">
+                    <span className="eyebrow">Solicitud de vinculacion</span>
+                    <h3 id="admin-profile-claim-title">{adminProfileClaimDialog.claim.fullName}</h3>
+                    <dl className="admin-claim-details">
+                      <div><dt>Cuenta solicitante</dt><dd>{adminProfileClaimDialog.claim.requesterEmail}</dd></div>
+                      <div><dt>Estado</dt><dd>{PROFILE_CLAIM_STATUS_LABELS[adminProfileClaimDialog.claim.status] || adminProfileClaimDialog.claim.status}</dd></div>
+                      <div><dt>Transferencia</dt><dd>{adminProfileClaimDialog.claim.affectedPostCount} {adminProfileClaimDialog.claim.affectedPostCount === 1 ? 'nota' : 'notas'}</dd></div>
+                      <div><dt>Solicitud</dt><dd>{formatAdminDate(adminProfileClaimDialog.claim.requestedAt)}</dd></div>
+                    </dl>
+                    {adminProfileClaimDialog.claim.blockReason && <p className="admin-profile-warning"><strong>Motivo del bloqueo</strong><span>{adminProfileClaimDialog.claim.blockReason}</span></p>}
+                    {adminProfileClaimDialog.action === 'approve' && (
+                      <div className="admin-profile-notice">Al aprobar, se copiara el perfil gestionado, se concedera el rol blog y se transferira la propiedad de las notas sin cambiar comentarios historicos.</div>
+                    )}
+                    {adminProfileClaimDialog.action === 'block' && (
+                      <label className="admin-claim-reason">
+                        Motivo opcional
+                        <textarea maxLength="300" onChange={(event) => setAdminProfileClaimReason(event.target.value)} placeholder="Explica por que se bloquea la solicitud." rows="3" value={adminProfileClaimReason} />
+                      </label>
+                    )}
+                    <div className="admin-modal-actions admin-claim-actions">
+                      <button className="btn btn-ghost" onClick={() => { setAdminProfileClaimDialog(null); setAdminProfileClaimReason(''); }} type="button">Cerrar</button>
+                      {adminProfileClaimDialog.action === 'review' && ['pending', 'processing'].includes(adminProfileClaimDialog.claim.status) && (
+                        <>
+                          {adminProfileClaimDialog.claim.status === 'pending' && <button className="btn btn-ghost danger" onClick={() => setAdminProfileClaimDialog((current) => ({ ...current, action: 'block' }))} type="button">Bloquear</button>}
+                          <button className="btn btn-primary" onClick={() => setAdminProfileClaimDialog((current) => ({ ...current, action: 'approve' }))} type="button">Aprobar vinculacion</button>
+                        </>
+                      )}
+                      {adminProfileClaimDialog.action === 'review' && adminProfileClaimDialog.claim.status === 'blocked' && (
+                        <button className="btn btn-primary" onClick={() => setAdminProfileClaimDialog((current) => ({ ...current, action: 'release' }))} type="button">Desbloquear</button>
+                      )}
+                      {['approve', 'block', 'release'].includes(adminProfileClaimDialog.action) && (
+                        <button className={`btn ${adminProfileClaimDialog.action === 'block' ? 'btn-ghost danger' : 'btn-primary'}`} disabled={isActionLoading(`profile-claim-${adminProfileClaimDialog.action}:${adminProfileClaimDialog.claim.id}`)} onClick={runAdminProfileClaimAction} type="button">
+                          {isActionLoading(`profile-claim-${adminProfileClaimDialog.action}:${adminProfileClaimDialog.claim.id}`)
+                            ? 'Procesando...'
+                            : adminProfileClaimDialog.action === 'approve'
+                              ? 'Confirmar aprobacion'
+                              : adminProfileClaimDialog.action === 'block'
+                                ? 'Confirmar bloqueo'
+                                : 'Confirmar desbloqueo'}
+                          <ActionSpinner active={isActionLoading(`profile-claim-${adminProfileClaimDialog.action}:${adminProfileClaimDialog.claim.id}`)} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
               {profilePreviewOpen && (
                 <div
                   className="admin-preview-modal-backdrop profile-preview-backdrop"
@@ -4010,8 +4306,46 @@ function normalizeInAppNotification(value = {}) {
     commentId: normalizeInputValue(value.commentId),
     commentBody: normalizeInputValue(value.commentBody),
     commentSelectedText: normalizeInputValue(value.commentSelectedText),
+    profileClaimId: normalizeInputValue(value.profileClaimId),
+    managedProfileId: normalizeInputValue(value.managedProfileId),
+    profileName: normalizeInputValue(value.profileName),
+    requesterEmail: normalizeInputValue(value.requesterEmail),
     createdAt: value.createdAt || '',
     readAt: value.readAt || '',
+  };
+}
+
+function normalizeProfileClaimMatch(value = {}) {
+  return {
+    candidate: value?.candidate ? {
+      id: normalizeInputValue(value.candidate.id),
+      fullName: normalizeInputValue(value.candidate.fullName),
+      postCount: Number(value.candidate.postCount) || 0,
+      description: normalizeInputValue(value.candidate.description),
+      focusArea: normalizeInputValue(value.candidate.focusArea),
+      photoUrl: normalizeInputValue(value.candidate.photoUrl),
+    } : null,
+    claim: value?.claim ? normalizeProfileClaim(value.claim) : null,
+    nameLocked: normalizeBoolean(value?.nameLocked),
+  };
+}
+
+function normalizeProfileClaim(value = {}) {
+  return {
+    id: normalizeInputValue(value.id),
+    managedProfileId: normalizeInputValue(value.managedProfileId),
+    requesterEmail: normalizeInputValue(value.requesterEmail),
+    requesterName: normalizeInputValue(value.requesterName),
+    fullName: normalizeInputValue(value.fullName),
+    status: normalizeInputValue(value.status),
+    affectedPostCount: Number(value.affectedPostCount ?? value.transferredPostCount) || 0,
+    transferredPostCount: Number(value.transferredPostCount) || 0,
+    blockReason: normalizeInputValue(value.blockReason),
+    requestedAt: value.requestedAt || '',
+    updatedAt: value.updatedAt || '',
+    approvedAt: value.approvedAt || '',
+    reviewedAt: value.reviewedAt || '',
+    reviewedBy: normalizeInputValue(value.reviewedBy),
   };
 }
 
@@ -4143,6 +4477,11 @@ function notificationTitle(notification = {}) {
   if (notification.type === 'post.editRequested') return `Solicitud de edición: ${notification.postTitle || 'Sin titulo'}`;
   if (notification.type === 'post.editEnabled') return `Edición habilitada: ${notification.postTitle || 'Sin titulo'}`;
   if (notification.type === 'user.roles.changed') return 'Tus permisos fueron actualizados';
+  if (notification.type === 'profile.claim.requested') return `Nueva vinculacion solicitada: ${notification.profileName || 'Perfil de autor'}`;
+  if (notification.type === 'profile.claim.approved') return `Perfil vinculado: ${notification.profileName || 'Perfil de autor'}`;
+  if (notification.type === 'profile.claim.blocked') return `Vinculacion bloqueada: ${notification.profileName || 'Perfil de autor'}`;
+  if (notification.type === 'profile.claim.released') return `Vinculacion desbloqueada: ${notification.profileName || 'Perfil de autor'}`;
+  if (notification.type === 'profile.claim.superseded') return `Perfil no disponible: ${notification.profileName || 'Perfil de autor'}`;
   return notification.subject || 'Actividad editorial';
 }
 
@@ -4153,13 +4492,20 @@ function notificationIcon(type = '') {
   if (type === 'post.editEnabled') return 'edit_note';
   if (type === 'post.submittedReview') return 'rate_review';
   if (type === 'user.roles.changed') return 'manage_accounts';
+  if (type.startsWith('profile.claim.')) return 'person_search';
   return 'notifications';
 }
 
 function notificationToneClass(notification = {}) {
-  return ['post.submittedReview', 'post.editRequested', 'post.editEnabled'].includes(notification.type)
+  return ['post.submittedReview', 'post.editRequested', 'post.editEnabled', 'profile.claim.requested', 'profile.claim.blocked'].includes(notification.type)
     ? 'attention'
     : '';
+}
+
+function profileClaimStatusClass(status = '') {
+  if (status === 'approved') return 'published';
+  if (status === 'blocked' || status === 'superseded') return 'archived';
+  return 'draft';
 }
 
 function normalizeInlineInput(value = '') {

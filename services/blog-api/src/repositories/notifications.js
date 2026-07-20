@@ -17,6 +17,11 @@ export const NOTIFICATION_EVENTS = {
   postEditRequested: 'postEditRequested',
   postEditEnabled: 'postEditEnabled',
   roleChanged: 'roleChanged',
+  profileClaimRequested: 'profileClaimRequested',
+  profileClaimApproved: 'profileClaimApproved',
+  profileClaimBlocked: 'profileClaimBlocked',
+  profileClaimReleased: 'profileClaimReleased',
+  profileClaimSuperseded: 'profileClaimSuperseded',
 };
 
 const DEFAULT_EVENTS = {
@@ -29,6 +34,11 @@ const DEFAULT_EVENTS = {
   [NOTIFICATION_EVENTS.postEditRequested]: true,
   [NOTIFICATION_EVENTS.postEditEnabled]: true,
   [NOTIFICATION_EVENTS.roleChanged]: true,
+  [NOTIFICATION_EVENTS.profileClaimRequested]: true,
+  [NOTIFICATION_EVENTS.profileClaimApproved]: true,
+  [NOTIFICATION_EVENTS.profileClaimBlocked]: true,
+  [NOTIFICATION_EVENTS.profileClaimReleased]: true,
+  [NOTIFICATION_EVENTS.profileClaimSuperseded]: true,
 };
 
 const preferences = () => db().collection('notificationPreferences');
@@ -402,6 +412,95 @@ export async function notifyRolesChanged(assignment, actorEmail) {
   });
 }
 
+export async function notifyProfileClaimRequested(claim, actor) {
+  const emailRecipients = await listOptedInRecipients({
+    eventKey: NOTIFICATION_EVENTS.profileClaimRequested,
+    roles: ['admin'],
+    excludeEmails: [actor?.email],
+  });
+  return queueNotification({
+    type: 'profile.claim.requested',
+    eventKey: NOTIFICATION_EVENTS.profileClaimRequested,
+    actor,
+    profileClaim: claim,
+    emailRecipients,
+    targetRoles: ['admin'],
+    excludeEmails: [actor?.email],
+    subject: `Nueva solicitud de vinculacion: ${claim.fullName}`,
+    text: [
+      `${actor?.name || actor?.email} solicito vincularse con el perfil ${claim.fullName}.`,
+      `Email: ${claim.requesterEmail}`,
+      `Notas alcanzadas: ${claim.affectedPostCount || 0}`,
+      `Abrir panel: ${config.appBaseUrl}/admin`,
+    ].join('\n'),
+  });
+}
+
+export async function notifyProfileClaimApproved(claim, actor) {
+  return notifyProfileClaimOutcome({
+    claim,
+    actor,
+    type: 'profile.claim.approved',
+    eventKey: NOTIFICATION_EVENTS.profileClaimApproved,
+    subject: `Perfil vinculado: ${claim.fullName}`,
+    text: `Tu cuenta ya esta vinculada con ${claim.fullName}. Heredaste el acceso a ${claim.transferredPostCount || claim.affectedPostCount || 0} notas.`,
+  });
+}
+
+export async function notifyProfileClaimBlocked(claim, actor) {
+  return notifyProfileClaimOutcome({
+    claim,
+    actor,
+    type: 'profile.claim.blocked',
+    eventKey: NOTIFICATION_EVENTS.profileClaimBlocked,
+    subject: `Solicitud bloqueada: ${claim.fullName}`,
+    text: claim.blockReason
+      ? `La solicitud fue bloqueada. Motivo: ${claim.blockReason}`
+      : 'La solicitud fue bloqueada. Contacta a un administrador si necesitas revisarla.',
+  });
+}
+
+export async function notifyProfileClaimReleased(claim, actor) {
+  return notifyProfileClaimOutcome({
+    claim,
+    actor,
+    type: 'profile.claim.released',
+    eventKey: NOTIFICATION_EVENTS.profileClaimReleased,
+    subject: `Solicitud desbloqueada: ${claim.fullName}`,
+    text: 'Ya podes volver a solicitar la vinculacion de este perfil.',
+  });
+}
+
+export async function notifyProfileClaimSuperseded(claim, actor) {
+  return notifyProfileClaimOutcome({
+    claim,
+    actor,
+    type: 'profile.claim.superseded',
+    eventKey: NOTIFICATION_EVENTS.profileClaimSuperseded,
+    subject: `Perfil no disponible: ${claim.fullName}`,
+    text: 'El perfil fue vinculado con otra cuenta y ya no esta disponible.',
+  });
+}
+
+async function notifyProfileClaimOutcome({ claim, actor, type, eventKey, subject, text }) {
+  const emailRecipients = await listOptedInEmails({
+    eventKey,
+    emails: [claim.requesterEmail],
+    excludeEmails: [actor?.email],
+  });
+  return queueNotification({
+    type,
+    eventKey,
+    actor,
+    profileClaim: claim,
+    emailRecipients,
+    targetEmails: [claim.requesterEmail],
+    excludeEmails: [actor?.email],
+    subject,
+    text: `${text}\nAbrir perfil: ${config.appBaseUrl}/admin`,
+  });
+}
+
 export async function safeNotify(fn) {
   try {
     return await fn();
@@ -421,6 +520,7 @@ async function queueNotification({
   actor,
   post = null,
   comment = null,
+  profileClaim = null,
   emailRecipients = [],
   targetEmails = [],
   targetRoles = [],
@@ -445,6 +545,10 @@ async function queueNotification({
     commentId: comment?.id || '',
     commentBody: latestCommentReply(comment)?.body || comment?.body || '',
     commentSelectedText: comment?.selectedTextCurrent || latestCommentReply(comment)?.selectedText || comment?.selectedText || '',
+    profileClaimId: profileClaim?.id || '',
+    managedProfileId: profileClaim?.managedProfileId || '',
+    profileName: profileClaim?.fullName || '',
+    requesterEmail: normalizeEmail(profileClaim?.requesterEmail),
     targetEmails: cleanTargetEmails,
     targetRoles: cleanTargetRoles,
     excludeEmails: cleanExcludeEmails,
@@ -548,7 +652,7 @@ function sanitizeEvents(value = {}) {
 
 function sanitizeRoles(value = []) {
   const roles = new Set(Array.isArray(value) ? value : []);
-  return ['admin', 'reviewer', 'blog'].filter((role) => roles.has(role));
+  return ['admin', 'reviewer', 'blog', 'newsletter'].filter((role) => roles.has(role));
 }
 
 function toInboxItem(event, readAt = null) {
@@ -565,6 +669,10 @@ function toInboxItem(event, readAt = null) {
     commentId: event.commentId || '',
     commentBody: event.commentBody || '',
     commentSelectedText: event.commentSelectedText || '',
+    profileClaimId: event.profileClaimId || '',
+    managedProfileId: event.managedProfileId || '',
+    profileName: event.profileName || '',
+    requesterEmail: normalizeEmail(event.requesterEmail),
     createdAt: event.createdAt || null,
     readAt,
   };

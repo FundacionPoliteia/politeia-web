@@ -150,7 +150,13 @@ async function readSessionUser(req) {
       roles: expandRoles([...(user.roles || []), ...builtInRoles]),
     };
   }
-  if (isPrimaryDomainEmail(user.email)) return user;
+  if (isPrimaryDomainEmail(user.email)) {
+    const assignedRoles = await safeResolveAssignedRoles(user.email);
+    return {
+      ...user,
+      roles: expandRoles([...(user.roles || []), ...assignedRoles]),
+    };
+  }
 
   const assignedRoles = await resolveAssignedRoles(user.email);
   if (!hasAssignedExternalAccess(user.email, assignedRoles)) return null;
@@ -253,6 +259,20 @@ export function expandRoles(value) {
   }
   if (roles.has('reviewer')) roles.add('blog');
   return ['admin', 'reviewer', 'blog', 'newsletter'].filter((role) => roles.has(role));
+}
+
+async function safeResolveAssignedRoles(email) {
+  try {
+    return await resolveAssignedRoles(email);
+  } catch (err) {
+    console.error(JSON.stringify({
+      severity: 'WARNING',
+      message: 'Could not refresh assigned roles for session',
+      email: normalizeEmail(email),
+      error: err?.message || String(err),
+    }));
+    return [];
+  }
 }
 
 export function resolveBuiltInRoles(email) {

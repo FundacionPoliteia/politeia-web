@@ -29,9 +29,18 @@ import {
   sanitizeProfile,
   updateManagedAuthorProfile,
   updateUserProfile,
+  identityNameKey,
 } from '../src/repositories/profiles.js';
 import { updatePostCommentStatus } from '../src/repositories/comments.js';
-import { isAllowedRoleEmail, sanitizeAssignedRoles } from '../src/repositories/users.js';
+import { isAllowedRoleEmail, resolveAssignedRoles, sanitizeAssignedRoles } from '../src/repositories/users.js';
+import {
+  approveProfileClaim,
+  blockProfileClaim,
+  createProfileClaim,
+  getProfileClaimMatch,
+  listMyProfileClaims,
+  releaseProfileClaim,
+} from '../src/repositories/profileClaims.js';
 import {
   confirmNewsletterSubscription,
   createNewsletterCampaign,
@@ -544,7 +553,7 @@ test('in-app notifications target roles and emails independently from email opt-
 test('notification retention removes events and read receipts older than seven days', async () => {
   const firestore = createMemoryFirestore();
   setFirestoreForTests(firestore);
-  const now = Date.parse('2026-07-18T12:00:00.000Z');
+  const now = Date.now();
   const user = { email: 'autor@politeia.ar', name: 'Autor', roles: ['blog'] };
 
   try {
@@ -1229,6 +1238,107 @@ test('resend webhooks are idempotent and suppress bounced newsletter recipients'
   }
 });
 
+test('profile claim matching respects accents and repeated spaces', () => {
+  assert.equal(identityNameKey('  Ana   P\u00e9rez '), identityNameKey('ana p\u00e9rez'));
+  assert.notEqual(identityNameKey('Ana P\u00e9rez'), identityNameKey('Ana Perez'));
+});
+
+test('managed profile claim transfers profile, roles and every non-deleted post', async () => {
+  const firestore = createMemoryFirestore();
+  setFirestoreForTests(firestore);
+  const requester = { email: 'ana@politeia.ar', name: 'Ana Perez', roles: [] };
+  const admin = { email: 'dev@politeia.ar', name: 'Admin', roles: ['admin'] };
+
+  try {
+    const managed = await createManagedAuthorProfile({
+      firstName: 'Ana',
+      lastName: 'P\u00e9rez',
+      description: 'Perfil gestionado',
+      focusArea: 'Politica publica',
+      closingPhrase: 'Una frase breve',
+      publicProfileEnabled: true,
+    }, admin.email);
+    await updateUserProfile(requester, {
+      firstName: '  ANA ',
+      lastName: ' P\u00e9rez ',
+      description: 'Dato temporal',
+      publicProfileEnabled: true,
+    });
+    await firestore.collection('users').doc(requester.email).set({
+      email: requester.email,
+      roles: ['newsletter'],
+      active: true,
+      deletedAt: null,
+    });
+
+    const posts = firestore.collection('posts');
+    await posts.doc('published').set({ authorName: 'Ana P\u00e9rez', authorEmail: '', status: 'published', deletedAt: null });
+    await posts.doc('edition').set({ authorName: 'ANA   P\u00e9rez', authorEmail: '', publicAuthorEmail: '', status: 'published-edition', deletedAt: null });
+    await posts.doc('draft').set({ authorName: 'Ana P\u00e9rez', authorEmail: '', status: 'draft', deletedAt: null });
+    await posts.doc('archived').set({ authorName: 'Ana P\u00e9rez', authorEmail: '', status: 'archived', deletedAt: null });
+    await posts.doc('deleted').set({ authorName: 'Ana P\u00e9rez', authorEmail: '', status: 'draft', deletedAt: '2026-01-01T00:00:00.000Z' });
+
+    const match = await getProfileClaimMatch(requester);
+    assert.equal(match.candidate.id, managed.id);
+    assert.equal(match.candidate.postCount, 4);
+
+    const requested = await createProfileClaim(requester, { managedProfileId: managed.id });
+    const duplicate = await createProfileClaim(requester, { managedProfileId: managed.id });
+    assert.equal(duplicate.id, requested.id);
+    assert.equal((await listMyProfileClaims(requester)).items.length, 1);
+
+    const approved = await approveProfileClaim(requested.id, admin);
+    assert.equal(approved.status, 'approved');
+    assert.equal(approved.transferredPostCount, 4);
+    assert.deepEqual(await resolveAssignedRoles(requester.email), ['blog', 'newsletter']);
+
+    const account = await getUserProfile(requester);
+    assert.equal(account.description, 'Perfil gestionado');
+    assert.equal(account.focusArea, 'Politica publica');
+    assert.equal(account.closingPhrase, 'Una frase breve');
+    assert.equal(account.publicProfileEnabled, true);
+    assert.equal((await firestore.collection('userProfiles').doc(managed.id).get()).exists, false);
+
+    for (const id of ['published', 'edition', 'draft', 'archived']) {
+      const post = (await posts.doc(id).get()).data();
+      assert.equal(post.authorEmail, requester.email);
+      assert.equal(post.ownershipClaimId, requested.id);
+    }
+    assert.equal((await posts.doc('published').get()).data().publicAuthorEmail, requester.email);
+    assert.equal((await posts.doc('edition').get()).data().publicAuthorEmail, requester.email);
+    assert.equal((await posts.doc('draft').get()).data().publicAuthorEmail, undefined);
+    assert.equal((await posts.doc('deleted').get()).data().authorEmail, '');
+  } finally {
+    setFirestoreForTests(null);
+  }
+});
+
+test('blocked profile claim can only be requested again after release', async () => {
+  const firestore = createMemoryFirestore();
+  setFirestoreForTests(firestore);
+  const requester = { email: 'sol@politeia.ar', name: 'Sol Diaz', roles: [] };
+  const admin = { email: 'admin@gmail.com', name: 'Admin externo', roles: ['admin'] };
+
+  try {
+    const managed = await createManagedAuthorProfile({ firstName: 'Sol', lastName: 'D\u00edaz' }, 'dev@politeia.ar');
+    await updateUserProfile(requester, { firstName: 'Sol', lastName: 'D\u00edaz' });
+    const claim = await createProfileClaim(requester, { managedProfileId: managed.id });
+    const blocked = await blockProfileClaim(claim.id, admin, { reason: 'Necesitamos validar identidad' });
+    assert.equal(blocked.status, 'blocked');
+    await assert.rejects(
+      createProfileClaim(requester, { managedProfileId: managed.id }),
+      /solicitud esta bloqueada/i
+    );
+    const released = await releaseProfileClaim(claim.id, admin);
+    assert.equal(released.status, 'released');
+    const requestedAgain = await createProfileClaim(requester, { managedProfileId: managed.id });
+    assert.notEqual(requestedAgain.id, claim.id);
+    assert.equal(requestedAgain.status, 'pending');
+  } finally {
+    setFirestoreForTests(null);
+  }
+});
+
 function createMemoryFirestore() {
   const collections = new Map();
   return {
@@ -1246,6 +1356,9 @@ function createMemoryFirestore() {
         },
         update(ref, data) {
           return ref.update(data);
+        },
+        delete(ref) {
+          return ref.delete();
         },
       };
       return fn(transaction);

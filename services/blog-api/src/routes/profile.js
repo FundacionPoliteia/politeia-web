@@ -11,6 +11,16 @@ import {
   updateManagedAuthorProfile,
   updateUserProfile,
 } from '../repositories/profiles.js';
+import {
+  approveProfileClaim,
+  blockProfileClaim,
+  createProfileClaim,
+  getProfileClaimMatch,
+  listManagedProfileClaims,
+  listMyProfileClaims,
+  releaseProfileClaim,
+  withdrawProfileClaim,
+} from '../repositories/profileClaims.js';
 
 export function profileRouter({ writeLimiter }) {
   const router = Router();
@@ -43,6 +53,41 @@ export function profileRouter({ writeLimiter }) {
     }
   });
 
+  router.get('/manage/claims', requireAuth, requireRole('admin'), async (_req, res, next) => {
+    try {
+      res.json(await listManagedProfileClaims());
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.post('/manage/claims/:id/approve', writeLimiter, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const item = await approveProfileClaim(req.params.id, req.user);
+      res.json({ item });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.post('/manage/claims/:id/block', writeLimiter, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const item = await blockProfileClaim(req.params.id, req.user, req.body || {});
+      res.json({ item });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.post('/manage/claims/:id/release', writeLimiter, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const item = await releaseProfileClaim(req.params.id, req.user);
+      res.json({ item });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.post('/manage', writeLimiter, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
       const item = await createManagedAuthorProfile(req.body || {}, req.user.email);
@@ -64,6 +109,40 @@ export function profileRouter({ writeLimiter }) {
   router.delete('/manage/:id', writeLimiter, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
       const item = await deleteManagedAuthorProfile(req.params.id, req.user.email);
+      res.json({ item });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.get('/claim-match', requireAuth, async (req, res, next) => {
+    try {
+      res.json(await getProfileClaimMatch(req.user));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.get('/claims/me', requireAuth, async (req, res, next) => {
+    try {
+      res.json(await listMyProfileClaims(req.user));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.post('/claims', writeLimiter, requireAuth, async (req, res, next) => {
+    try {
+      const item = await createProfileClaim(req.user, req.body || {});
+      res.status(201).json({ item });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.post('/claims/:id/withdraw', writeLimiter, requireAuth, async (req, res, next) => {
+    try {
+      const item = await withdrawProfileClaim(req.params.id, req.user);
       res.json({ item });
     } catch (err) {
       next(err);

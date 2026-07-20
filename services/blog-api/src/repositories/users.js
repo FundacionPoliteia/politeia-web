@@ -97,6 +97,42 @@ export async function deleteUserRoleAssignment(email, actorEmail) {
   return after;
 }
 
+export async function grantBlogRoleForProfileClaim(email, actorEmail, claimId) {
+  const cleanEmail = normalizeEmail(email);
+  assertAllowedEmail(cleanEmail);
+  const ref = users().doc(roleAssignmentId(cleanEmail));
+  const beforeDoc = await ref.get();
+  const before = beforeDoc.exists ? serializeDoc(beforeDoc) : null;
+  const roles = sanitizeAssignedRoles([...(before?.roles || []), 'blog']);
+
+  await ref.set({
+    email: cleanEmail,
+    roles,
+    active: true,
+    deletedAt: null,
+    updatedAt: serverTimestamp(),
+    updatedBy: actorEmail,
+    profileClaimId: claimId,
+    ...(before ? {} : {
+      createdAt: serverTimestamp(),
+      createdBy: actorEmail,
+    }),
+  }, { merge: true });
+
+  const after = toUserRoleAssignment(serializeDoc(await ref.get()));
+  if (!(before?.roles || []).includes('blog')) {
+    await writeAuditLog({
+      actorEmail,
+      action: 'profileClaim.role.grant',
+      resourceType: 'user',
+      resourceId: cleanEmail,
+      before,
+      after: { ...after, profileClaimId: claimId },
+    });
+  }
+  return after;
+}
+
 export function sanitizeAssignedRoles(value) {
   const source = Array.isArray(value) ? value : [];
   const roles = new Set(source.map((role) => String(role).trim().toLowerCase()));

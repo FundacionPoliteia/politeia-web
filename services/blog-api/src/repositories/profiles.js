@@ -6,6 +6,7 @@ import { isValidSlug, slugify } from '../utils/slug.js';
 
 const profiles = () => db().collection('userProfiles');
 const posts = () => db().collection('posts');
+const profileClaims = () => db().collection('profileClaims');
 const PUBLIC_AUTHOR_STATUSES = ['published', 'published-edition'];
 
 export async function getUserProfile(user) {
@@ -23,6 +24,12 @@ export async function updateUserProfile(user, data) {
   const ref = profiles().doc(profileId(email));
   const beforeDoc = await ref.get();
   const before = beforeDoc.exists ? await toUserProfile(serializeDoc(beforeDoc), user) : null;
+  if (before && await hasPendingClaimForEmail(email)) {
+    const requestedName = buildFullName(data?.firstName ?? before.firstName, data?.lastName ?? before.lastName);
+    if (identityNameKey(requestedName) !== identityNameKey(before.fullName)) {
+      throw new HttpError(409, 'No podes cambiar el nombre mientras haya una solicitud de vinculacion pendiente');
+    }
+  }
   const clean = sanitizeProfile({ ...(before || {}), ...(data || {}) });
   const fullName = buildFullName(clean.firstName, clean.lastName);
   const patch = {
@@ -119,6 +126,12 @@ export async function updateManagedAuthorProfile(id = '', data, actorEmail = '')
   if (!before.managedAuthor) {
     throw new HttpError(403, 'Only managed author profiles can be edited');
   }
+  if (await hasPendingClaimForManagedProfile(cleanId)) {
+    const requestedName = buildFullName(data?.firstName ?? before.firstName, data?.lastName ?? before.lastName);
+    if (identityNameKey(requestedName) !== identityNameKey(before.fullName)) {
+      throw new HttpError(409, 'No se puede renombrar un perfil con solicitudes de vinculacion pendientes');
+    }
+  }
 
   const clean = sanitizeProfile({ ...before, ...(data || {}) });
   const fullName = buildFullName(clean.firstName, clean.lastName);
@@ -172,6 +185,9 @@ export async function deleteManagedAuthorProfile(id = '', actorEmail = '') {
   if (!before.managedAuthor) {
     throw new HttpError(403, 'Only managed author profiles can be deleted');
   }
+  if (await hasPendingClaimForManagedProfile(cleanId)) {
+    throw new HttpError(409, 'No se puede eliminar un perfil con solicitudes de vinculacion pendientes');
+  }
 
   await ref.delete();
   await writeAuditLog({
@@ -197,6 +213,7 @@ export async function getPublicAuthorProfileBySlug(slug = '') {
 
   const items = await Promise.all(snapshot.docs
     .map((doc) => serializeDoc(doc))
+    .sort((left, right) => Number(right?.managedAuthor === true) - Number(left?.managedAuthor === true))
     .map((item) => toPublicAuthorProfile(item)));
   const item = items.find(Boolean);
 
@@ -212,8 +229,10 @@ export async function listPublicAuthorProfiles({ limit = 24 } = {}) {
   const authorStats = buildAuthorStats(postSnapshot.docs.map((doc) => serializeDoc(doc)));
   const items = profileSnapshot.docs
     .map((doc) => serializeDoc(doc))
+    .sort((left, right) => Number(right?.managedAuthor === true) - Number(left?.managedAuthor === true))
     .map((item) => toPublicAuthorProfileFromStats(item, authorStats))
     .filter(Boolean)
+    .filter((item, index, source) => source.findIndex((candidate) => authorKey(candidate.fullName) === authorKey(item.fullName)) === index)
     .sort((a, b) => {
       const dateCompare = String(b.latestPostDate || '').localeCompare(String(a.latestPostDate || ''));
       if (dateCompare) return dateCompare;
@@ -272,7 +291,7 @@ export function buildFullName(firstName = '', lastName = '') {
 async function toUserProfile(item, user) {
   const clean = sanitizeProfile(item || {});
   const fullName = buildFullName(clean.firstName, clean.lastName);
-  const canSharePublicProfile = await authorNameExists(fullName);
+  const canSharePublicProfile = await authorNameExists(fullName) && !(item?.managedAuthor !== true && await managedProfileExistsForName(fullName));
   const publicProfileEnabled = resolvePublicProfilePreference(item, clean);
   return {
     id: item?.id || profileId(user?.email),
@@ -394,6 +413,30 @@ async function authorNameExists(fullName = '') {
 
 function authorKey(fullName = '') {
   return normalizeText(fullName).toLocaleLowerCase('es-AR');
+}
+
+export function identityNameKey(fullName = '') {
+  return normalizeText(fullName).toLocaleLowerCase('es-AR');
+}
+
+async function managedProfileExistsForName(fullName = '') {
+  const key = identityNameKey(fullName);
+  if (!key) return false;
+  const snapshot = await profiles().get();
+  return snapshot.docs.some((doc) => {
+    const item = serializeDoc(doc);
+    return item?.managedAuthor === true && identityNameKey(item.fullName || buildFullName(item.firstName, item.lastName)) === key;
+  });
+}
+
+async function hasPendingClaimForEmail(email = '') {
+  const snapshot = await profileClaims().where('requesterEmail', '==', normalizeEmail(email)).get();
+  return snapshot.docs.some((doc) => ['pending', 'processing'].includes(serializeDoc(doc)?.status));
+}
+
+async function hasPendingClaimForManagedProfile(managedProfileId = '') {
+  const snapshot = await profileClaims().where('managedProfileId', '==', managedProfileId).get();
+  return snapshot.docs.some((doc) => ['pending', 'processing'].includes(serializeDoc(doc)?.status));
 }
 
 function profileId(email) {
