@@ -9,6 +9,7 @@ import AuthorEnd from './AuthorEnd';
 import BlogIndex from './BlogIndex';
 import NewsletterAdminPanel from './NewsletterAdminPanel';
 import AdminOperationsPanel from './AdminOperationsPanel';
+import MailingAdminPanel from './MailingAdminPanel';
 import { parseTagsText, sanitizeCategory, sanitizeTags, taxonomyKey } from '../lib/taxonomy';
 
 const API_BASE = process.env.NEXT_PUBLIC_BLOG_API_BASE_URL || '';
@@ -205,6 +206,16 @@ export default function AdminConsole() {
   const [profileConsentOpen, setProfileConsentOpen] = useState(false);
   const [previewCardOpen, setPreviewCardOpen] = useState(true);
   const [pendingAction, setPendingAction] = useState(null);
+  const [mailingPublicationPolicy, setMailingPublicationPolicy] = useState({
+    enabled: false,
+    automaticByDefault: true,
+    weeklyLimit: 2,
+    dispatchIntervalHours: 12,
+    gracePeriodMinutes: 10,
+    sentThisWeek: 0,
+    remainingThisWeek: 0,
+    nextDispatchAt: null,
+  });
   const [editRequestConfirmOpen, setEditRequestConfirmOpen] = useState(false);
   const [categoryDeleteTarget, setCategoryDeleteTarget] = useState(null);
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
@@ -286,6 +297,7 @@ export default function AdminConsole() {
   const canReviewProfiles = isAdmin;
   const canAccessRolesMailPanel = canManageUsers;
   const canAccessNewsletterPanel = isNewsletterManager;
+  const canAccessMailingPanel = isAdmin;
   const defaultPanelTab = canAccessEditorialPanel ? 'blogs' : canAccessNewsletterPanel ? 'newsletter' : 'profile';
   const accountAuthorName = user?.name || user?.email || '';
   const profileAuthorName = profileDraft.fullName || userProfile.fullName || accountAuthorName;
@@ -425,6 +437,10 @@ export default function AdminConsole() {
   }, [canManageUsers]);
 
   useEffect(() => {
+    if (canPublishPosts) loadMailingPublicationPolicy();
+  }, [activePanelTab, canPublishPosts]);
+
+  useEffect(() => {
     if (canReviewProfiles && activePanelTab === 'profiles') {
       loadAdminProfiles();
       loadAdminProfileClaims();
@@ -506,13 +522,16 @@ export default function AdminConsole() {
     if (!canAccessNewsletterPanel && activePanelTab === 'newsletter') {
       setActivePanelTab(defaultPanelTab);
     }
+    if (!canAccessMailingPanel && activePanelTab === 'mailing') {
+      setActivePanelTab(defaultPanelTab);
+    }
     if (!canAccessProfilePanel && activePanelTab === 'profile') {
       setActivePanelTab(defaultPanelTab);
     }
     if (!canReviewProfiles && activePanelTab === 'profiles') {
       setActivePanelTab(defaultPanelTab);
     }
-  }, [activePanelTab, canAccessEditorialPanel, canAccessNewsletterPanel, canAccessProfilePanel, canAccessRolesMailPanel, canReviewProfiles, defaultPanelTab]);
+  }, [activePanelTab, canAccessEditorialPanel, canAccessMailingPanel, canAccessNewsletterPanel, canAccessProfilePanel, canAccessRolesMailPanel, canReviewProfiles, defaultPanelTab]);
 
   useEffect(() => {
     const hasOpenModal = previewOpen
@@ -738,6 +757,16 @@ export default function AdminConsole() {
       setUseManualAuthorNote(false);
       setCoverImageError('');
       setPendingAction(null);
+      setMailingPublicationPolicy({
+        enabled: false,
+        automaticByDefault: true,
+        weeklyLimit: 2,
+        dispatchIntervalHours: 12,
+        gracePeriodMinutes: 10,
+        sentThisWeek: 0,
+        remainingThisWeek: 0,
+        nextDispatchAt: null,
+      });
       setCategoryDeleteTarget(null);
       setCategoryDropdownOpen(false);
       setCategorySearchTerm('');
@@ -798,6 +827,15 @@ export default function AdminConsole() {
       setCategories(data.items || []);
     } catch (err) {
       setMessage(err.message);
+    }
+  }
+
+  async function loadMailingPublicationPolicy() {
+    try {
+      const data = await api('/v1/mailing/publication-policy');
+      setMailingPublicationPolicy((current) => ({ ...current, ...data }));
+    } catch (_err) {
+      setMailingPublicationPolicy((current) => ({ ...current, enabled: false }));
     }
   }
 
@@ -1609,11 +1647,14 @@ export default function AdminConsole() {
     }
   }
 
-  async function action(path, success, loadingKey = path) {
+  async function action(path, success, loadingKey = path, body = null) {
     try {
       setBusy(true);
       setMessage('');
-      const data = await withActionLoading(loadingKey, () => api(path, { method: 'POST' }));
+      const data = await withActionLoading(loadingKey, () => api(path, {
+        method: 'POST',
+        ...(body ? { body: JSON.stringify(body) } : {}),
+      }));
       if (data.item?.id && data.item.id === form.id) {
         const nextForm = postToForm(data.item);
         setForm(nextForm);
@@ -1634,14 +1675,23 @@ export default function AdminConsole() {
 
   function requestAction(path, success, label, loadingKey = workflowActionKey(path)) {
     const requiresArticlePreview = path.includes('/submit-review');
-    if (hasUnsavedChanges || requiresArticlePreview) {
+    const requiresPublicationConfirm = path.includes('/publish');
+    const targetPostId = path.match(/\/v1\/posts\/([^/]+)\//)?.[1] || '';
+    const targetPost = posts.find((post) => post.id === targetPostId);
+    const actionHasUnsavedChanges = Boolean(hasUnsavedChanges && (!targetPostId || targetPostId === form.id));
+    if (actionHasUnsavedChanges || requiresArticlePreview || requiresPublicationConfirm) {
       setPendingAction({
         path,
         success,
         label,
         loadingKey,
-        hasUnsavedChanges,
+        hasUnsavedChanges: actionHasUnsavedChanges,
         requiresArticlePreview,
+        requiresPublicationConfirm,
+        notifySubscribers: requiresPublicationConfirm
+          ? mailingPublicationPolicy.enabled && mailingPublicationPolicy.automaticByDefault
+          : false,
+        postTitle: targetPost?.title || (targetPostId === form.id ? form.title : ''),
       });
       return;
     }
@@ -1676,7 +1726,14 @@ export default function AdminConsole() {
   async function confirmPendingAction() {
     if (!pendingAction) return;
     const nextAction = pendingAction;
-    const completed = await action(nextAction.path, nextAction.success, nextAction.loadingKey);
+    const completed = await action(
+      nextAction.path,
+      nextAction.success,
+      nextAction.loadingKey,
+      nextAction.requiresPublicationConfirm
+        ? { notifySubscribers: nextAction.notifySubscribers }
+        : null
+    );
     if (completed) setPendingAction(null);
   }
 
@@ -1688,7 +1745,12 @@ export default function AdminConsole() {
       setBusy(true);
       setMessage('');
       await withActionLoading('post-save', () => persistCurrentPost({ refresh: false }));
-      await withActionLoading(nextAction.loadingKey, () => api(nextAction.path, { method: 'POST' }));
+      await withActionLoading(nextAction.loadingKey, () => api(nextAction.path, {
+        method: 'POST',
+        ...(nextAction.requiresPublicationConfirm
+          ? { body: JSON.stringify({ notifySubscribers: nextAction.notifySubscribers }) }
+          : {}),
+      }));
       setPendingAction(null);
       setMessage(nextAction.success);
       await Promise.all([loadPosts(), loadCategories()]);
@@ -2297,6 +2359,16 @@ export default function AdminConsole() {
                       Newsletter
                     </button>
                   )}
+                  {canAccessMailingPanel && (
+                    <button
+                      aria-pressed={activePanelTab === 'mailing'}
+                      className={activePanelTab === 'mailing' ? 'selected' : ''}
+                      onClick={() => setActivePanelTab('mailing')}
+                      type="button"
+                    >
+                      Mailing
+                    </button>
+                  )}
                   {canAccessRolesMailPanel && (
                     <button
                       aria-pressed={activePanelTab === 'access'}
@@ -2903,6 +2975,10 @@ export default function AdminConsole() {
 
               {activePanelTab === 'newsletter' && canAccessNewsletterPanel && (
                 <NewsletterAdminPanel apiBase={API_BASE} currentEmail={user.email} />
+              )}
+
+              {activePanelTab === 'mailing' && canAccessMailingPanel && (
+                <MailingAdminPanel apiBase={API_BASE} currentEmail={user.email} />
               )}
 
               {activePanelTab === 'access' && (
@@ -4248,7 +4324,7 @@ export default function AdminConsole() {
                   <div
                     aria-labelledby="pending-action-title"
                     aria-modal="true"
-                    className={`admin-modal ${pendingAction.requiresArticlePreview ? 'admin-submit-review-preview-modal' : ''}`}
+                    className={`admin-modal ${pendingAction.requiresArticlePreview ? 'admin-submit-review-preview-modal' : ''} ${pendingAction.requiresPublicationConfirm ? 'admin-publication-confirm-modal' : ''}`}
                     role="dialog"
                   >
                     {pendingAction.requiresArticlePreview ? (
@@ -4272,6 +4348,35 @@ export default function AdminConsole() {
                           />
                         </div>
                       </>
+                    ) : pendingAction.requiresPublicationConfirm ? (
+                      <>
+                        <span>Publicacion</span>
+                        <h3 id="pending-action-title">Publicar esta nota</h3>
+                        {pendingAction.postTitle && <strong className="admin-publication-title">{pendingAction.postTitle}</strong>}
+                        <p>La nota quedara visible en el blog publico. Elegi si tambien debe entrar al sistema de avisos por email.</p>
+                        <label className={`admin-switch-row admin-publication-mailing-choice ${!mailingPublicationPolicy.enabled ? 'disabled' : ''}`}>
+                          <input
+                            checked={pendingAction.notifySubscribers}
+                            disabled={!mailingPublicationPolicy.enabled}
+                            onChange={(event) => setPendingAction((current) => ({ ...current, notifySubscribers: event.target.checked }))}
+                            type="checkbox"
+                          />
+                          <span>
+                            <strong>Avisar a suscriptores de nuevos blogs</strong>
+                            <small>
+                              {mailingPublicationPolicy.enabled
+                                ? `Se procesara en un ciclo de hasta ${mailingPublicationPolicy.dispatchIntervalHours || 12} horas. Quedan ${mailingPublicationPolicy.remainingThisWeek} de ${mailingPublicationPolicy.weeklyLimit} envios automaticos esta semana.`
+                                : 'La automatizacion esta desactivada. La nota igualmente puede publicarse.'}
+                            </small>
+                          </span>
+                        </label>
+                        {mailingPublicationPolicy.enabled && mailingPublicationPolicy.remainingThisWeek === 0 && pendingAction.notifySubscribers && (
+                          <p className="admin-publication-mailing-note">El limite semanal ya fue alcanzado: esta nota quedara apilada para el proximo resumen.</p>
+                        )}
+                        {pendingAction.hasUnsavedChanges && (
+                          <p className="admin-publication-unsaved-note">Hay cambios sin guardar. Podes publicar la version guardada o guardar primero.</p>
+                        )}
+                      </>
                     ) : (
                       <>
                         <h3 id="pending-action-title">Cambios sin guardar</h3>
@@ -4280,7 +4385,7 @@ export default function AdminConsole() {
                         </p>
                       </>
                     )}
-                    <div className={pendingAction.requiresArticlePreview ? 'admin-submit-review-preview-footer' : ''}>
+                    <div className={pendingAction.requiresArticlePreview ? 'admin-submit-review-preview-footer' : pendingAction.requiresPublicationConfirm ? 'admin-publication-confirm-footer' : ''}>
                       {pendingAction.requiresArticlePreview && (
                         <div>
                           <strong>Confirmar envio a revision</strong>
@@ -4289,6 +4394,12 @@ export default function AdminConsole() {
                               ? 'Hay cambios sin guardar. Elegi si queres enviarlos o conservar la ultima version guardada.'
                               : 'La nota quedara disponible para el equipo de revision.'}
                           </p>
+                        </div>
+                      )}
+                      {pendingAction.requiresPublicationConfirm && (
+                        <div>
+                          <strong>Confirmar publicacion</strong>
+                          <p>El aviso por email queda registrado por nota y puede administrarse despues desde Mailing.</p>
                         </div>
                       )}
                       <div className="admin-modal-actions">
@@ -4308,7 +4419,9 @@ export default function AdminConsole() {
                           </>
                         ) : (
                           <button className="btn btn-primary" disabled={busy || isActionLoading(pendingAction.loadingKey)} onClick={confirmPendingAction} type="button">
-                            {isActionLoading(pendingAction.loadingKey) ? 'Enviando...' : 'Confirmar envio'}
+                            {isActionLoading(pendingAction.loadingKey)
+                              ? (pendingAction.requiresPublicationConfirm ? 'Publicando...' : 'Enviando...')
+                              : (pendingAction.requiresPublicationConfirm ? 'Publicar nota' : 'Confirmar envio')}
                             <ActionSpinner active={isActionLoading(pendingAction.loadingKey)} />
                           </button>
                         )}

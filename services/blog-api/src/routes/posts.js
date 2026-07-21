@@ -38,6 +38,7 @@ import {
   notifyPostSubmittedForReview,
   safeNotify,
 } from '../repositories/notifications.js';
+import { queuePublishedPostMail } from '../repositories/mailingAutomation.js';
 
 export function postsRouter({ writeLimiter }) {
   const router = Router();
@@ -184,6 +185,9 @@ export function postsRouter({ writeLimiter }) {
     try {
       const post = await transitionPost(req.params.id, 'published', req.user, 'post.publish');
       await safeNotify(() => notifyPostPublished(post, req.user));
+      await safeNotify(() => queuePublishedPostMail(post, req.user, {
+        notifySubscribers: req.body?.notifySubscribers !== false,
+      }));
       res.json({ item: post });
     } catch (err) {
       next(err);

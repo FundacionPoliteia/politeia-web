@@ -252,6 +252,9 @@ MAIL_FROM_NEWSLETTER=Politeia Newsletter <newsletter@politeia.ar>
 MAIL_REPLY_TO=info@politeia.ar
 NEWSLETTER_AUDIENCE_KEY=politeia-newsletter
 NEWSLETTER_TOKEN_SECRET=una-cadena-larga-distinta-de-session-secret
+RESEND_TOPIC_NEWSLETTER_ID=
+RESEND_TOPIC_NEW_POSTS_ID=
+MAILING_DISPATCH_TOKEN=una-cadena-larga-distinta-de-los-otros-secretos
 APP_BASE_URL=http://admin.localhost:3000
 PUBLIC_SITE_URL=http://localhost:3000
 API_PUBLIC_URL=http://localhost:8080
@@ -269,9 +272,11 @@ Para una prueba manual, definir `MAIL_TEST_TO` en `services/blog-api/.env` y eje
 npm run blog-api:mail:test
 ```
 
-Con `MAIL_PROVIDER=console` solo se imprime el correo. Para una prueba real, cambiar a `MAIL_PROVIDER=resend`, cargar `RESEND_API_KEY`, `RESEND_SEGMENT_ID` y opcionalmente `RESEND_TOPIC_ID`, reiniciar el backend y repetir el comando.
+Con `MAIL_PROVIDER=console` solo se imprime el correo. Para una prueba real, cambiar a `MAIL_PROVIDER=resend`, cargar `RESEND_API_KEY`, `RESEND_SEGMENT_ID`, `RESEND_TOPIC_NEWSLETTER_ID` y `RESEND_TOPIC_NEW_POSTS_ID`, reiniciar el backend y repetir el comando.
 
-El formulario de `/blog` crea una suscripcion pendiente. El usuario debe abrir el link de confirmacion antes de quedar activo. En el panel, cada cuenta configura sus avisos internos desde `Mi perfil`; el administrador crea pruebas, borradores o envios desde `Roles`.
+El formulario de `/blog` crea una suscripcion pendiente con Newsletter y Nuevos blogs activos por defecto. El usuario debe abrir el link de confirmacion antes de quedar activo y luego puede administrar ambos temas desde el enlace de preferencias. En el panel, cada cuenta configura sus avisos internos desde `Mi perfil`; el administrador crea newsletters desde `Newsletter` y controla los avisos de publicaciones desde `Mailing`.
+
+Para probar el ciclo automatico local sin esperar 12 horas, usar el boton de despacho manual de la tab `Mailing` o llamar el endpoint administrativo. El intervalo de produccion se mantiene en 12 horas por defecto y puede cambiarse desde la misma configuracion.
 
 No pegues keys reales en tickets, chats o capturas. Si una `RESEND_API_KEY` queda expuesta, revocarla en Resend y crear una nueva antes de seguir probando.
 

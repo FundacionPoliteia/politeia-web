@@ -2228,6 +2228,105 @@ a {
   margin: 14px 0 24px
 }
 
+.newsletter-preferences-modal {
+  justify-items: stretch;
+  width: min(560px, 100%);
+  text-align: left
+}
+
+.newsletter-preferences-modal .newsletter-result-eyebrow,
+.newsletter-preferences-modal h2 {
+  justify-self: center;
+  text-align: center
+}
+
+.newsletter-preferences-modal>p {
+  max-width: none;
+  text-align: center
+}
+
+.newsletter-topic-choices {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  margin: 24px 0
+}
+
+.newsletter-topic-choices label {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 16px;
+  border: 1px solid var(--linea);
+  border-radius: 8px;
+  background: var(--hueso);
+  cursor: pointer
+}
+
+.newsletter-topic-choices input {
+  width: 18px;
+  height: 18px;
+  margin: 2px 0 0;
+  accent-color: var(--azul)
+}
+
+.newsletter-topic-choices span,
+.newsletter-topic-choices small {
+  display: block
+}
+
+.newsletter-topic-choices strong {
+  color: var(--tinta)
+}
+
+.newsletter-topic-choices small {
+  color: var(--gris);
+  font-size: .8rem;
+  line-height: 1.45;
+  margin-top: 4px
+}
+
+.newsletter-preferences-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  width: 100%;
+  margin-top: 12px
+}
+
+.newsletter-preferences-warning {
+  color: #a12620 !important;
+  font-size: .82rem;
+  margin: -12px 0 8px !important;
+  text-align: left !important
+}
+
+.newsletter-preferences-email {
+  display: grid;
+  gap: 7px;
+  color: var(--tinta);
+  font-size: .78rem;
+  font-weight: 800;
+  text-transform: uppercase
+}
+
+.newsletter-preferences-email input {
+  width: 100%;
+  border: 1px solid var(--linea);
+  border-radius: 8px;
+  padding: 13px 14px;
+  color: var(--tinta);
+  font: inherit;
+  font-weight: 400;
+  text-transform: none
+}
+
+.newsletter-preferences-account,
+.newsletter-preferences-loading {
+  margin-bottom: 0 !important
+}
+
 @media(max-width:520px) {
   .newsletter-result-overlay {
     align-items: end;
@@ -2240,6 +2339,10 @@ a {
 
   .newsletter-result-modal .btn {
     width: 100%
+  }
+
+  .newsletter-preferences-actions {
+    display: grid
   }
 }
 
@@ -6977,7 +7080,279 @@ a {
   margin-top: 0
 }
 
+.admin-mailing-manager {
+  display: grid;
+  gap: 22px;
+  border-top: 4px solid var(--azul)
+}
+
+.admin-mailing-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px
+}
+
+.admin-mailing-metrics article {
+  min-width: 0;
+  border: 1px solid var(--linea);
+  border-radius: 8px;
+  background: var(--hueso);
+  padding: 16px
+}
+
+.admin-mailing-metrics strong,
+.admin-mailing-metrics span {
+  display: block
+}
+
+.admin-mailing-metrics strong {
+  color: var(--azul);
+  font-family: var(--display);
+  font-size: 1.5rem;
+  line-height: 1
+}
+
+.admin-mailing-metrics span {
+  color: var(--gris);
+  font-size: .78rem;
+  line-height: 1.35;
+  margin-top: 7px
+}
+
+.admin-mailing-schedule {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--gris);
+  font-size: .82rem;
+  line-height: 1.4
+}
+
+.admin-mailing-schedule .material-symbols-outlined {
+  color: var(--azul);
+  font-size: 19px
+}
+
+.admin-mailing-settings,
+.admin-mailing-lab,
+.admin-mailing-queue {
+  border: 1px solid var(--linea);
+  border-radius: 8px;
+  background: var(--blanco);
+  padding: 18px
+}
+
+.admin-mailing-settings summary {
+  color: var(--tinta);
+  font-family: var(--display);
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer
+}
+
+.admin-mailing-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 18px 0
+}
+
+.admin-mailing-settings-grid>label:not(.admin-switch-row),
+.admin-mailing-lab>label {
+  display: grid;
+  gap: 7px;
+  color: var(--tinta);
+  font-size: .76rem;
+  font-weight: 800;
+  text-transform: uppercase
+}
+
+.admin-mailing-settings-grid input,
+.admin-mailing-lab input {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--linea);
+  border-radius: 8px;
+  background: var(--hueso);
+  color: var(--tinta);
+  font: inherit;
+  font-weight: 400;
+  text-transform: none;
+  padding: 10px 12px
+}
+
+.admin-mailing-wide {
+  grid-column: 1 / -1
+}
+
+.admin-mailing-switch.disabled,
+.admin-publication-mailing-choice.disabled {
+  cursor: default;
+  opacity: .66
+}
+
+.admin-mailing-lab {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, .65fr);
+  gap: 16px;
+  align-items: end;
+  background: var(--hueso)
+}
+
+.admin-mailing-lab>div:first-child span,
+.admin-mailing-queue-head span {
+  color: var(--azul);
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase
+}
+
+.admin-mailing-lab h3,
+.admin-mailing-queue-head h3 {
+  font-family: var(--display);
+  font-size: 1.18rem;
+  margin-top: 4px
+}
+
+.admin-mailing-lab p {
+  color: var(--gris);
+  font-size: .84rem;
+  margin-top: 4px
+}
+
+.admin-mailing-lab .admin-row-actions {
+  grid-column: 1 / -1
+}
+
+.admin-mailing-queue {
+  display: grid;
+  gap: 14px;
+  padding: 0;
+  overflow: hidden
+}
+
+.admin-mailing-queue-head,
+.admin-mailing-batch-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 18px 0
+}
+
+.admin-mailing-queue-head small {
+  color: var(--gris)
+}
+
+.admin-mailing-batch-actions {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  padding-top: 0
+}
+
+.admin-mailing-queue .admin-table-wrap {
+  border: 0;
+  border-top: 1px solid var(--linea);
+  border-radius: 0
+}
+
+.admin-mailing-table td strong,
+.admin-mailing-table td small {
+  display: block
+}
+
+.admin-mailing-table td small {
+  max-width: 34ch;
+  color: var(--gris);
+  font-size: .73rem;
+  margin-top: 4px;
+  overflow-wrap: anywhere
+}
+
+.admin-publication-confirm-modal {
+  width: min(600px, 100%)
+}
+
+.admin-publication-confirm-modal>span {
+  color: var(--azul);
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase
+}
+
+.admin-publication-confirm-modal h3 {
+  margin-top: 5px
+}
+
+.admin-publication-title {
+  display: block;
+  color: var(--tinta);
+  font-family: var(--display);
+  font-size: 1.05rem;
+  line-height: 1.35;
+  margin: 10px 0 4px
+}
+
+.admin-publication-mailing-choice {
+  margin-top: 18px
+}
+
+.admin-publication-mailing-note,
+.admin-publication-unsaved-note {
+  border-left: 3px solid #c6922f;
+  background: #fff8e7;
+  padding: 10px 12px;
+  margin-top: 10px
+}
+
+.admin-publication-confirm-footer {
+  border-top: 1px solid var(--linea);
+  margin-top: 20px;
+  padding-top: 16px
+}
+
+.admin-publication-confirm-footer>div:first-child strong {
+  display: block;
+  color: var(--tinta)
+}
+
+.admin-publication-confirm-footer>div:first-child p {
+  font-size: .82rem;
+  margin-top: 3px
+}
+
 @media(max-width:700px) {
+  .admin-mailing-metrics,
+  .admin-mailing-settings-grid,
+  .admin-mailing-lab {
+    grid-template-columns: 1fr
+  }
+
+  .admin-mailing-wide,
+  .admin-mailing-lab .admin-row-actions {
+    grid-column: auto
+  }
+
+  .admin-mailing-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr))
+  }
+
+  .admin-mailing-batch-actions .btn {
+    flex: 1 1 calc(50% - 6px);
+    justify-content: center
+  }
+
+  .admin-publication-confirm-footer .admin-modal-actions,
+  .admin-publication-confirm-footer .btn {
+    width: 100%
+  }
+
+  .admin-publication-confirm-footer .btn {
+    justify-content: center
+  }
+
   .admin-newsletter-test-row,
   .admin-newsletter-form .admin-two {
     grid-template-columns: 1fr

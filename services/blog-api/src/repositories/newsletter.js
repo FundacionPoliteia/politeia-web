@@ -5,7 +5,7 @@ import { config } from '../config.js';
 import { HttpError } from '../errors.js';
 import { db, serializeDoc, serverTimestamp } from '../firestore.js';
 import { MAIL_CHANNELS, createResendBroadcast, syncResendContact } from '../mail/provider.js';
-import { renderMailLayout, renderNewsletterConfirmation } from '../mail/templates.js';
+import { renderEditorialMail, renderMailLayout, renderNewsletterConfirmation } from '../mail/templates.js';
 import { createMailDelivery } from './mail.js';
 
 const subscriptions = () => db().collection('newsletterSubscriptions');
@@ -43,15 +43,16 @@ const BASE_NEWSLETTER_TEMPLATES = [
   },
 ];
 
-export async function requestNewsletterSubscription({ email, source = 'blog', locale = 'es-AR' }) {
+export async function requestNewsletterSubscription({ email, source = 'blog', locale = 'es-AR', topics = null }) {
   const cleanEmail = validateEmail(email);
+  const topicPreferences = sanitizeTopicPreferences(topics);
   requireTokenSecret();
   const ref = subscriptions().doc(subscriptionId(cleanEmail));
   const existingDoc = await ref.get();
   const existing = existingDoc.exists ? serializeDoc(existingDoc) : null;
   if (existing?.status === 'subscribed') return { accepted: true };
 
-  const token = signNewsletterToken({ email: cleanEmail, action: 'confirm' });
+  const token = signNewsletterToken({ email: cleanEmail, action: 'confirm', topics: topicPreferences });
   const confirmUrl = `${apiPublicUrl()}/v1/newsletter/confirm?token=${encodeURIComponent(token)}`;
   const rendered = renderNewsletterConfirmation({ confirmUrl });
   await ref.set({
@@ -61,6 +62,7 @@ export async function requestNewsletterSubscription({ email, source = 'blog', lo
     status: 'pending',
     source: sanitizeShortText(source, 80),
     locale: sanitizeShortText(locale, 20),
+    topicPreferences,
     requestedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     confirmedAt: null,
@@ -85,7 +87,8 @@ export async function confirmNewsletterSubscription(token) {
   const doc = await ref.get();
   if (!doc.exists) throw new HttpError(400, 'La solicitud de suscripcion no existe o vencio');
 
-  const provider = await syncResendContact({ email: payload.email, subscribed: true });
+  const topicPreferences = sanitizeTopicPreferences(payload.topics);
+  const provider = await syncResendContact({ email: payload.email, subscribed: true, topics: topicPreferences });
   if (!provider.ok) {
     throw new HttpError(
       502,
@@ -103,15 +106,56 @@ export async function confirmNewsletterSubscription(token) {
     confirmedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     unsubscribedAt: null,
+    topicPreferences,
     providerContactId: provider.data?.id || '',
   }, { merge: true });
-  return { email: payload.email, status: 'subscribed' };
+  return { email: payload.email, status: 'subscribed', topics: topicPreferences };
 }
 
 export async function unsubscribeNewsletter(token) {
-  const payload = verifyNewsletterToken(token, 'unsubscribe', { allowExpired: true });
+  return updateNewsletterPreferences(token, { newsletter: false, newPosts: false });
+}
+
+export async function requestNewsletterPreferences(email) {
+  const cleanEmail = validateEmail(email);
+  const ref = subscriptions().doc(subscriptionId(cleanEmail));
+  const doc = await ref.get();
+  if (!doc.exists) return { accepted: true };
+  const manageUrl = createNewsletterPreferencesUrl(cleanEmail);
+  const rendered = renderEditorialMail({
+    subject: 'Administra tus preferencias de Politeia',
+    text: 'Usa este enlace para elegir que novedades queres recibir o para darte de baja de todos los envios.',
+    actionUrl: manageUrl,
+    actionLabel: 'Administrar preferencias',
+  });
+  await createMailDelivery({
+    channel: MAIL_CHANNELS.newsletter,
+    type: 'newsletter.preferences',
+    recipient: cleanEmail,
+    subject: 'Administra tus preferencias de Politeia',
+    text: rendered.text,
+    html: rendered.html,
+    idempotencyKey: `newsletter-preferences:${subscriptionId(cleanEmail)}:${Math.floor(Date.now() / 60000)}`,
+  });
+  return { accepted: true };
+}
+
+export async function getNewsletterPreferences(token) {
+  const payload = verifyNewsletterToken(token, ['preferences', 'unsubscribe'], { allowExpired: true });
+  const doc = await subscriptions().doc(subscriptionId(payload.email)).get();
+  if (!doc.exists) throw new HttpError(404, 'La suscripcion no existe');
+  const item = serializeDoc(doc);
+  return { email: payload.email, status: item.status || 'pending', topics: subscriptionTopics(item) };
+}
+
+export async function updateNewsletterPreferences(token, topics) {
+  const payload = verifyNewsletterToken(token, ['preferences', 'unsubscribe'], { allowExpired: true });
   const ref = subscriptions().doc(subscriptionId(payload.email));
-  const provider = await syncResendContact({ email: payload.email, subscribed: false });
+  const doc = await ref.get();
+  if (!doc.exists) throw new HttpError(404, 'La suscripcion no existe');
+  const topicPreferences = sanitizeTopicPreferences(topics);
+  const subscribed = topicPreferences.newsletter || topicPreferences.newPosts;
+  const provider = await syncResendContact({ email: payload.email, subscribed, topics: topicPreferences });
   if (!provider.ok) {
     throw new HttpError(
       502,
@@ -128,11 +172,12 @@ export async function unsubscribeNewsletter(token) {
     projectKey: config.mailProjectKey,
     audienceKey: config.newsletterAudienceKey,
     email: payload.email,
-    status: 'unsubscribed',
-    unsubscribedAt: serverTimestamp(),
+    status: subscribed ? 'subscribed' : 'unsubscribed',
+    topicPreferences,
+    unsubscribedAt: subscribed ? null : serverTimestamp(),
     updatedAt: serverTimestamp(),
   }, { merge: true });
-  return { email: payload.email, status: 'unsubscribed' };
+  return { email: payload.email, status: subscribed ? 'subscribed' : 'unsubscribed', topics: topicPreferences };
 }
 
 export async function getNewsletterOverview() {
@@ -145,9 +190,12 @@ export async function getNewsletterOverview() {
     audienceKey: config.newsletterAudienceKey,
     provider: config.mailProvider,
     segmentConfigured: Boolean(config.resendSegmentId),
-    topicConfigured: Boolean(config.resendTopicId),
+    topicConfigured: Boolean(config.resendTopicNewsletterId),
+    newPostsTopicConfigured: Boolean(config.resendTopicNewPostsId),
     counts: {
       subscribed: items.filter((item) => item.status === 'subscribed').length,
+      newsletter: items.filter((item) => item.status === 'subscribed' && subscriptionTopics(item).newsletter).length,
+      newPosts: items.filter((item) => item.status === 'subscribed' && subscriptionTopics(item).newPosts).length,
       pending: items.filter((item) => item.status === 'pending').length,
       unsubscribed: items.filter((item) => item.status === 'unsubscribed').length,
     },
@@ -180,6 +228,7 @@ export async function listNewsletterSubscribers({ status, limit = 50 } = {}) {
       requestedAt: item.requestedAt || null,
       confirmedAt: item.confirmedAt || null,
       updatedAt: item.updatedAt || null,
+      topics: subscriptionTopics(item),
     })),
   };
 }
@@ -247,12 +296,14 @@ export async function sendNewsletterTest({ to, subject, previewText = '', conten
   const cleanContent = sanitizeCampaignHtml(content);
   if (!cleanSubject || !stripHtml(cleanContent)) throw new HttpError(400, 'subject and content are required');
   const unsubscribeUrl = createNewsletterUnsubscribeUrl(cleanEmail);
+  const preferencesUrl = createNewsletterPreferencesUrl(cleanEmail);
   const rendered = renderMailLayout({
     preheader: cleanPreview || cleanSubject,
     heading: cleanSubject,
     bodyHtml: cleanContent,
     bodyText: stripHtml(cleanContent),
     unsubscribeUrl,
+    preferencesUrl,
   });
   return createMailDelivery({
     channel: MAIL_CHANNELS.newsletter,
@@ -277,6 +328,7 @@ export function renderNewsletterPreview({ subject, previewText = '', content }) 
     bodyHtml: cleanContent,
     bodyText: stripHtml(cleanContent),
     unsubscribeUrl: '#newsletter-unsubscribe-preview',
+    preferencesUrl: '#newsletter-preferences-preview',
   });
 }
 
@@ -293,6 +345,7 @@ export async function createNewsletterCampaign({ name, subject, previewText = ''
     bodyHtml: cleanContent,
     bodyText: stripHtml(cleanContent),
     unsubscribeUrl: '{{{RESEND_UNSUBSCRIBE_URL}}}',
+    preferencesUrl: publicPreferencesUrl('{{{contact.email}}}'),
   });
   const ref = campaigns().doc();
   await ref.set({
@@ -317,6 +370,7 @@ export async function createNewsletterCampaign({ name, subject, previewText = ''
     html: rendered.html,
     text: rendered.text,
     send: send === true,
+    topicId: config.resendTopicNewsletterId || config.resendTopicId,
   });
   if (!provider.ok) {
     await ref.update({ status: 'failed', lastError: provider.error || 'Provider failed', updatedAt: serverTimestamp() });
@@ -336,13 +390,20 @@ export function createNewsletterUnsubscribeUrl(email) {
   return `${apiPublicUrl()}/v1/newsletter/unsubscribe?token=${encodeURIComponent(token)}`;
 }
 
-function signNewsletterToken({ email, action, ttlMs = TOKEN_TTL_MS }) {
+export function createNewsletterPreferencesUrl(email) {
+  const cleanEmail = validateEmail(email);
+  const token = signNewsletterToken({ email: cleanEmail, action: 'preferences', ttlMs: 365 * 24 * 60 * 60 * 1000 });
+  return publicPreferencesUrl(cleanEmail, token);
+}
+
+function signNewsletterToken({ email, action, ttlMs = TOKEN_TTL_MS, topics = undefined }) {
   requireTokenSecret();
   const payload = Buffer.from(JSON.stringify({
     email: normalizeEmail(email),
     action,
     projectKey: config.mailProjectKey,
     audienceKey: config.newsletterAudienceKey,
+    ...(topics ? { topics: sanitizeTopicPreferences(topics) } : {}),
     exp: Date.now() + ttlMs,
   })).toString('base64url');
   const signature = createHmac('sha256', config.newsletterTokenSecret).update(payload).digest('base64url');
@@ -362,12 +423,41 @@ function verifyNewsletterToken(token, expectedAction, { allowExpired = false } =
   } catch {
     throw new HttpError(400, 'Token invalido');
   }
-  if (payload.action !== expectedAction || payload.projectKey !== config.mailProjectKey || payload.audienceKey !== config.newsletterAudienceKey) {
+  const expectedActions = Array.isArray(expectedAction) ? expectedAction : [expectedAction];
+  if (!expectedActions.includes(payload.action) || payload.projectKey !== config.mailProjectKey || payload.audienceKey !== config.newsletterAudienceKey) {
     throw new HttpError(400, 'Token invalido');
   }
   if (!allowExpired && Number(payload.exp) < Date.now()) throw new HttpError(400, 'El enlace vencio');
   payload.email = validateEmail(payload.email);
   return payload;
+}
+
+export function subscriptionTopics(item = {}) {
+  if (!item.topicPreferences || typeof item.topicPreferences !== 'object') {
+    return { newsletter: true, newPosts: true };
+  }
+  return sanitizeTopicPreferences(item.topicPreferences);
+}
+
+function sanitizeTopicPreferences(value) {
+  const source = value && typeof value === 'object' ? value : {};
+  return {
+    newsletter: source.newsletter !== false,
+    newPosts: source.newPosts !== false,
+  };
+}
+
+function publicPreferencesUrl(email = '', token = '') {
+  const url = new URL('/blog', config.publicSiteUrl);
+  url.searchParams.set('newsletter', 'preferencias');
+  if (email) url.searchParams.set('email', email);
+  if (token) url.searchParams.set('token', token);
+  url.hash = 'news';
+  return preserveResendContactPlaceholder(url.toString());
+}
+
+function preserveResendContactPlaceholder(value) {
+  return String(value).replace(/%7B%7B%7Bcontact\.email%7D%7D%7D/gi, '{{{contact.email}}}');
 }
 
 function sanitizeCampaignHtml(value = '') {

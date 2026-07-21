@@ -19,6 +19,7 @@ import { openApiSpec } from './openapi.js';
 import { handleResendWebhook } from './routes/mailWebhook.js';
 import { apiRequestLogger } from './middleware/apiRequestLogger.js';
 import { adminOperationsRouter } from './routes/adminOperations.js';
+import { mailingRouter } from './routes/mailing.js';
 
 export function createApp() {
   const app = express();
@@ -60,6 +61,7 @@ export function createApp() {
   app.use('/v1/import', writeLimiter, requireAuth, requireAnyRole(['blog', 'reviewer']), requireGoogleCloudCredentials, importRouter);
   app.use('/v1/notifications', requireGoogleCloudCredentials, notificationsRouter({ writeLimiter }));
   app.use('/v1/newsletter', requireGoogleCloudCredentials, newsletterRouter({ writeLimiter }));
+  app.use('/v1/mailing', requireGoogleCloudCredentials, mailingRouter({ writeLimiter }));
   app.use('/v1/profile', requireGoogleCloudCredentials, profileRouter({ writeLimiter }));
   app.use('/v1/admin', requireGoogleCloudCredentials, adminOperationsRouter({ writeLimiter }));
 

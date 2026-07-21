@@ -7,7 +7,7 @@ import NewsletterForm from './NewsletterForm';
 
 const DEFAULT_PROFILE_PHOTO = '/default_profile.png';
 
-export default function BlogIndex({ posts = [], autorFiltro = '', categoriaFiltro = '', newsletterStatus = '', authorProfile = null, authors = [], preview = false }) {
+export default function BlogIndex({ posts = [], autorFiltro = '', categoriaFiltro = '', newsletterStatus = '', newsletterEmail = '', newsletterToken = '', authorProfile = null, authors = [], preview = false }) {
   const [query, setQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('');
   const filtrandoAutor = Boolean(autorFiltro);
@@ -232,7 +232,7 @@ export default function BlogIndex({ posts = [], autorFiltro = '', categoriaFiltr
             <h2>Ideas y novedades, directo en tu correo.</h2>
             <p>Recibi nuevas notas y actualizaciones de Politeia. Primero te enviaremos un email para confirmar tu suscripcion.</p>
           </div>
-          <NewsletterForm initialStatus={newsletterStatus} />
+          <NewsletterForm initialStatus={newsletterStatus} initialEmail={newsletterEmail} initialToken={newsletterToken} />
         </div>
       </section>}
     </Root>

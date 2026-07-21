@@ -51,6 +51,7 @@ import {
   createNewsletterUnsubscribeUrl,
   deleteNewsletterTemplate,
   getNewsletterOverview,
+  getNewsletterPreferences,
   listNewsletterSubscribers,
   listNewsletterTemplates,
   renderNewsletterPreview,
@@ -66,6 +67,12 @@ import {
   recordApiRequest,
   sendAdminResendTest,
 } from '../src/repositories/operations.js';
+import {
+  dispatchMailing,
+  getMailingAdminOverview,
+  queuePublishedPostMail,
+  updateMailingSettings,
+} from '../src/repositories/mailingAutomation.js';
 
 test('GET /healthz returns service health', async () => {
   const res = await request(createApp()).get('/healthz').expect(200);
@@ -245,6 +252,33 @@ test('newsletter administration accepts newsletter and admin roles only', async 
       .get('/v1/newsletter/admin/overview')
       .set('Cookie', sessionFor('blog@politeia.ar', ['blog']))
       .expect(403);
+  } finally {
+    config.devAuth = previousDevAuth;
+    setFirestoreForTests(null);
+  }
+});
+
+test('mailing configuration is admin-only while reviewers can read publication policy', async () => {
+  const firestore = createMemoryFirestore();
+  const previousDevAuth = config.devAuth;
+  setFirestoreForTests(firestore);
+  config.devAuth = false;
+  const sessionFor = (email, roles) => `${config.sessionCookieName}=${encodeURIComponent(buildSessionCookie({ email, name: email, roles }))}`;
+
+  try {
+    const app = createApp();
+    await request(app)
+      .get('/v1/mailing/publication-policy')
+      .set('Cookie', sessionFor('reviewer@politeia.ar', ['reviewer']))
+      .expect(200);
+    await request(app)
+      .get('/v1/mailing/admin/overview')
+      .set('Cookie', sessionFor('reviewer@politeia.ar', ['reviewer']))
+      .expect(403);
+    await request(app)
+      .get('/v1/mailing/admin/overview')
+      .set('Cookie', sessionFor('admin@politeia.ar', ['admin']))
+      .expect(200);
   } finally {
     config.devAuth = previousDevAuth;
     setFirestoreForTests(null);
@@ -1038,6 +1072,7 @@ test('newsletter subscription uses double opt-in and becomes active only after c
     const confirmed = await confirmNewsletterSubscription(decodeURIComponent(tokenMatch[1]));
     assert.equal(confirmed.email, 'reader@example.com');
     assert.equal(confirmed.status, 'subscribed');
+    assert.deepEqual(confirmed.topics, { newsletter: true, newPosts: true });
 
     const active = await getNewsletterOverview();
     assert.equal(active.counts.pending, 0);
@@ -1047,6 +1082,7 @@ test('newsletter subscription uses double opt-in and becomes active only after c
     assert.equal(activeSubscribers.total, 1);
     assert.equal(activeSubscribers.items[0].email, 'reader@example.com');
     assert.ok(activeSubscribers.items[0].confirmedAt);
+    assert.deepEqual(activeSubscribers.items[0].topics, { newsletter: true, newPosts: true });
 
     await assert.rejects(
       () => listNewsletterSubscribers({ status: 'unsubscribed' }),
@@ -1058,6 +1094,8 @@ test('newsletter subscription uses double opt-in and becomes active only after c
     assert.equal(repeatedDeliveries.docs.length, 1);
 
     const unsubscribeUrl = new URL(createNewsletterUnsubscribeUrl('reader@example.com'));
+    const preferencesFromUnsubscribe = await getNewsletterPreferences(unsubscribeUrl.searchParams.get('token'));
+    assert.deepEqual(preferencesFromUnsubscribe.topics, { newsletter: true, newPosts: true });
     const unsubscribed = await unsubscribeNewsletter(unsubscribeUrl.searchParams.get('token'));
     assert.equal(unsubscribed.status, 'unsubscribed');
     const inactive = await getNewsletterOverview();
@@ -1089,6 +1127,64 @@ test('newsletter campaigns are project-scoped and remain drafts in console mode'
     assert.match(item.contentHtml, /<strong>Gracias<\/strong>/);
     assert.match(item.contentHtml, /<img[^>]+src="https:\/\/example\.com\/portada\.jpg"/);
     assert.match(item.contentHtml, /<table[^>]*>/);
+  } finally {
+    config.mailProvider = previousProvider;
+    setFirestoreForTests(null);
+  }
+});
+
+test('post mailing respects the weekly cap and the configurable 12 hour dispatch cycle', async () => {
+  const firestore = createMemoryFirestore();
+  const previousProvider = config.mailProvider;
+  setFirestoreForTests(firestore);
+  config.mailProvider = 'console';
+
+  try {
+    await updateMailingSettings({
+      enabled: true,
+      automaticByDefault: true,
+      weeklyLimit: 2,
+      dispatchIntervalHours: 12,
+      gracePeriodMinutes: 0,
+    }, 'admin@politeia.ar');
+    await firestore.collection('newsletterSubscriptions').doc('reader').set({
+      projectKey: config.mailProjectKey,
+      email: 'reader@example.com',
+      status: 'subscribed',
+      topics: { newsletter: true, newPosts: true },
+    });
+
+    for (let index = 1; index <= 3; index += 1) {
+      const post = {
+        id: `post-${index}`,
+        title: `Nota ${index}`,
+        slug: `nota-${index}`,
+        excerpt: `Extracto ${index}`,
+        status: 'published',
+        publishedAt: new Date(Date.now() + index).toISOString(),
+      };
+      await firestore.collection('posts').doc(post.id).set(post);
+      await queuePublishedPostMail(post, { email: 'reviewer@politeia.ar' });
+    }
+
+    const firstRunAt = new Date(Date.now() + 10000);
+    const result = await dispatchMailing({ now: firstRunAt });
+    assert.equal(result.sent.length, 2);
+    assert.equal(result.queuedForDigest.length, 1);
+
+    const jobs = await firestore.collection('postMailingJobs').get();
+    const statuses = jobs.docs.map((doc) => doc.data().status).sort();
+    assert.deepEqual(statuses, ['digest_pending', 'sent', 'sent']);
+
+    const tooSoon = await dispatchMailing({ now: new Date(firstRunAt.getTime() + 60 * 60 * 1000) });
+    assert.equal(tooSoon.skipped, true);
+    assert.equal(tooSoon.reason, 'interval');
+
+    const overview = await getMailingAdminOverview();
+    assert.equal(overview.settings.dispatchIntervalHours, 12);
+    assert.equal(overview.sentThisWeek, 2);
+    assert.equal(overview.remainingThisWeek, 0);
+    assert.equal(overview.recipientCount, 1);
   } finally {
     config.mailProvider = previousProvider;
     setFirestoreForTests(null);
@@ -1177,7 +1273,7 @@ test('newsletter test emails include a signed unsubscribe link', async () => {
     const delivery = snapshot.docs[0].data();
     assert.match(delivery.html, /Una mirada breve antes de abrir el correo/);
     assert.match(delivery.html, /href="https:\/\/api\.example\.com\/v1\/newsletter\/unsubscribe\?token=/);
-    assert.match(delivery.html, />darte de baja<\/a>/);
+    assert.match(delivery.html, />darte de baja de todos los envios<\/a>/);
     assert.match(delivery.text, /Darte de baja: https:\/\/api\.example\.com\/v1\/newsletter\/unsubscribe\?token=/);
   } finally {
     Object.assign(config, previous);
@@ -1211,7 +1307,7 @@ test('Resend broadcasts receive the provider unsubscribe placeholder as a clicka
       send: false,
     }, 'admin@politeia.ar');
     assert.match(requestBody.html, /href="\{\{\{RESEND_UNSUBSCRIBE_URL\}\}\}"/);
-    assert.match(requestBody.html, />darte de baja<\/a>/);
+    assert.match(requestBody.html, />darte de baja de todos los envios<\/a>/);
     assert.match(requestBody.text, /Darte de baja: \{\{\{RESEND_UNSUBSCRIBE_URL\}\}\}/);
   } finally {
     Object.assign(config, previous);
@@ -1323,6 +1419,8 @@ test('resend contact sync creates a contact without undeclared custom properties
     resendApiKey: config.resendApiKey,
     resendSegmentId: config.resendSegmentId,
     resendTopicId: config.resendTopicId,
+    resendTopicNewsletterId: config.resendTopicNewsletterId,
+    resendTopicNewPostsId: config.resendTopicNewPostsId,
   };
   const previousFetch = global.fetch;
   let requestBody;
@@ -1330,6 +1428,8 @@ test('resend contact sync creates a contact without undeclared custom properties
   config.resendApiKey = 're_test';
   config.resendSegmentId = 'segment-1';
   config.resendTopicId = 'topic-1';
+  config.resendTopicNewsletterId = 'topic-1';
+  config.resendTopicNewPostsId = '';
   global.fetch = async (_url, options) => {
     requestBody = JSON.parse(options.body);
     return { ok: true, json: async () => ({ id: 'contact-1' }) };
@@ -1353,6 +1453,8 @@ test('resend contact sync updates existing contact topic through its dedicated e
     resendApiKey: config.resendApiKey,
     resendSegmentId: config.resendSegmentId,
     resendTopicId: config.resendTopicId,
+    resendTopicNewsletterId: config.resendTopicNewsletterId,
+    resendTopicNewPostsId: config.resendTopicNewPostsId,
   };
   const previousFetch = global.fetch;
   const requests = [];
@@ -1360,6 +1462,8 @@ test('resend contact sync updates existing contact topic through its dedicated e
   config.resendApiKey = 're_test';
   config.resendSegmentId = 'segment-1';
   config.resendTopicId = 'topic-1';
+  config.resendTopicNewsletterId = 'topic-1';
+  config.resendTopicNewPostsId = '';
   global.fetch = async (url, options) => {
     requests.push({ url, options });
     if (requests.length === 1) {

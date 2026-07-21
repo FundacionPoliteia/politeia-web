@@ -47,6 +47,8 @@ export const config = {
   resendWebhookSecret: process.env.RESEND_WEBHOOK_SECRET || '',
   resendSegmentId: process.env.RESEND_SEGMENT_ID || '',
   resendTopicId: process.env.RESEND_TOPIC_ID || '',
+  resendTopicNewsletterId: process.env.RESEND_TOPIC_NEWSLETTER_ID || process.env.RESEND_TOPIC_ID || '',
+  resendTopicNewPostsId: process.env.RESEND_TOPIC_NEW_POSTS_ID || '',
   newsletterAudienceKey: process.env.NEWSLETTER_AUDIENCE_KEY || 'politeia-newsletter',
   newsletterTokenSecret: process.env.NEWSLETTER_TOKEN_SECRET || process.env.SESSION_SECRET || (process.env.NODE_ENV === 'production' ? '' : 'dev-newsletter-secret'),
   publicSiteUrl: process.env.PUBLIC_SITE_URL || 'https://www.politeia.ar',
@@ -63,6 +65,7 @@ export const config = {
     ? process.env.API_REQUEST_LOGS_ENABLED === 'true'
     : process.env.NODE_ENV === 'production',
   apiRequestLogsRetentionDays: Math.min(Math.max(Number(process.env.API_REQUEST_LOGS_RETENTION_DAYS || 14), 1), 90),
+  mailingDispatchToken: process.env.MAILING_DISPATCH_TOKEN || '',
 };
 
 export function requireConfig(keys) {

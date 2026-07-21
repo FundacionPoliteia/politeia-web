@@ -10,6 +10,8 @@ export default async function BlogPage({ searchParams }) {
   const autorFiltro = normalizarParametro(params?.autor);
   const categoriaFiltro = normalizarParametro(params?.categoria);
   const newsletterStatus = normalizarParametro(params?.newsletter);
+  const newsletterEmail = normalizarParametro(params?.email);
+  const newsletterToken = normalizarParametro(params?.token);
   const [posts, authorProfile, authors] = await Promise.all([
     getPosts(30),
     autorFiltro ? getPublicAuthorProfile(autorFiltro) : null,
@@ -22,6 +24,8 @@ export default async function BlogPage({ searchParams }) {
       autorFiltro={autorFiltro}
       categoriaFiltro={categoriaFiltro}
       newsletterStatus={newsletterStatus}
+      newsletterEmail={newsletterEmail}
+      newsletterToken={newsletterToken}
       authorProfile={authorProfile}
       authors={authors}
     />

@@ -223,7 +223,9 @@ MAIL_PROVIDER=disabled  # saltea envios
 Antes de activar envios, verificar `politeia.ar` en Resend y crear:
 
 - un Segment para el newsletter; copiar su ID a `RESEND_SEGMENT_ID`;
-- opcionalmente un Topic de preferencias; copiar su ID a `RESEND_TOPIC_ID`;
+- un Topic para novedades/editoriales; copiar su ID a `RESEND_TOPIC_NEWSLETTER_ID`;
+- un Topic para avisos de nuevos blogs; copiar su ID a `RESEND_TOPIC_NEW_POSTS_ID`;
+- configurar ambos Topics para que los contactos existentes comiencen suscriptos y puedan salir de cada tema por separado;
 - un webhook HTTPS apuntando a `https://URL_DE_CLOUD_RUN/v1/mail/webhooks/resend` para `email.delivered`, `email.failed`, `email.bounced`, `email.complained` y `email.suppressed`;
 - copiar el Signing Secret del webhook a Secret Manager como `resend-webhook-secret`.
 
@@ -246,7 +248,19 @@ gcloud.cmd run services update politeia-blog-api --region us-central1 --env-vars
 
 La cuenta de servicio de Cloud Run necesita `roles/secretmanager.secretAccessor` sobre esos tres secretos. En Vercel configurar `NEXT_PUBLIC_EMAIL_SETTINGS_ENABLED=true` cuando el backend ya tenga Resend listo.
 
-Para reutilizar el modulo en otro proyecto o branch, cambiar `MAIL_PROJECT_KEY`, `MAIL_BRAND_NAME`, los tres `MAIL_FROM_*`, `NEWSLETTER_AUDIENCE_KEY`, `RESEND_SEGMENT_ID`, `RESEND_TOPIC_ID`, `PUBLIC_SITE_URL` y `APP_BASE_URL`. Las colecciones de Firestore quedan particionadas por `projectKey` y `audienceKey`.
+Para reutilizar el modulo en otro proyecto o branch, cambiar `MAIL_PROJECT_KEY`, `MAIL_BRAND_NAME`, los tres `MAIL_FROM_*`, `NEWSLETTER_AUDIENCE_KEY`, `RESEND_SEGMENT_ID`, los dos `RESEND_TOPIC_*`, `PUBLIC_SITE_URL` y `APP_BASE_URL`. Las colecciones de Firestore quedan particionadas por `projectKey` y `audienceKey`.
+
+### Dispatcher de nuevos blogs
+
+El envio automatico usa un heartbeat de Cloud Scheduler y un gate persistido en Firestore. Scheduler puede consultar cada hora, pero el backend no crea un broadcast hasta que transcurre la frecuencia elegida en `Mailing > Configuracion automatica`; el valor inicial es 12 horas. Esto permite cambiar la frecuencia sin recrear el job y evita el comportamiento anterior de cinco minutos.
+
+Agregar a Cloud Run una cadena privada larga en `MAILING_DISPATCH_TOKEN`. No debe reutilizar `SESSION_SECRET` ni quedar en Git. Luego crear el job:
+
+```bash
+gcloud.cmd scheduler jobs create http politeia-blog-mailing-dispatch --location us-central1 --schedule="0 * * * *" --uri="https://URL_DE_CLOUD_RUN/v1/mailing/dispatch" --http-method=POST --headers="Authorization=Bearer TOKEN_PRIVADO" --time-zone="America/Argentina/Buenos_Aires"
+```
+
+El cron horario solo despierta el dispatcher. Con la configuracion inicial, los broadcasts reales se procesan como maximo una vez cada 12 horas. Desde la tab `Mailing`, un administrador puede cambiar el intervalo, desactivar la automatizacion, ajustar el limite semanal y forzar una seleccion de notas.
 
 Despues de actualizar variables o secretos, revisar:
 

@@ -63,9 +63,10 @@ export async function sendMail({
     : result;
 }
 
-export async function syncResendContact({ email, firstName = '', lastName = '', subscribed = true }) {
+export async function syncResendContact({ email, firstName = '', lastName = '', subscribed = true, topics = null }) {
   if (config.mailProvider !== 'resend') return { ok: true, status: 'skipped' };
-  if (!config.resendSegmentId && !config.resendTopicId) {
+  const topicSubscriptions = buildTopicSubscriptions(topics, subscribed);
+  if (!config.resendSegmentId && topicSubscriptions.length === 0) {
     return { ok: true, status: 'skipped', warning: 'No Resend segment or topic configured' };
   }
 
@@ -76,9 +77,7 @@ export async function syncResendContact({ email, firstName = '', lastName = '', 
   if (firstName) payload.first_name = firstName;
   if (lastName) payload.last_name = lastName;
   if (config.resendSegmentId) payload.segments = [{ id: config.resendSegmentId }];
-  if (config.resendTopicId) {
-    payload.topics = [{ id: config.resendTopicId, subscription: subscribed ? 'opt_in' : 'opt_out' }];
-  }
+  if (topicSubscriptions.length) payload.topics = topicSubscriptions;
 
   const created = await resendRequest('/contacts', { method: 'POST', body: payload });
   if (created.ok) return created;
@@ -105,13 +104,10 @@ export async function syncResendContact({ email, firstName = '', lastName = '', 
     }
   }
 
-  if (config.resendTopicId) {
+  if (topicSubscriptions.length) {
     const topics = await resendRequest(`/contacts/${encodeURIComponent(email)}/topics`, {
       method: 'PATCH',
-      body: [{
-        id: config.resendTopicId,
-        subscription: subscribed ? 'opt_in' : 'opt_out',
-      }],
+      body: topicSubscriptions,
     });
     if (!topics.ok) return providerSyncError('topic', topics);
   }
@@ -124,7 +120,17 @@ export async function syncResendContact({ email, firstName = '', lastName = '', 
   };
 }
 
-export async function createResendBroadcast({ name, subject, html, text = '', previewText = '', send = false }) {
+export async function createResendBroadcast({
+  name,
+  subject,
+  html,
+  text = '',
+  previewText = '',
+  send = false,
+  topicId = config.resendTopicNewsletterId,
+  scheduledAt = '',
+  idempotencyKey = '',
+}) {
   if (config.mailProvider === 'console') {
     console.info(JSON.stringify({
       severity: 'INFO',
@@ -158,9 +164,27 @@ export async function createResendBroadcast({ name, subject, html, text = '', pr
     send,
   };
   if (previewText) body.preview_text = previewText;
+  if (scheduledAt) body.scheduled_at = scheduledAt;
   if (config.mailReplyTo) body.reply_to = config.mailReplyTo;
-  if (config.resendTopicId) body.topic_id = config.resendTopicId;
-  return resendRequest('/broadcasts', { method: 'POST', body });
+  if (topicId) body.topic_id = topicId;
+  return resendRequest('/broadcasts', { method: 'POST', body, idempotencyKey });
+}
+
+export async function sendResendBroadcast(providerBroadcastId, { scheduledAt = '', idempotencyKey = '' } = {}) {
+  const id = String(providerBroadcastId || '').trim();
+  if (!id) return { ok: false, error: 'provider broadcast id is required' };
+  if (config.mailProvider === 'console') return { ok: true, status: 'sent', providerMessageId: id };
+  if (config.mailProvider === 'disabled') return { ok: true, status: 'skipped', providerMessageId: id };
+  const body = scheduledAt ? { scheduled_at: scheduledAt } : {};
+  return resendRequest(`/broadcasts/${encodeURIComponent(id)}/send`, { method: 'POST', body, idempotencyKey });
+}
+
+export async function getResendBroadcast(providerBroadcastId) {
+  const id = String(providerBroadcastId || '').trim();
+  if (!id) return { ok: false, error: 'provider broadcast id is required' };
+  if (config.mailProvider === 'console') return { ok: true, status: 'sent', data: { id, status: 'sent' } };
+  if (config.mailProvider === 'disabled') return { ok: true, status: 'skipped', data: { id, status: 'skipped' } };
+  return resendRequest(`/broadcasts/${encodeURIComponent(id)}`);
 }
 
 export function channelSender(channel) {
@@ -210,4 +234,17 @@ function providerSyncError(stage, result, previous = null) {
     error: `Resend contact synchronization failed at ${stage}: ${result?.error || 'Unknown provider error'}`,
     statusCode: result?.statusCode || 0,
   };
+}
+
+function buildTopicSubscriptions(topics, subscribed) {
+  const values = topics && typeof topics === 'object'
+    ? [
+        [config.resendTopicNewsletterId, topics.newsletter !== false],
+        [config.resendTopicNewPostsId, topics.newPosts !== false],
+      ]
+    : [[config.resendTopicNewsletterId || config.resendTopicId, subscribed]];
+  const seen = new Set();
+  return values
+    .filter(([id]) => id && !seen.has(id) && seen.add(id))
+    .map(([id, enabled]) => ({ id, subscription: subscribed && enabled ? 'opt_in' : 'opt_out' }));
 }
