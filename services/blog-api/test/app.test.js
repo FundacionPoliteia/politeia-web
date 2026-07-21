@@ -8,6 +8,7 @@ import { setFirestoreForTests } from '../src/firestore.js';
 import { canManageAllPosts, matchesManageStatus, toBlogAuthorView } from '../src/repositories/posts.js';
 import {
   cleanupExpiredNotifications,
+  getNotificationPreferences,
   listInAppNotifications,
   markAllNotificationsRead,
   markNotificationRead,
@@ -18,6 +19,7 @@ import {
   notifyPostEditRequested,
   notifyPostPublished,
   notifyPostSubmittedForReview,
+  updateNotificationPreferences,
 } from '../src/repositories/notifications.js';
 import {
   buildFullName,
@@ -563,6 +565,7 @@ test('in-app notifications target roles and emails independently from email opt-
     const post = {
       id: 'post-1',
       title: 'Nota en revision',
+      slug: 'nota-en-revision',
       authorEmail: 'autor@politeia.ar',
       authorName: 'Autor Politeia',
     };
@@ -606,6 +609,7 @@ test('in-app notifications target roles and emails independently from email opt-
     await notifyPostPublished(post, reviewer);
     authorInbox = await listInAppNotifications(author);
     assert.equal(authorInbox.items.some((item) => item.type === 'post.published'), true);
+    assert.equal(authorInbox.items.find((item) => item.type === 'post.published')?.postSlug, 'nota-en-revision');
 
     await notifyPostEditRequested(post, author);
     reviewerInbox = await listInAppNotifications(reviewer);
@@ -626,6 +630,30 @@ test('in-app notifications target roles and emails independently from email opt-
 
     const allRead = await markAllNotificationsRead(author);
     assert.equal(allRead.unreadCount, 0);
+  } finally {
+    setFirestoreForTests(null);
+  }
+});
+
+test('email notification preferences start disabled with every event unchecked', async () => {
+  const firestore = createMemoryFirestore();
+  setFirestoreForTests(firestore);
+  const user = { email: 'autor@politeia.ar', name: 'Autor', roles: ['blog'] };
+
+  try {
+    const initial = await getNotificationPreferences(user);
+    assert.equal(initial.enabled, false);
+    assert.equal(initial.events.roleChanged, false);
+    assert.equal(Object.values(initial.events).every((enabled) => enabled === false), true);
+
+    const updated = await updateNotificationPreferences(user, {
+      enabled: true,
+      events: { postPublished: true },
+    });
+    assert.equal(updated.enabled, true);
+    assert.equal(updated.events.postPublished, true);
+    assert.equal(updated.events.roleChanged, false);
+    assert.equal(updated.events.commentCreated, false);
   } finally {
     setFirestoreForTests(null);
   }

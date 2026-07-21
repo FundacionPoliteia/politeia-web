@@ -25,20 +25,20 @@ export const NOTIFICATION_EVENTS = {
 };
 
 const DEFAULT_EVENTS = {
-  [NOTIFICATION_EVENTS.postSubmittedReview]: true,
-  [NOTIFICATION_EVENTS.commentCreated]: true,
-  [NOTIFICATION_EVENTS.commentReplied]: true,
-  [NOTIFICATION_EVENTS.commentResolved]: true,
-  [NOTIFICATION_EVENTS.commentReopened]: true,
-  [NOTIFICATION_EVENTS.postPublished]: true,
-  [NOTIFICATION_EVENTS.postEditRequested]: true,
-  [NOTIFICATION_EVENTS.postEditEnabled]: true,
-  [NOTIFICATION_EVENTS.roleChanged]: true,
-  [NOTIFICATION_EVENTS.profileClaimRequested]: true,
-  [NOTIFICATION_EVENTS.profileClaimApproved]: true,
-  [NOTIFICATION_EVENTS.profileClaimBlocked]: true,
-  [NOTIFICATION_EVENTS.profileClaimReleased]: true,
-  [NOTIFICATION_EVENTS.profileClaimSuperseded]: true,
+  [NOTIFICATION_EVENTS.postSubmittedReview]: false,
+  [NOTIFICATION_EVENTS.commentCreated]: false,
+  [NOTIFICATION_EVENTS.commentReplied]: false,
+  [NOTIFICATION_EVENTS.commentResolved]: false,
+  [NOTIFICATION_EVENTS.commentReopened]: false,
+  [NOTIFICATION_EVENTS.postPublished]: false,
+  [NOTIFICATION_EVENTS.postEditRequested]: false,
+  [NOTIFICATION_EVENTS.postEditEnabled]: false,
+  [NOTIFICATION_EVENTS.roleChanged]: false,
+  [NOTIFICATION_EVENTS.profileClaimRequested]: false,
+  [NOTIFICATION_EVENTS.profileClaimApproved]: false,
+  [NOTIFICATION_EVENTS.profileClaimBlocked]: false,
+  [NOTIFICATION_EVENTS.profileClaimReleased]: false,
+  [NOTIFICATION_EVENTS.profileClaimSuperseded]: false,
 };
 
 const preferences = () => db().collection('notificationPreferences');
@@ -541,6 +541,7 @@ async function queueNotification({
     actorName: actor?.name || actor?.email || '',
     postId: post?.id || '',
     postTitle: post?.title || '',
+    postSlug: post?.slug || '',
     postAuthorEmail: normalizeEmail(post?.authorEmail),
     commentId: comment?.id || '',
     commentBody: latestCommentReply(comment)?.body || comment?.body || '',
@@ -646,7 +647,7 @@ function toPreference(item, user) {
 
 function sanitizeEvents(value = {}) {
   return Object.fromEntries(
-    Object.keys(DEFAULT_EVENTS).map((key) => [key, value[key] !== false])
+    Object.keys(DEFAULT_EVENTS).map((key) => [key, value[key] === true])
   );
 }
 
@@ -666,6 +667,7 @@ function toInboxItem(event, readAt = null) {
     actorName: event.actorName || event.actorEmail || '',
     postId: event.postId || '',
     postTitle: event.postTitle || '',
+    postSlug: event.postSlug || '',
     commentId: event.commentId || '',
     commentBody: event.commentBody || '',
     commentSelectedText: event.commentSelectedText || '',

@@ -11,6 +11,7 @@ import { parseTagsText, sanitizeCategory, sanitizeTags, taxonomyKey } from '../l
 
 const API_BASE = process.env.NEXT_PUBLIC_BLOG_API_BASE_URL || '';
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
+const PUBLIC_SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.politeia.ar').replace(/\/$/, '');
 const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0';
 const ALLOWED_EMAIL_DOMAIN = 'politeia.ar';
 const ASSIGNED_EMAIL_DOMAIN = 'gmail.com';
@@ -65,8 +66,10 @@ const ASSIGNABLE_ROLES = [
   { value: 'blog', label: 'Blog' },
   { value: 'newsletter', label: 'Newsletter' },
 ];
+const ROLE_LABELS = Object.fromEntries(ASSIGNABLE_ROLES.map((role) => [role.value, role.label]));
 
 const NOTIFICATION_EVENT_LABELS = [
+  { value: 'roleChanged', label: 'Cambios en mis permisos', roles: [], always: true },
   { value: 'postSubmittedReview', label: 'Posts enviados a revision', roles: ['admin', 'reviewer'] },
   { value: 'commentCreated', label: 'Comentarios nuevos en mis posts', roles: ['blog'] },
   { value: 'commentResolved', label: 'Comentarios resueltos', roles: ['blog'] },
@@ -77,7 +80,7 @@ const NOTIFICATION_EVENT_LABELS = [
 ];
 
 const DEFAULT_NOTIFICATION_EVENTS = Object.fromEntries(
-  NOTIFICATION_EVENT_LABELS.map((event) => [event.value, true])
+  NOTIFICATION_EVENT_LABELS.map((event) => [event.value, false])
 );
 
 const CLAIM_NOTIFICATION_EVENT_LABELS = [
@@ -89,7 +92,7 @@ const CLAIM_NOTIFICATION_EVENT_LABELS = [
 ];
 NOTIFICATION_EVENT_LABELS.push(...CLAIM_NOTIFICATION_EVENT_LABELS);
 Object.assign(DEFAULT_NOTIFICATION_EVENTS, Object.fromEntries(
-  CLAIM_NOTIFICATION_EVENT_LABELS.map((event) => [event.value, true])
+  CLAIM_NOTIFICATION_EVENT_LABELS.map((event) => [event.value, false])
 ));
 
 const PROFILE_CLAIM_STATUS_LABELS = {
@@ -223,6 +226,8 @@ export default function AdminConsole() {
   const [loadingNotifications, setLoadingNotifications] = useState(false);
   const [showPreviousNotifications, setShowPreviousNotifications] = useState(false);
   const [notificationPolicy, setNotificationPolicy] = useState(DEFAULT_NOTIFICATION_POLICY);
+  const [notificationActionDialog, setNotificationActionDialog] = useState(null);
+  const [notificationHighlight, setNotificationHighlight] = useState({ target: '', nonce: 0 });
   const [mobilePostsOpen, setMobilePostsOpen] = useState(false);
   const [activePanelTab, setActivePanelTab] = useState('blogs');
   const [userProfile, setUserProfile] = useState(EMPTY_PROFILE);
@@ -255,6 +260,7 @@ export default function AdminConsole() {
   const docxInputRef = useRef(null);
   const profilePhotoInputRef = useRef(null);
   const adminProfilePhotoInputRef = useRef(null);
+  const profilePermissionsRef = useRef(null);
   const coverValidationRef = useRef(0);
 
   const roles = user?.roles || [];
@@ -362,6 +368,24 @@ export default function AdminConsole() {
   useEffect(() => {
     if (user) clearGoogleSignIn();
   }, [user]);
+
+  useEffect(() => {
+    if (notificationHighlight.target !== 'profile-permissions' || activePanelTab !== 'profile') return undefined;
+
+    const scrollTimer = window.setTimeout(() => {
+      profilePermissionsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 80);
+    const clearTimer = window.setTimeout(() => {
+      setNotificationHighlight((current) => (
+        current.nonce === notificationHighlight.nonce ? { target: '', nonce: current.nonce } : current
+      ));
+    }, 4200);
+
+    return () => {
+      window.clearTimeout(scrollTimer);
+      window.clearTimeout(clearTimer);
+    };
+  }, [activePanelTab, notificationHighlight]);
 
   useEffect(() => {
     loadMe({ silent: true });
@@ -498,6 +522,7 @@ export default function AdminConsole() {
       || adminProfileDeleteTarget
       || profileClaimConfirmOpen
       || adminProfileClaimDialog
+      || notificationActionDialog
       || reviewCommentDialog
       || editingReviewComment;
     if (!hasOpenModal) return undefined;
@@ -514,6 +539,10 @@ export default function AdminConsole() {
       }
       if (adminProfileDeleteTarget) {
         setAdminProfileDeleteTarget(null);
+        return;
+      }
+      if (notificationActionDialog) {
+        setNotificationActionDialog(null);
         return;
       }
       if (adminProfileClaimDialog) {
@@ -550,7 +579,7 @@ export default function AdminConsole() {
 
     window.addEventListener('keydown', handleModalEscape);
     return () => window.removeEventListener('keydown', handleModalEscape);
-  }, [adminProfileClaimDialog, adminProfileDeleteTarget, busy, categoryDeleteTarget, editRequestConfirmOpen, editingReviewComment, pendingAction, previewOpen, profileClaimConfirmOpen, profileConsentOpen, profilePreviewOpen, reviewCommentDialog, savingProfile]);
+  }, [adminProfileClaimDialog, adminProfileDeleteTarget, busy, categoryDeleteTarget, editRequestConfirmOpen, editingReviewComment, notificationActionDialog, pendingAction, previewOpen, profileClaimConfirmOpen, profileConsentOpen, profilePreviewOpen, reviewCommentDialog, savingProfile]);
 
   function initializeGoogle() {
     if (userRef.current) {
@@ -728,6 +757,8 @@ export default function AdminConsole() {
       setInAppNotifications([]);
       setUnreadNotificationCount(0);
       setNotificationsOpen(false);
+      setNotificationActionDialog(null);
+      setNotificationHighlight({ target: '', nonce: 0 });
       setLoadingNotifications(false);
       setUserProfile(EMPTY_PROFILE);
       setProfileDraft(EMPTY_PROFILE);
@@ -853,6 +884,13 @@ export default function AdminConsole() {
       setMessage('');
       await markNotificationRead(notification);
       setNotificationsOpen(false);
+      if (notification.type === 'user.roles.changed') {
+        setActivePanelTab('profile');
+        await Promise.all([loadMe({ silent: true }), loadUserProfile()]);
+        setNotificationHighlight({ target: 'profile-permissions', nonce: Date.now() });
+        setMessage('Estos son los permisos vigentes de tu cuenta.');
+        return;
+      }
       if (notification.profileClaimId) {
         if (isAdmin && notification.type === 'profile.claim.requested') {
           setActivePanelTab('profiles');
@@ -863,6 +901,7 @@ export default function AdminConsole() {
         } else {
           setActivePanelTab('profile');
           await Promise.all([loadMe({ silent: true }), loadUserProfile()]);
+          setMessage(notification.subject || 'Abrimos el estado de tu vinculacion de perfil.');
           if (notification.type === 'profile.claim.approved') {
             setStatusFilter('');
             await loadPosts();
@@ -892,10 +931,52 @@ export default function AdminConsole() {
         } else {
           setMessage('El comentario asociado ya no esta disponible.');
         }
+        return;
       }
+      openPostNotificationContext(notification, post);
     } catch (err) {
       setMessage(err.message);
     }
+  }
+
+  function openPostNotificationContext(notification, post) {
+    const postTitle = post?.title || notification.postTitle || 'la nota';
+    const postSlug = post?.slug || notification.postSlug;
+
+    if (notification.type === 'post.published') {
+      setNotificationActionDialog({
+        title: 'Post publicado',
+        message: `“${postTitle}” ya esta disponible en el blog publico.`,
+        actionLabel: 'Ir al blog publicado',
+        href: postSlug ? `${PUBLIC_SITE_URL}/blog/${encodeURIComponent(postSlug)}` : `${PUBLIC_SITE_URL}/blog`,
+      });
+      return;
+    }
+
+    const contexts = {
+      'post.submittedReview': {
+        title: 'Post enviado a revision',
+        message: `Abrimos “${postTitle}” para que puedas continuar con la revision.`,
+        actionLabel: 'Continuar revisando',
+      },
+      'post.editRequested': {
+        title: 'Solicitud de edicion',
+        message: `Abrimos “${postTitle}” y su solicitud de edicion para que puedas evaluarla.`,
+        actionLabel: 'Revisar solicitud',
+      },
+      'post.editEnabled': {
+        title: 'Edicion habilitada',
+        message: `“${postTitle}” ya esta abierto para realizar cambios.`,
+        actionLabel: 'Continuar editando',
+      },
+    };
+    const context = contexts[notification.type];
+    if (context) {
+      setNotificationActionDialog(context);
+      return;
+    }
+
+    setMessage(`Abrimos “${postTitle}” en el gestor.`);
   }
 
   async function saveNotificationPreferences() {
@@ -920,10 +1001,17 @@ export default function AdminConsole() {
   }
 
   function updateNotificationPreference(field, value) {
-    setNotificationPreferences((current) => normalizeNotificationPreferences({
-      ...current,
-      [field]: value,
-    }));
+    setNotificationPreferences((current) => {
+      const next = normalizeNotificationPreferences(current);
+      const isEnablingEmail = field === 'enabled' && value === true && !next.enabled;
+      return normalizeNotificationPreferences({
+        ...next,
+        [field]: value,
+        events: isEnablingEmail
+          ? Object.fromEntries(Object.keys(DEFAULT_NOTIFICATION_EVENTS).map((eventKey) => [eventKey, false]))
+          : next.events,
+      });
+    });
   }
 
   function toggleNotificationEvent(eventKey) {
@@ -2059,6 +2147,49 @@ export default function AdminConsole() {
         </div>
       )}
 
+      {user && canAccessPanel && notificationActionDialog && (
+        <div
+          className="admin-modal-backdrop"
+          onMouseDown={() => setNotificationActionDialog(null)}
+          role="presentation"
+        >
+          <div
+            aria-labelledby="notification-action-title"
+            aria-modal="true"
+            className="admin-modal admin-notification-action-modal"
+            onMouseDown={(event) => event.stopPropagation()}
+            role="dialog"
+          >
+            <span aria-hidden="true" className="material-symbols-outlined admin-notification-action-icon">
+              {notificationActionDialog.href ? 'open_in_new' : 'info'}
+            </span>
+            <h3 id="notification-action-title">{notificationActionDialog.title}</h3>
+            <p>{notificationActionDialog.message}</p>
+            <div className="admin-modal-actions">
+              <button className="btn btn-ghost" onClick={() => setNotificationActionDialog(null)} type="button">
+                Cerrar
+              </button>
+              {notificationActionDialog.href ? (
+                <a
+                  className="btn btn-primary"
+                  href={notificationActionDialog.href}
+                  onClick={() => setNotificationActionDialog(null)}
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  {notificationActionDialog.actionLabel}
+                  <span aria-hidden="true" className="material-symbols-outlined">open_in_new</span>
+                </a>
+              ) : (
+                <button className="btn btn-primary" onClick={() => setNotificationActionDialog(null)} type="button">
+                  {notificationActionDialog.actionLabel || 'Entendido'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <section className={user && canAccessPanel ? 'sec' : 'admin-access-section'}>
         <div className={user && canAccessPanel ? 'wrap' : 'admin-access-wrap'}>
           {!API_BASE || !GOOGLE_CLIENT_ID ? (
@@ -2173,10 +2304,21 @@ export default function AdminConsole() {
               </div>
               {activePanelTab === 'profile' && (
                 <>
-                  <div className="admin-panel-navbar admin-profile-session-card">
+                  <div
+                    className={`admin-panel-navbar admin-profile-session-card ${notificationHighlight.target === 'profile-permissions' ? 'admin-notification-highlight' : ''}`}
+                    ref={profilePermissionsRef}
+                  >
                     <div className="admin-panel-user">
                       <strong>{user.name || user.email}</strong>
-                      <span>{user.email} - {roleLabel} - {roles.join(', ')}</span>
+                      <span>{user.email} - {roleLabel}</span>
+                      <div className="admin-current-roles" aria-label="Permisos actuales de la cuenta">
+                        <small>Permisos actuales</small>
+                        <span>
+                          {roles.length ? roles.map((role) => (
+                            <strong key={role}>{ROLE_LABELS[role] || role}</strong>
+                          )) : <strong>Sin roles activos</strong>}
+                        </span>
+                      </div>
                     </div>
                     <button className="btn btn-ghost" onClick={logout}>
                       Salir
@@ -2356,9 +2498,9 @@ export default function AdminConsole() {
                             <span><strong>Recibir emails del panel</strong><small>El opt-in se guarda para {notificationPreferences.email || user.email}.</small></span>
                           </label>
                           <div className="admin-notification-options">
-                            {NOTIFICATION_EVENT_LABELS.filter((event) => event.roles.some((role) => roles.includes(role))).map((event) => (
+                            {NOTIFICATION_EVENT_LABELS.filter((event) => event.always || event.roles.some((role) => roles.includes(role))).map((event) => (
                               <label key={event.value}>
-                                <input checked={notificationPreferences.events[event.value] !== false} disabled={!notificationPreferences.enabled} onChange={() => toggleNotificationEvent(event.value)} type="checkbox" />
+                                <input checked={notificationPreferences.events[event.value] === true} disabled={!notificationPreferences.enabled} onChange={() => toggleNotificationEvent(event.value)} type="checkbox" />
                                 {event.label}
                               </label>
                             ))}
@@ -2749,11 +2891,11 @@ export default function AdminConsole() {
                       </label>
                       <div className="admin-notification-options">
                         {NOTIFICATION_EVENT_LABELS
-                          .filter((event) => event.roles.some((role) => roles.includes(role)))
+                          .filter((event) => event.always || event.roles.some((role) => roles.includes(role)))
                           .map((event) => (
                             <label key={event.value}>
                               <input
-                                checked={notificationPreferences.events[event.value] !== false}
+                                checked={notificationPreferences.events[event.value] === true}
                                 disabled={!notificationPreferences.enabled}
                                 onChange={() => toggleNotificationEvent(event.value)}
                                 type="checkbox"
@@ -4364,6 +4506,7 @@ function normalizeInAppNotification(value = {}) {
     actorName: normalizeInputValue(value.actorName),
     postId: normalizeInputValue(value.postId),
     postTitle: normalizeInputValue(value.postTitle),
+    postSlug: normalizeInputValue(value.postSlug),
     commentId: normalizeInputValue(value.commentId),
     commentBody: normalizeInputValue(value.commentBody),
     commentSelectedText: normalizeInputValue(value.commentSelectedText),

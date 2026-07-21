@@ -2787,6 +2787,59 @@ a {
   margin-top: 3px
 }
 
+.admin-current-roles {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 10px
+}
+
+.admin-current-roles>small {
+  color: var(--gris);
+  font-size: .7rem;
+  font-weight: 800;
+  letter-spacing: .06em;
+  text-transform: uppercase
+}
+
+.admin-current-roles>span {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0
+}
+
+.admin-current-roles>span>strong {
+  border: 1px solid rgba(19, 122, 159, .2);
+  border-radius: 999px;
+  background: rgba(19, 122, 159, .08);
+  color: var(--azul);
+  padding: 4px 8px;
+  font-family: var(--texto);
+  font-size: .72rem;
+  line-height: 1;
+  font-weight: 800
+}
+
+.admin-notification-highlight {
+  animation: admin-context-highlight 4.2s ease both
+}
+
+@keyframes admin-context-highlight {
+  0%, 100% {
+    border-color: var(--linea);
+    box-shadow: 0 12px 28px rgba(26, 26, 55, .06)
+  }
+  12%, 72% {
+    border-color: rgba(218, 158, 42, .85);
+    background: rgba(255, 244, 209, .72);
+    box-shadow: 0 0 0 4px rgba(218, 158, 42, .16), 0 16px 34px rgba(26, 26, 55, .1)
+  }
+}
+
 .admin-session-actions {
   display: flex;
   align-items: center;
@@ -5963,6 +6016,33 @@ a {
   margin-top: 22px
 }
 
+.admin-notification-action-modal {
+  max-width: 520px
+}
+
+.admin-notification-action-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 16px;
+  border-radius: 999px;
+  background: rgba(19, 122, 159, .1);
+  color: var(--azul);
+  font-size: 25px
+}
+
+.admin-notification-action-modal .admin-modal-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px
+}
+
+.admin-notification-action-modal .admin-modal-actions .material-symbols-outlined {
+  font-size: 18px
+}
+
 .rich-comment-modal q {
   display: block;
   margin: 14px 0;
@@ -6086,6 +6166,10 @@ a {
 
   .admin-panel-user span {
     padding-right: 54px
+  }
+
+  .admin-current-roles>span {
+    padding-right: 0
   }
 
   .admin-session-actions {
