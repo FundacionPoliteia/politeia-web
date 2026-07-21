@@ -7,7 +7,7 @@ import NewsletterForm from './NewsletterForm';
 
 const DEFAULT_PROFILE_PHOTO = '/default_profile.png';
 
-export default function BlogIndex({ posts = [], autorFiltro = '', categoriaFiltro = '', newsletterStatus = '', authorProfile = null, authors = [] }) {
+export default function BlogIndex({ posts = [], autorFiltro = '', categoriaFiltro = '', newsletterStatus = '', authorProfile = null, authors = [], preview = false }) {
   const [query, setQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('');
   const filtrandoAutor = Boolean(autorFiltro);
@@ -15,7 +15,8 @@ export default function BlogIndex({ posts = [], autorFiltro = '', categoriaFiltr
   const authorName = authorProfile?.fullName || autorFiltro;
   const authorLead = authorProfile?.description || 'Publicaciones del autor, reunidas en un mismo lugar.';
   const authorFocusArea = authorProfile?.focusArea || '';
-  const authorPhoto = authorProfile?.photoUrl || '';
+  const authorPhoto = authorProfile ? authorProfile.photoUrl || DEFAULT_PROFILE_PHOTO : '';
+  const Root = preview ? 'div' : 'main';
 
   const postsPorAutor = useMemo(
     () => filtrarPorCategoria(filtrarPorAutor(posts, autorFiltro), categoriaFiltro),
@@ -37,7 +38,7 @@ export default function BlogIndex({ posts = [], autorFiltro = '', categoriaFiltr
   }
 
   return (
-    <main>
+    <Root className={preview ? 'blog-index-preview' : undefined}>
       <section className="page-hero">
         <div className={filtrandoAutor && authorPhoto ? 'wrap blog-author-hero' : 'wrap'}>
           <div>
@@ -224,7 +225,7 @@ export default function BlogIndex({ posts = [], autorFiltro = '', categoriaFiltr
         </div>
       </section>
 
-      <section className="blog-newsletter" id="news">
+      {!preview && <section className="blog-newsletter" id="news">
         <div className="wrap blog-newsletter-inner">
           <div>
             <span className="eyebrow">Newsletter</span>
@@ -233,8 +234,8 @@ export default function BlogIndex({ posts = [], autorFiltro = '', categoriaFiltr
           </div>
           <NewsletterForm initialStatus={newsletterStatus} />
         </div>
-      </section>
-    </main>
+      </section>}
+    </Root>
   );
 }
 

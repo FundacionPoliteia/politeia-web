@@ -635,6 +635,35 @@ test('in-app notifications target roles and emails independently from email opt-
   }
 });
 
+test('public author detail resolves legacy profiles without a stored author slug', async () => {
+  const firestore = createMemoryFirestore();
+  setFirestoreForTests(firestore);
+
+  try {
+    await firestore.collection('userProfiles').doc('legacy-author').set({
+      firstName: 'Lourdes Ariadna',
+      lastName: 'Ramos',
+      description: 'Perfil publico legado.',
+      focusArea: 'Politica nacional',
+      managedAuthor: true,
+      publicProfileEnabled: true,
+    });
+    await firestore.collection('posts').doc('legacy-author-post').set({
+      authorName: 'Lourdes Ariadna Ramos',
+      title: 'Nota publica',
+      status: 'published',
+      publishedAt: '2026-07-21T12:00:00.000Z',
+    });
+
+    const profile = await getPublicAuthorProfileBySlug('lourdes-ariadna-ramos');
+    assert.equal(profile.fullName, 'Lourdes Ariadna Ramos');
+    assert.equal(profile.description, 'Perfil publico legado.');
+    assert.equal(profile.focusArea, 'Politica nacional');
+  } finally {
+    setFirestoreForTests(null);
+  }
+});
+
 test('email notification preferences start disabled with every event unchecked', async () => {
   const firestore = createMemoryFirestore();
   setFirestoreForTests(firestore);

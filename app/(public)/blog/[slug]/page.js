@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getPost, formatearFecha, etiquetasPost, hrefAutorBlog } from '../../../../lib/blogApi';
+import AuthorEnd from '../../../../components/AuthorEnd';
 
 export const dynamic = 'force-dynamic';
 
@@ -75,22 +76,8 @@ export default async function NotaPage({ params }) {
         className="art-body"
         dangerouslySetInnerHTML={{ __html: post.contenido }}
       />
-      {(autorNombre || autorFoto || cierreAutor) && (
-        <section className="art-author-end" aria-label="Autor de la nota">
-          {autorFoto && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={autorFoto} alt="" />
-          )}
-          <div>
-            <span>Sobre el autor</span>
-            {autorNombre ? (
-              <h2>
-                <Link href={hrefAutorBlog(autorNombre)} className="art-author">{autorNombre}</Link>
-              </h2>
-            ) : null}
-            {cierreAutor && <p>{cierreAutor}</p>}
-          </div>
-        </section>
+      {post.mostrarCierreAutor && (
+        <AuthorEnd fullName={autorNombre} photoUrl={autorFoto} closingPhrase={cierreAutor} />
       )}
     </article>
   );

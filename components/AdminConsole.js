@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { marked } from 'marked';
 import RichTextEditor from './RichTextEditor';
 import AuthorCard from './AuthorCard';
+import AuthorEnd from './AuthorEnd';
+import BlogIndex from './BlogIndex';
 import NewsletterAdminPanel from './NewsletterAdminPanel';
 import AdminOperationsPanel from './AdminOperationsPanel';
 import { parseTagsText, sanitizeCategory, sanitizeTags, taxonomyKey } from '../lib/taxonomy';
@@ -1621,16 +1623,26 @@ export default function AdminConsole() {
       setMessage(success);
       await loadPosts();
       await loadInAppNotifications({ silent: true });
+      return true;
     } catch (err) {
       setMessage(err.message);
+      return false;
     } finally {
       setBusy(false);
     }
   }
 
   function requestAction(path, success, label, loadingKey = workflowActionKey(path)) {
-    if (hasUnsavedChanges) {
-      setPendingAction({ path, success, label, loadingKey });
+    const requiresArticlePreview = path.includes('/submit-review');
+    if (hasUnsavedChanges || requiresArticlePreview) {
+      setPendingAction({
+        path,
+        success,
+        label,
+        loadingKey,
+        hasUnsavedChanges,
+        requiresArticlePreview,
+      });
       return;
     }
     action(path, success, loadingKey);
@@ -1661,11 +1673,11 @@ export default function AdminConsole() {
     }
   }
 
-  function confirmPendingAction() {
+  async function confirmPendingAction() {
     if (!pendingAction) return;
     const nextAction = pendingAction;
-    setPendingAction(null);
-    action(nextAction.path, nextAction.success, nextAction.loadingKey);
+    const completed = await action(nextAction.path, nextAction.success, nextAction.loadingKey);
+    if (completed) setPendingAction(null);
   }
 
   async function saveAndConfirmPendingAction() {
@@ -1676,8 +1688,8 @@ export default function AdminConsole() {
       setBusy(true);
       setMessage('');
       await withActionLoading('post-save', () => persistCurrentPost({ refresh: false }));
-      setPendingAction(null);
       await withActionLoading(nextAction.loadingKey, () => api(nextAction.path, { method: 'POST' }));
+      setPendingAction(null);
       setMessage(nextAction.success);
       await Promise.all([loadPosts(), loadCategories()]);
       await loadInAppNotifications({ silent: true });
@@ -2016,6 +2028,42 @@ export default function AdminConsole() {
     latestPostTitle: profilePreviewPosts[0]?.title || 'Una mirada sobre los debates de nuestro tiempo',
     categories: [...new Set(profilePreviewPosts.map((post) => post.category).filter(Boolean))].slice(0, 3),
   };
+  const profilePreviewBlogPosts = profilePreviewPosts.length
+    ? profilePreviewPosts.slice(0, 4).map((post) => ({
+        id: post.id,
+        slug: post.slug,
+        titulo: post.title,
+        extracto: post.excerpt,
+        fecha: post.publishedAt || post.updatedAt || post.createdAt,
+        imagen: post.coverImage || null,
+        autor: profilePreviewName,
+        categoria: post.category || 'Notas',
+        tags: sanitizeTags(post.tags || []),
+      }))
+    : [
+        {
+          id: 'profile-preview-post-1',
+          slug: 'una-mirada-sobre-los-debates',
+          titulo: profilePreviewAuthor.latestPostTitle,
+          extracto: 'Una introduccion breve que ayuda a comprender el enfoque y las preguntas principales de la nota.',
+          fecha: new Date().toISOString(),
+          imagen: null,
+          autor: profilePreviewName,
+          categoria: profilePreviewAuthor.categories[0] || 'Analisis',
+          tags: [profilePreviewAuthor.categories[0] || 'Analisis'],
+        },
+        {
+          id: 'profile-preview-post-2',
+          slug: 'ideas-para-comprender-una-conversacion',
+          titulo: 'Ideas para comprender una conversacion publica en movimiento',
+          extracto: 'Otra nota de ejemplo para mostrar como se organiza la produccion del autor.',
+          fecha: new Date().toISOString(),
+          imagen: null,
+          autor: profilePreviewName,
+          categoria: profilePreviewAuthor.categories[1] || 'Democracia',
+          tags: [profilePreviewAuthor.categories[1] || 'Democracia'],
+        },
+      ];
   const openReviewCommentCount = reviewComments.filter((comment) => comment.status !== 'resolved').length;
   const filteredReviewComments = useMemo(() => {
     if (reviewCommentFilter === 'all') return reviewComments;
@@ -4036,15 +4084,12 @@ export default function AdminConsole() {
                           <p>
                             Esa tarea no termina con una respuesta definitiva: abre nuevas preguntas y nos invita a participar con informacion, criterio y responsabilidad.
                           </p>
-                          <section className="art-author-end" aria-label="Vista previa del cierre de autor">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={profilePreviewAuthor.photoUrl} alt="" />
-                            <div>
-                              <span>Sobre el autor</span>
-                              <h2>{profilePreviewAuthor.fullName}</h2>
-                              {profilePreviewAuthor.closingPhrase && <p>{profilePreviewAuthor.closingPhrase}</p>}
-                            </div>
-                          </section>
+                          <AuthorEnd
+                            fullName={profilePreviewAuthor.fullName}
+                            photoUrl={profilePreviewAuthor.photoUrl}
+                            closingPhrase={profilePreviewAuthor.closingPhrase}
+                            preview
+                          />
                         </article>
                       </section>
 
@@ -4057,40 +4102,12 @@ export default function AdminConsole() {
                           <small>Es la vista que abre el lector al elegir tu nombre.</small>
                         </div>
                         <div className="profile-preview-author-page">
-                          <header>
-                            <div>
-                              <span>Blog</span>
-                              <h4>Notas escritas por {profilePreviewAuthor.fullName}.</h4>
-                              <div className="profile-preview-author-about">
-                                <small>Sobre mi</small>
-                                <p>{profilePreviewAuthor.description}</p>
-                                <div className="profile-preview-author-focus">
-                                  <span>Temas y mirada</span>
-                                  <strong>{profilePreviewAuthor.focusArea}</strong>
-                                </div>
-                              </div>
-                            </div>
-                            <aside>
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={profilePreviewAuthor.photoUrl} alt="" />
-                            </aside>
-                          </header>
-                          <div className="profile-preview-search">
-                            <span aria-hidden="true" className="material-symbols-outlined">search</span>
-                            Buscar entre las notas de {profilePreviewAuthor.fullName}
-                          </div>
-                          <div className="profile-preview-posts">
-                            <article>
-                              <span>{profilePreviewAuthor.categories[0] || 'Analisis'}</span>
-                              <h5>{profilePreviewAuthor.latestPostTitle}</h5>
-                              <p>Una introduccion breve que ayuda a comprender el enfoque y las preguntas principales de la nota.</p>
-                            </article>
-                            <article>
-                              <span>{profilePreviewAuthor.categories[1] || 'Democracia'}</span>
-                              <h5>Ideas para comprender una conversacion publica en movimiento</h5>
-                              <p>Otra nota de ejemplo para mostrar como se organiza la produccion del autor.</p>
-                            </article>
-                          </div>
+                          <BlogIndex
+                            posts={profilePreviewBlogPosts}
+                            autorFiltro={profilePreviewAuthor.fullName}
+                            authorProfile={profilePreviewAuthor}
+                            preview
+                          />
                         </div>
                       </section>
                     </div>
@@ -4109,39 +4126,16 @@ export default function AdminConsole() {
                         Cerrar
                       </button>
                     </div>
-                    <article className="article admin-article-preview">
-                      <div className="art-tags" aria-label="Tags">
-                        {previewTags.slice(0, 4).map((tag) => (
-                          <span className="art-cat" key={tag}>{tag}</span>
-                        ))}
-                      </div>
-                      <h1>{form.title || 'Titulo del blog'}</h1>
-                      <div className="art-meta">{form.authorName ? `Por ${form.authorName} - ` : ''}{previewDate}</div>
-                      {form.coverImage && form.showCoverInPost !== false && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          className="art-hero"
-                          src={form.coverImage}
-                          alt={form.title || 'Portada'}
-                          onError={() => failCoverImageLoad()}
-                          onLoad={() => setCoverImageError('')}
-                        />
-                      )}
-                      <div className="art-body" dangerouslySetInnerHTML={{ __html: previewHtml }} />
-                      {(form.authorName || previewAuthorPhoto || previewAuthorNote) && (
-                        <section className="art-author-end" aria-label="Autor de la nota">
-                          {previewAuthorPhoto && (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={previewAuthorPhoto} alt="" />
-                          )}
-                          <div>
-                            <span>Sobre el autor</span>
-                            {form.authorName && <h2>{form.authorName}</h2>}
-                            {previewAuthorNote && <p>{previewAuthorNote}</p>}
-                          </div>
-                        </section>
-                      )}
-                    </article>
+                    <AdminArticlePreview
+                      form={form}
+                      previewAuthorNote={previewAuthorNote}
+                      previewAuthorPhoto={previewAuthorPhoto}
+                      previewDate={previewDate}
+                      previewHtml={previewHtml}
+                      previewTags={previewTags}
+                      onCoverError={failCoverImageLoad}
+                      onCoverLoad={() => setCoverImageError('')}
+                    />
                   </div>
                 </div>
               )}
@@ -4251,23 +4245,74 @@ export default function AdminConsole() {
               )}
               {pendingAction && (
                 <div className="admin-modal-backdrop" role="presentation">
-                  <div aria-modal="true" className="admin-modal" role="dialog">
-                    <h3>Cambios sin guardar</h3>
-                    <p>
-                      Tenes cambios sin guardar. Podes cancelar, {pendingAction.label} sin guardar esos cambios, o guardar primero y despues {pendingAction.label}.
-                    </p>
-                    <div className="admin-modal-actions">
-                      <button className="btn btn-ghost" disabled={busy} onClick={() => setPendingAction(null)} type="button">
-                        Cancelar
-                      </button>
-                      <button className="btn btn-ghost" disabled={busy || isActionLoading(pendingAction.loadingKey)} onClick={confirmPendingAction} type="button">
-                        {actionButtonLabel(pendingAction.label)} sin guardar
-                        <ActionSpinner active={isActionLoading(pendingAction.loadingKey)} />
-                      </button>
-                      <button className="btn btn-primary" disabled={busy || isActionLoading('post-save') || isActionLoading(pendingAction.loadingKey)} onClick={saveAndConfirmPendingAction} type="button">
-                        Guardar y {pendingAction.label}
-                        <ActionSpinner active={isActionLoading('post-save') || isActionLoading(pendingAction.loadingKey)} />
-                      </button>
+                  <div
+                    aria-labelledby="pending-action-title"
+                    aria-modal="true"
+                    className={`admin-modal ${pendingAction.requiresArticlePreview ? 'admin-submit-review-preview-modal' : ''}`}
+                    role="dialog"
+                  >
+                    {pendingAction.requiresArticlePreview ? (
+                      <>
+                        <div className="admin-preview-modal-bar admin-submit-review-preview-head">
+                          <div>
+                            <span>Revision editorial</span>
+                            <p id="pending-action-title">Revisa la nota completa antes de enviarla.</p>
+                          </div>
+                        </div>
+                        <div className="admin-submit-review-preview-body">
+                          <AdminArticlePreview
+                            form={form}
+                            previewAuthorNote={previewAuthorNote}
+                            previewAuthorPhoto={previewAuthorPhoto}
+                            previewDate={previewDate}
+                            previewHtml={previewHtml}
+                            previewTags={previewTags}
+                            onCoverError={failCoverImageLoad}
+                            onCoverLoad={() => setCoverImageError('')}
+                          />
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <h3 id="pending-action-title">Cambios sin guardar</h3>
+                        <p>
+                          Tenes cambios sin guardar. Podes cancelar, {pendingAction.label} sin guardar esos cambios, o guardar primero y despues {pendingAction.label}.
+                        </p>
+                      </>
+                    )}
+                    <div className={pendingAction.requiresArticlePreview ? 'admin-submit-review-preview-footer' : ''}>
+                      {pendingAction.requiresArticlePreview && (
+                        <div>
+                          <strong>Confirmar envio a revision</strong>
+                          <p>
+                            {pendingAction.hasUnsavedChanges
+                              ? 'Hay cambios sin guardar. Elegi si queres enviarlos o conservar la ultima version guardada.'
+                              : 'La nota quedara disponible para el equipo de revision.'}
+                          </p>
+                        </div>
+                      )}
+                      <div className="admin-modal-actions">
+                        <button className="btn btn-ghost" disabled={busy} onClick={() => setPendingAction(null)} type="button">
+                          Cancelar
+                        </button>
+                        {pendingAction.hasUnsavedChanges ? (
+                          <>
+                            <button className="btn btn-ghost" disabled={busy || isActionLoading(pendingAction.loadingKey)} onClick={confirmPendingAction} type="button">
+                              {actionButtonLabel(pendingAction.label)} sin guardar
+                              <ActionSpinner active={isActionLoading(pendingAction.loadingKey)} />
+                            </button>
+                            <button className="btn btn-primary" disabled={busy || isActionLoading('post-save') || isActionLoading(pendingAction.loadingKey)} onClick={saveAndConfirmPendingAction} type="button">
+                              Guardar y {pendingAction.label}
+                              <ActionSpinner active={isActionLoading('post-save') || isActionLoading(pendingAction.loadingKey)} />
+                            </button>
+                          </>
+                        ) : (
+                          <button className="btn btn-primary" disabled={busy || isActionLoading(pendingAction.loadingKey)} onClick={confirmPendingAction} type="button">
+                            {isActionLoading(pendingAction.loadingKey) ? 'Enviando...' : 'Confirmar envio'}
+                            <ActionSpinner active={isActionLoading(pendingAction.loadingKey)} />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -4409,6 +4454,48 @@ export default function AdminConsole() {
       return normalizeForm({ ...current, tagsText: tags.join(', ') });
     });
   }
+}
+
+function AdminArticlePreview({
+  form,
+  previewAuthorNote,
+  previewAuthorPhoto,
+  previewDate,
+  previewHtml,
+  previewTags,
+  onCoverError,
+  onCoverLoad,
+}) {
+  return (
+    <article className="article admin-article-preview">
+      <div className="art-tags" aria-label="Tags">
+        {previewTags.slice(0, 4).map((tag) => (
+          <span className="art-cat" key={tag}>{tag}</span>
+        ))}
+      </div>
+      <h1>{form.title || 'Titulo del blog'}</h1>
+      <div className="art-meta">{form.authorName ? `Por ${form.authorName} - ` : ''}{previewDate}</div>
+      {form.coverImage && form.showCoverInPost !== false && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          className="art-hero"
+          src={form.coverImage}
+          alt={form.title || 'Portada'}
+          onError={onCoverError}
+          onLoad={onCoverLoad}
+        />
+      )}
+      <div className="art-body" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+      {form.showAuthorNote && (
+        <AuthorEnd
+          fullName={form.authorName}
+          photoUrl={previewAuthorPhoto}
+          closingPhrase={previewAuthorNote}
+          preview
+        />
+      )}
+    </article>
+  );
 }
 
 function buildPayload(form, canChooseSlug = false) {

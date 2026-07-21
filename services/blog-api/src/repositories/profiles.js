@@ -215,12 +215,22 @@ export async function getPublicAuthorProfileBySlug(slug = '') {
   const cleanSlug = slugify(slug);
   if (!cleanSlug || !isValidSlug(cleanSlug)) return null;
 
-  const snapshot = await profiles()
+  const exactSnapshot = await profiles()
     .where('authorSlug', '==', cleanSlug)
     .limit(10)
     .get();
+  let candidateDocs = exactSnapshot.docs;
 
-  const items = await Promise.all(snapshot.docs
+  if (!candidateDocs.length) {
+    const fallbackSnapshot = await profiles().get();
+    candidateDocs = fallbackSnapshot.docs.filter((doc) => {
+      const item = serializeDoc(doc);
+      const fullName = buildFullName(item?.firstName, item?.lastName);
+      return slugify(item?.authorSlug || fullName) === cleanSlug;
+    });
+  }
+
+  const items = await Promise.all(candidateDocs
     .map((doc) => serializeDoc(doc))
     .sort((left, right) => Number(right?.managedAuthor === true) - Number(left?.managedAuthor === true))
     .map((item) => toPublicAuthorProfile(item)));
