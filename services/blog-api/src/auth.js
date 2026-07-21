@@ -85,12 +85,14 @@ export async function authenticateGoogleCredential(token) {
     throw new HttpError(401, `Only @${config.allowedEmailDomain} accounts or assigned @${config.allowedAssignedEmailDomains.join(', @')} accounts can access this service`);
   }
 
-  const roles = expandRoles(await resolveRoles(email, assignedRoles));
+  const directoryRoles = await resolveDirectoryRoles(email);
+  const roles = expandRoles([...directoryRoles, ...assignedRoles]);
   return {
     email,
     name: payload.name || email,
     picture: payload.picture || '',
     roles,
+    directoryRoles,
     authMode: 'google',
   };
 }
@@ -103,7 +105,8 @@ export function buildSessionCookie(user) {
     email: user.email,
     name: user.name || user.email,
     picture: user.picture || '',
-      roles: expandRoles(user.roles),
+    roles: expandRoles(user.roles),
+    directoryRoles: expandRoles(user.directoryRoles ?? user.roles),
     authMode: 'session',
     iat: now,
     exp: now + config.sessionTtlMs,
@@ -147,14 +150,18 @@ async function readSessionUser(req) {
   if (builtInRoles.length) {
     return {
       ...user,
-      roles: expandRoles([...(user.roles || []), ...builtInRoles]),
+      roles: expandRoles(builtInRoles),
     };
   }
   if (isPrimaryDomainEmail(user.email)) {
-    const assignedRoles = await safeResolveAssignedRoles(user.email);
+    const assignedRoles = await resolveAssignedRoles(user.email);
     return {
       ...user,
-      roles: expandRoles([...(user.roles || []), ...assignedRoles]),
+      roles: expandRoles([
+        ...builtInRoles,
+        ...(user.directoryRoles || []),
+        ...assignedRoles,
+      ]),
     };
   }
 
@@ -185,6 +192,7 @@ export function verifySessionCookie(token) {
       name: payload.name || email,
       picture: payload.picture || '',
       roles,
+      directoryRoles: expandRoles(payload.directoryRoles || []),
       authMode: 'session',
     };
   } catch (_err) {
@@ -229,7 +237,7 @@ function hasAssignedExternalAccess(email, assignedRoles) {
   return isAllowedAssignedExternalEmail(email) && expandRoles(assignedRoles).length > 0;
 }
 
-async function resolveRoles(email, assignedRoles = null) {
+async function resolveDirectoryRoles(email) {
   const cached = roleCache.get(email);
   if (cached && cached.expiresAt > Date.now()) return cached.roles;
 
@@ -243,8 +251,6 @@ async function resolveRoles(email, assignedRoles = null) {
       roles.push('blog');
     }
   }
-  roles.push(...(assignedRoles || await resolveAssignedRoles(email)));
-
   const expandedRoles = expandRoles(roles);
   roleCache.set(email, { roles: expandedRoles, expiresAt: Date.now() + config.roleCacheTtlMs });
   return expandedRoles;
@@ -259,20 +265,6 @@ export function expandRoles(value) {
   }
   if (roles.has('reviewer')) roles.add('blog');
   return ['admin', 'reviewer', 'blog', 'newsletter'].filter((role) => roles.has(role));
-}
-
-async function safeResolveAssignedRoles(email) {
-  try {
-    return await resolveAssignedRoles(email);
-  } catch (err) {
-    console.error(JSON.stringify({
-      severity: 'WARNING',
-      message: 'Could not refresh assigned roles for session',
-      email: normalizeEmail(email),
-      error: err?.message || String(err),
-    }));
-    return [];
-  }
 }
 
 export function resolveBuiltInRoles(email) {

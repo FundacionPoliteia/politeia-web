@@ -98,6 +98,85 @@ test('GET /v1/me accepts a valid session cookie', async () => {
   }
 });
 
+test('GET /v1/me replaces stale primary-domain session roles with the current assignment', async () => {
+  const firestore = createMemoryFirestore();
+  const previousDevAuth = config.devAuth;
+  setFirestoreForTests(firestore);
+  config.devAuth = false;
+  await firestore.collection('users').doc('member@politeia.ar').set({
+    email: 'member@politeia.ar',
+    roles: ['blog'],
+    active: true,
+  });
+  const session = buildSessionCookie({
+    email: 'member@politeia.ar',
+    name: 'Member',
+    roles: ['admin'],
+    directoryRoles: [],
+  });
+
+  try {
+    const app = createApp();
+    const current = await request(app)
+      .get('/v1/me')
+      .set('Cookie', `${config.sessionCookieName}=${encodeURIComponent(session)}`)
+      .expect(200);
+    assert.deepEqual(current.body.user.roles, ['blog']);
+
+    await firestore.collection('users').doc('member@politeia.ar').update({
+      roles: [],
+      active: false,
+    });
+    const revoked = await request(app)
+      .get('/v1/me')
+      .set('Cookie', `${config.sessionCookieName}=${encodeURIComponent(session)}`)
+      .expect(200);
+    assert.deepEqual(revoked.body.user.roles, []);
+  } finally {
+    config.devAuth = previousDevAuth;
+    setFirestoreForTests(null);
+  }
+});
+
+test('GET /v1/me rejects an external session after its role assignment is removed', async () => {
+  const firestore = createMemoryFirestore();
+  const previousDevAuth = config.devAuth;
+  setFirestoreForTests(firestore);
+  config.devAuth = false;
+  await firestore.collection('users').doc('member@gmail.com').set({
+    email: 'member@gmail.com',
+    roles: ['blog'],
+    active: true,
+  });
+  const session = buildSessionCookie({
+    email: 'member@gmail.com',
+    name: 'External member',
+    roles: ['admin'],
+    directoryRoles: [],
+  });
+
+  try {
+    const app = createApp();
+    const current = await request(app)
+      .get('/v1/me')
+      .set('Cookie', `${config.sessionCookieName}=${encodeURIComponent(session)}`)
+      .expect(200);
+    assert.deepEqual(current.body.user.roles, ['blog']);
+
+    await firestore.collection('users').doc('member@gmail.com').update({
+      roles: [],
+      active: false,
+    });
+    await request(app)
+      .get('/v1/me')
+      .set('Cookie', `${config.sessionCookieName}=${encodeURIComponent(session)}`)
+      .expect(401);
+  } finally {
+    config.devAuth = previousDevAuth;
+    setFirestoreForTests(null);
+  }
+});
+
 test('role expansion keeps reviewer as blog plus review and admin as everything', () => {
   assert.deepEqual(expandRoles(['blog']), ['blog']);
   assert.deepEqual(expandRoles(['reviewer']), ['reviewer', 'blog']);

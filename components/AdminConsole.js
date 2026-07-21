@@ -368,6 +368,23 @@ export default function AdminConsole() {
   }, []);
 
   useEffect(() => {
+    if (!user?.email) return undefined;
+
+    const intervalId = window.setInterval(() => {
+      loadMe({ silent: true });
+    }, NOTIFICATION_REFRESH_MS);
+    const refreshSessionWhenVisible = () => {
+      if (document.visibilityState === 'visible') loadMe({ silent: true });
+    };
+
+    document.addEventListener('visibilitychange', refreshSessionWhenVisible);
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', refreshSessionWhenVisible);
+    };
+  }, [user?.email]);
+
+  useEffect(() => {
     if (canAccessEditorialPanel) {
       loadPosts();
       loadCategories();
@@ -593,6 +610,9 @@ export default function AdminConsole() {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
+      if (res.status === 401 || res.status === 403) {
+        void loadMe({ silent: true });
+      }
       throw new Error(data?.error?.message || `Error ${res.status}`);
     }
     return data;
