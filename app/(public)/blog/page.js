@@ -1,5 +1,6 @@
 import BlogIndex from '../../../components/BlogIndex';
 import { getPosts, getPublicAuthorProfile, getPublicAuthorProfiles } from '../../../lib/blogApi';
+import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,8 +16,18 @@ export default async function BlogPage({ searchParams }) {
   const [posts, authorProfile, authors] = await Promise.all([
     getPosts(30),
     autorFiltro ? getPublicAuthorProfile(autorFiltro) : null,
-    getPublicAuthorProfiles(8),
+    getPublicAuthorProfiles(100),
   ]);
+
+  if (autorFiltro && !authorProfile) {
+    const validParams = new URLSearchParams();
+    if (categoriaFiltro) validParams.set('categoria', categoriaFiltro);
+    if (newsletterStatus) validParams.set('newsletter', newsletterStatus);
+    if (newsletterEmail) validParams.set('email', newsletterEmail);
+    if (newsletterToken) validParams.set('token', newsletterToken);
+    const validQuery = validParams.toString();
+    redirect(validQuery ? `/blog?${validQuery}` : '/blog');
+  }
 
   return (
     <BlogIndex

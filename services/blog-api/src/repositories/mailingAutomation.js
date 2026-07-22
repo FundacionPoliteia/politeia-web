@@ -57,6 +57,9 @@ export async function getMailingSettings() {
 }
 
 export async function updateMailingSettings(body = {}, actorEmail = '') {
+  if (Object.prototype.hasOwnProperty.call(body, 'timeZone') && !isValidTimeZone(body.timeZone)) {
+    throw new HttpError(400, 'La zona horaria no es valida');
+  }
   const current = await getMailingSettings();
   const next = normalizeSettings({ ...current, ...body });
   await settingsCollection().doc(config.mailProjectKey).set({
@@ -317,9 +320,9 @@ function renderPostMail(items, settings, { testEmail = '' } = {}) {
 
 function renderPostCard(post, ctaLabel) {
   const image = post.coverImage
-    ? `<img alt="" src="${escapeHtml(post.coverImage)}" style="display:block;width:100%;height:auto;max-height:320px;object-fit:cover;border:0">`
+    ? `<td width="148" valign="top" style="width:148px;padding:20px 0 20px 20px"><img alt="" src="${escapeHtml(post.coverImage)}" width="128" height="92" style="display:block;width:128px;height:92px;object-fit:cover;border:0;border-radius:6px"></td>`
     : '';
-  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;margin:0 0 24px;border:1px solid #dcdde3;border-top:4px solid #137a9f"><tr><td>${image}<div style="padding:22px"><p style="margin:0 0 8px;color:#137a9f;font-size:12px;font-weight:800;text-transform:uppercase">${escapeHtml(post.category || 'Nota')}</p><h2 style="margin:0 0 10px;color:#1a1a37;font-family:'Fraunces',Georgia,serif;font-size:25px;line-height:1.2">${escapeHtml(post.title)}</h2><p style="margin:0 0 14px;color:#42445b;font-size:15px;line-height:1.55">${escapeHtml(post.excerpt)}</p><p style="margin:0 0 18px;color:#737489;font-size:12px">${escapeHtml(post.authorName)}</p><a href="${escapeHtml(post.url)}" style="display:inline-block;padding:11px 16px;border-radius:6px;background:#137a9f;color:#fff;text-decoration:none;font-weight:700">${escapeHtml(ctaLabel)}</a></div></td></tr></table>`;
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;margin:0 0 24px;border:1px solid #dcdde3;border-top:4px solid #137a9f"><tr>${image}<td valign="top" style="padding:20px"><p style="margin:0 0 7px;color:#137a9f;font-size:11px;font-weight:800;text-transform:uppercase">${escapeHtml(post.category || 'Nota')}</p><h2 style="margin:0 0 8px;color:#1a1a37;font-family:'Fraunces',Georgia,serif;font-size:22px;line-height:1.2">${escapeHtml(post.title)}</h2><p style="margin:0 0 10px;color:#42445b;font-size:14px;line-height:1.5">${escapeHtml(post.excerpt)}</p><p style="margin:0 0 14px;color:#737489;font-size:12px">${escapeHtml(post.authorName)}</p><a href="${escapeHtml(post.url)}" style="display:inline-block;padding:9px 13px;border-radius:6px;background:#137a9f;color:#fff;text-decoration:none;font-size:14px;font-weight:700">${escapeHtml(ctaLabel)}</a></td></tr></table>`;
 }
 
 function toMailPost(item = {}) {
@@ -327,7 +330,7 @@ function toMailPost(item = {}) {
   return {
     title: publicPostValue(item, 'title') || item.postTitle || 'Nueva nota',
     excerpt: publicPostValue(item, 'excerpt') || 'Una nueva lectura ya esta disponible.',
-    coverImage: publicPostValue(item, 'coverImage'),
+    coverImage: publicPostValue(item, 'coverImageThumbnail') || publicPostValue(item, 'coverImage'),
     authorName: publicPostValue(item, 'authorName'),
     category: publicPostValue(item, 'category'),
     url: new URL(`/blog/${encodeURIComponent(slug)}`, config.publicSiteUrl).toString(),
@@ -347,7 +350,7 @@ function normalizeSettings(value = {}) {
     weeklyLimit: clampNumber(value.weeklyLimit, 0, 7, DEFAULT_MAILING_SETTINGS.weeklyLimit),
     dispatchIntervalHours: clampNumber(value.dispatchIntervalHours, 1, 168, DEFAULT_MAILING_SETTINGS.dispatchIntervalHours),
     gracePeriodMinutes: clampNumber(value.gracePeriodMinutes, 0, 1440, DEFAULT_MAILING_SETTINGS.gracePeriodMinutes),
-    timeZone: DEFAULT_MAILING_SETTINGS.timeZone,
+    timeZone: normalizeTimeZone(value.timeZone),
     singleSubject: cleanText(value.singleSubject, 180) || DEFAULT_MAILING_SETTINGS.singleSubject,
     digestSubject: cleanText(value.digestSubject, 180) || DEFAULT_MAILING_SETTINGS.digestSubject,
     singlePreheader: cleanText(value.singlePreheader, 180) || DEFAULT_MAILING_SETTINGS.singlePreheader,
@@ -357,6 +360,22 @@ function normalizeSettings(value = {}) {
     maxFullCards: clampNumber(value.maxFullCards, 1, 12, DEFAULT_MAILING_SETTINGS.maxFullCards),
     lastAutomaticDispatchAt: value.lastAutomaticDispatchAt || null,
   };
+}
+
+function normalizeTimeZone(value) {
+  const candidate = cleanText(value, 80) || DEFAULT_MAILING_SETTINGS.timeZone;
+  return isValidTimeZone(candidate) ? candidate : DEFAULT_MAILING_SETTINGS.timeZone;
+}
+
+function isValidTimeZone(value) {
+  const candidate = cleanText(value, 80);
+  if (!candidate) return false;
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: candidate }).format();
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function dispatchIsDue(settings, now) {
@@ -396,7 +415,15 @@ async function resolveJobs(ids = []) {
   const jobs = [];
   for (const id of [...new Set((Array.isArray(ids) ? ids : []).map(String).filter(Boolean))]) {
     const doc = await jobsCollection().doc(id).get();
-    if (doc.exists) jobs.push(serializeDoc(doc));
+    if (!doc.exists) continue;
+    const job = serializeDoc(doc);
+    const postDoc = job.postId ? await postsCollection().doc(job.postId).get() : null;
+    if (postDoc?.exists) {
+      const post = serializeDoc(postDoc);
+      jobs.push({ ...job, ...post, id: job.id, postId: post.id });
+    } else {
+      jobs.push(job);
+    }
   }
   return jobs;
 }

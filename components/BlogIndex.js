@@ -10,17 +10,21 @@ const DEFAULT_PROFILE_PHOTO = '/default_profile.png';
 export default function BlogIndex({ posts = [], autorFiltro = '', categoriaFiltro = '', newsletterStatus = '', newsletterEmail = '', newsletterToken = '', authorProfile = null, authors = [], preview = false }) {
   const [query, setQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('');
-  const filtrandoAutor = Boolean(autorFiltro);
+  const filtrandoAutor = Boolean(autorFiltro && authorProfile);
   const filtrandoCategoria = Boolean(categoriaFiltro);
-  const authorName = authorProfile?.fullName || autorFiltro;
-  const authorLead = authorProfile?.description || 'Publicaciones del autor, reunidas en un mismo lugar.';
+  const authorName = authorProfile?.fullName || '';
+  const authorLead = authorProfile?.description || '';
   const authorFocusArea = authorProfile?.focusArea || '';
   const authorPhoto = authorProfile ? authorProfile.photoUrl || DEFAULT_PROFILE_PHOTO : '';
+  const publicAuthorKeys = useMemo(
+    () => new Set(authors.map((author) => taxonomyKey(author.fullName)).filter(Boolean)),
+    [authors]
+  );
   const Root = preview ? 'div' : 'main';
 
   const postsPorAutor = useMemo(
-    () => filtrarPorCategoria(filtrarPorAutor(posts, autorFiltro), categoriaFiltro),
-    [posts, autorFiltro, categoriaFiltro]
+    () => filtrarPorCategoria(filtrarPorAutor(posts, filtrandoAutor ? autorFiltro : ''), categoriaFiltro),
+    [posts, autorFiltro, categoriaFiltro, filtrandoAutor]
   );
   const postsFiltrados = useMemo(
     () => filtrarPorBusqueda(postsPorAutor, query),
@@ -160,7 +164,11 @@ export default function BlogIndex({ posts = [], autorFiltro = '', categoriaFiltr
                               <div className="meta">
                                 {p.autor && (
                                   <>
-                                    <Link href={hrefAutorBlog(p.autor)} className="post-author">{p.autor}</Link>
+                                    {publicAuthorKeys.has(taxonomyKey(p.autor)) ? (
+                                      <Link href={hrefAutorBlog(p.autor)} className="post-author">{p.autor}</Link>
+                                    ) : (
+                                      <span className="post-author-name">{p.autor}</span>
+                                    )}
                                     {' - '}
                                   </>
                                 )}

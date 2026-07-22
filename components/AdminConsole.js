@@ -30,6 +30,7 @@ const EMPTY_FORM = {
   excerpt: '',
   contentMarkdown: '',
   coverImage: '',
+  coverImageThumbnail: '',
   authorName: '',
   authorNote: '',
   showAuthorNote: false,
@@ -1391,7 +1392,12 @@ export default function AdminConsole() {
       setMessage('');
       setCoverImageError('');
       const media = await withActionLoading('cover-upload', () => uploadMedia(file));
-      setForm((current) => normalizeForm({ ...current, coverImage: media?.url, showCoverInPost: true }));
+      setForm((current) => normalizeForm({
+        ...current,
+        coverImage: media?.url,
+        coverImageThumbnail: media?.thumbnailUrl || '',
+        showCoverInPost: true,
+      }));
       setCoverMode('upload');
       setMessage('Imagen cargada.');
     } catch (err) {
@@ -3667,6 +3673,7 @@ export default function AdminConsole() {
                           setForm((current) => normalizeForm({
                             ...current,
                             coverImage,
+                            coverImageThumbnail: '',
                             showCoverInPost: current.coverImage ? current.showCoverInPost : true,
                           }));
                         }}
@@ -4618,6 +4625,7 @@ function buildPayload(form, canChooseSlug = false) {
     excerpt: form.excerpt || undefined,
     contentMarkdown: form.contentMarkdown,
     coverImage: form.coverImage || undefined,
+    coverImageThumbnail: form.coverImageThumbnail || '',
     showCoverInPost: form.coverImage ? form.showCoverInPost !== false : true,
     authorName: form.authorName || undefined,
     authorNote: form.showAuthorNote === true ? form.authorNote || '' : '',
@@ -5027,6 +5035,7 @@ function postToForm(post = {}) {
     excerpt: post.excerpt,
     contentMarkdown: post.contentMarkdown,
     coverImage: post.coverImage,
+    coverImageThumbnail: post.coverImageThumbnail,
     authorName: post.authorName,
     authorNote: post.authorNote,
     showAuthorNote: post.showAuthorNote === true,
@@ -5047,6 +5056,7 @@ function serializeForm(form) {
     excerpt: form.excerpt || '',
     contentMarkdown: form.contentMarkdown || '',
     coverImage: form.coverImage || '',
+    coverImageThumbnail: form.coverImageThumbnail || '',
     authorName: form.authorName || '',
     authorNote: form.authorNote || '',
     showAuthorNote: form.showAuthorNote === true,

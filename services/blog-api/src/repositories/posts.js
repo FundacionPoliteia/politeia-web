@@ -12,6 +12,7 @@ const PUBLIC_FIELDS = [
   'contentMarkdown',
   'contentHtml',
   'coverImage',
+  'coverImageThumbnail',
   'showCoverInPost',
   'authorName',
   'authorEmail',

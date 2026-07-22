@@ -607,7 +607,8 @@ a {
 }
 
 .post-author,
-.art-author {
+.art-author,
+.post-author-name {
   color: var(--azul);
   font-weight: 800;
   text-decoration: none

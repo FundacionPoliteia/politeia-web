@@ -8,6 +8,7 @@ const DEFAULT_SETTINGS = {
   weeklyLimit: 2,
   dispatchIntervalHours: 12,
   gracePeriodMinutes: 10,
+  timeZone: 'America/Argentina/Buenos_Aires',
   singleSubject: 'Nueva nota en Politeia: {{title}}',
   digestSubject: '{{count}} nuevas notas para leer en Politeia',
   singlePreheader: 'Una nueva lectura ya esta disponible en el blog.',
@@ -168,8 +169,11 @@ export default function MailingAdminPanel({ apiBase, currentEmail }) {
           <label>Frecuencia del ciclo (horas)<input min="1" max="168" type="number" value={settings.dispatchIntervalHours} onChange={(event) => setSettings((current) => ({ ...current, dispatchIntervalHours: event.target.value }))} /></label>
           <label>Espera despues de publicar (minutos)<input min="0" max="1440" type="number" value={settings.gracePeriodMinutes} onChange={(event) => setSettings((current) => ({ ...current, gracePeriodMinutes: event.target.value }))} /></label>
           <label>Cards completas en resumen<input min="1" max="12" type="number" value={settings.maxFullCards} onChange={(event) => setSettings((current) => ({ ...current, maxFullCards: event.target.value }))} /></label>
+          <label>Zona horaria<input list="mailing-time-zones" value={settings.timeZone} onChange={(event) => setSettings((current) => ({ ...current, timeZone: event.target.value }))} /><datalist id="mailing-time-zones"><option value="America/Argentina/Buenos_Aires" /><option value="America/Montevideo" /><option value="America/Santiago" /><option value="Europe/Madrid" /><option value="UTC" /></datalist></label>
           <label className="admin-mailing-wide">Asunto individual<input value={settings.singleSubject} onChange={(event) => setSettings((current) => ({ ...current, singleSubject: event.target.value }))} /></label>
+          <label className="admin-mailing-wide">Texto de previsualizacion individual<input maxLength="180" value={settings.singlePreheader} onChange={(event) => setSettings((current) => ({ ...current, singlePreheader: event.target.value }))} /></label>
           <label className="admin-mailing-wide">Asunto apilado<input value={settings.digestSubject} onChange={(event) => setSettings((current) => ({ ...current, digestSubject: event.target.value }))} /></label>
+          <label className="admin-mailing-wide">Texto de previsualizacion apilado<input maxLength="180" value={settings.digestPreheader} onChange={(event) => setSettings((current) => ({ ...current, digestPreheader: event.target.value }))} /></label>
           <label className="admin-mailing-wide">Introduccion del resumen<input value={settings.digestIntro} onChange={(event) => setSettings((current) => ({ ...current, digestIntro: event.target.value }))} /></label>
           <label>Texto del boton<input value={settings.ctaLabel} onChange={(event) => setSettings((current) => ({ ...current, ctaLabel: event.target.value }))} /></label>
         </div>

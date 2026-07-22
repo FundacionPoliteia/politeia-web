@@ -212,6 +212,7 @@ function buildPostPayload(body, user) {
   assertOptionalString(body.slug, 'slug');
   assertOptionalString(body.excerpt, 'excerpt');
   assertOptionalString(body.coverImage, 'coverImage');
+  assertOptionalString(body.coverImageThumbnail, 'coverImageThumbnail');
   assertOptionalString(body.category, 'category');
   assertOptionalString(body.authorName, 'authorName');
   assertOptionalString(body.authorNote, 'authorNote');
@@ -220,6 +221,7 @@ function buildPostPayload(body, user) {
   assertOptionalBoolean(body.showAuthorNote, 'showAuthorNote');
   assertStringArray(body.tags, 'tags');
   if (body.coverImage) assertHttpsUrl(body.coverImage, 'coverImage');
+  if (body.coverImageThumbnail) assertHttpsUrl(body.coverImageThumbnail, 'coverImageThumbnail');
   if (body.slug && !canChooseSlug(user)) {
     throw new HttpError(403, 'Only admin or reviewer users can choose slug');
   }
@@ -235,6 +237,7 @@ function buildPostPayload(body, user) {
     contentMarkdown: body.contentMarkdown,
     contentHtml,
     coverImage: body.coverImage || null,
+    coverImageThumbnail: body.coverImageThumbnail || null,
     showCoverInPost: body.showCoverInPost !== false,
     authorEmail: canManageAllPosts(user) ? body.authorEmail || user.email : user.email,
     authorName: body.authorName || user.name || user.email,
@@ -274,6 +277,10 @@ function buildPostPatch(body, user) {
   if (body.coverImage !== undefined) {
     if (body.coverImage) assertHttpsUrl(body.coverImage, 'coverImage');
     patch.coverImage = body.coverImage || null;
+  }
+  if (body.coverImageThumbnail !== undefined) {
+    if (body.coverImageThumbnail) assertHttpsUrl(body.coverImageThumbnail, 'coverImageThumbnail');
+    patch.coverImageThumbnail = body.coverImageThumbnail || null;
   }
   if (body.showCoverInPost !== undefined) {
     assertOptionalBoolean(body.showCoverInPost, 'showCoverInPost');

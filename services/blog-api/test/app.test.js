@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import request from 'supertest';
+import sharp from 'sharp';
 import { createApp } from '../src/app.js';
 import { buildSessionCookie, expandRoles, resolveBuiltInRoles, verifySessionCookie } from '../src/auth.js';
 import { config, parseEnvValue } from '../src/config.js';
@@ -71,8 +72,10 @@ import {
   dispatchMailing,
   getMailingAdminOverview,
   queuePublishedPostMail,
+  renderMailingPreview,
   updateMailingSettings,
 } from '../src/repositories/mailingAutomation.js';
+import { createMailThumbnail } from '../src/repositories/media.js';
 
 test('GET /healthz returns service health', async () => {
   const res = await request(createApp()).get('/healthz').expect(200);
@@ -1146,6 +1149,9 @@ test('post mailing respects the weekly cap and the configurable 12 hour dispatch
       weeklyLimit: 2,
       dispatchIntervalHours: 12,
       gracePeriodMinutes: 0,
+      timeZone: 'UTC',
+      singlePreheader: 'Una nota para leer hoy.',
+      digestPreheader: 'Las notas nuevas de esta semana.',
     }, 'admin@politeia.ar');
     await firestore.collection('newsletterSubscriptions').doc('reader').set({
       projectKey: config.mailProjectKey,
@@ -1182,11 +1188,58 @@ test('post mailing respects the weekly cap and the configurable 12 hour dispatch
 
     const overview = await getMailingAdminOverview();
     assert.equal(overview.settings.dispatchIntervalHours, 12);
+    assert.equal(overview.settings.timeZone, 'UTC');
+    assert.equal(overview.settings.singlePreheader, 'Una nota para leer hoy.');
+    assert.equal(overview.settings.digestPreheader, 'Las notas nuevas de esta semana.');
     assert.equal(overview.sentThisWeek, 2);
     assert.equal(overview.remainingThisWeek, 0);
     assert.equal(overview.recipientCount, 1);
+    await assert.rejects(
+      () => updateMailingSettings({ timeZone: 'Zona/Inexistente' }, 'admin@politeia.ar'),
+      /zona horaria no es valida/i,
+    );
   } finally {
     config.mailProvider = previousProvider;
+    setFirestoreForTests(null);
+  }
+});
+
+test('mailing uses a compact WebP cover thumbnail when one is available', async () => {
+  const source = await sharp({
+    create: {
+      width: 1200,
+      height: 800,
+      channels: 3,
+      background: { r: 20, g: 110, b: 145 },
+    },
+  }).jpeg({ quality: 90 }).toBuffer();
+  const thumbnail = await createMailThumbnail(source);
+  const metadata = await sharp(thumbnail).metadata();
+  assert.equal(metadata.format, 'webp');
+  assert.equal(metadata.width, 480);
+  assert.equal(metadata.height, 270);
+
+  const firestore = createMemoryFirestore();
+  setFirestoreForTests(firestore);
+  try {
+    await updateMailingSettings({ enabled: true, gracePeriodMinutes: 0 }, 'admin@politeia.ar');
+    const post = {
+      id: 'post-with-thumbnail',
+      title: 'Nota con portada',
+      slug: 'nota-con-portada',
+      excerpt: 'Una lectura con imagen optimizada.',
+      coverImage: 'https://example.com/original-cover.jpg',
+      coverImageThumbnail: 'https://example.com/mail-cover.webp',
+      status: 'published',
+      publishedAt: new Date().toISOString(),
+    };
+    await firestore.collection('posts').doc(post.id).set(post);
+    const job = await queuePublishedPostMail(post, { email: 'reviewer@politeia.ar' });
+    const preview = await renderMailingPreview({ jobIds: [job.id] });
+    assert.match(preview.html, /https:\/\/example\.com\/mail-cover\.webp/);
+    assert.doesNotMatch(preview.html, /original-cover\.jpg/);
+    assert.match(preview.html, /width="128" height="92"/);
+  } finally {
     setFirestoreForTests(null);
   }
 });
