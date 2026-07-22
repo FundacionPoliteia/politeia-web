@@ -79,6 +79,11 @@ export default function MailingAdminPanel({ apiBase, currentEmail }) {
     }
   }
 
+  function resetSettings() {
+    setSettings({ ...DEFAULT_SETTINGS });
+    setMessage('Restauramos los valores predeterminados en el formulario. Revisa los cambios y guardalos para aplicarlos.');
+  }
+
   async function runAction(action) {
     if (!selected.length || busy) return;
     const forced = action === 'send-now';
@@ -155,29 +160,102 @@ export default function MailingAdminPanel({ apiBase, currentEmail }) {
       </p>
 
       <details className="admin-mailing-settings" open>
-        <summary>Configuracion automatica</summary>
-        <div className="admin-mailing-settings-grid">
-          <label className="admin-switch-row admin-mailing-switch">
-            <input checked={settings.enabled} onChange={(event) => setSettings((current) => ({ ...current, enabled: event.target.checked }))} type="checkbox" />
-            <span><strong>Automatizacion activa</strong><small>Las publicaciones elegibles entran en el siguiente ciclo.</small></span>
-          </label>
-          <label className="admin-switch-row admin-mailing-switch">
-            <input checked={settings.automaticByDefault} onChange={(event) => setSettings((current) => ({ ...current, automaticByDefault: event.target.checked }))} type="checkbox" />
-            <span><strong>Avisar por defecto al publicar</strong><small>El modal de publicacion permite excluir cada nota.</small></span>
-          </label>
-          <label>Limite semanal<input min="0" max="7" type="number" value={settings.weeklyLimit} onChange={(event) => setSettings((current) => ({ ...current, weeklyLimit: event.target.value }))} /></label>
-          <label>Frecuencia del ciclo (horas)<input min="1" max="168" type="number" value={settings.dispatchIntervalHours} onChange={(event) => setSettings((current) => ({ ...current, dispatchIntervalHours: event.target.value }))} /></label>
-          <label>Espera despues de publicar (minutos)<input min="0" max="1440" type="number" value={settings.gracePeriodMinutes} onChange={(event) => setSettings((current) => ({ ...current, gracePeriodMinutes: event.target.value }))} /></label>
-          <label>Cards completas en resumen<input min="1" max="12" type="number" value={settings.maxFullCards} onChange={(event) => setSettings((current) => ({ ...current, maxFullCards: event.target.value }))} /></label>
-          <label>Zona horaria<input list="mailing-time-zones" value={settings.timeZone} onChange={(event) => setSettings((current) => ({ ...current, timeZone: event.target.value }))} /><datalist id="mailing-time-zones"><option value="America/Argentina/Buenos_Aires" /><option value="America/Montevideo" /><option value="America/Santiago" /><option value="Europe/Madrid" /><option value="UTC" /></datalist></label>
-          <label className="admin-mailing-wide">Asunto individual<input value={settings.singleSubject} onChange={(event) => setSettings((current) => ({ ...current, singleSubject: event.target.value }))} /></label>
-          <label className="admin-mailing-wide">Texto de previsualizacion individual<input maxLength="180" value={settings.singlePreheader} onChange={(event) => setSettings((current) => ({ ...current, singlePreheader: event.target.value }))} /></label>
-          <label className="admin-mailing-wide">Asunto apilado<input value={settings.digestSubject} onChange={(event) => setSettings((current) => ({ ...current, digestSubject: event.target.value }))} /></label>
-          <label className="admin-mailing-wide">Texto de previsualizacion apilado<input maxLength="180" value={settings.digestPreheader} onChange={(event) => setSettings((current) => ({ ...current, digestPreheader: event.target.value }))} /></label>
-          <label className="admin-mailing-wide">Introduccion del resumen<input value={settings.digestIntro} onChange={(event) => setSettings((current) => ({ ...current, digestIntro: event.target.value }))} /></label>
-          <label>Texto del boton<input value={settings.ctaLabel} onChange={(event) => setSettings((current) => ({ ...current, ctaLabel: event.target.value }))} /></label>
+        <summary>
+          <span>Configuracion automatica</span>
+          <small>Reglas de envio y textos reutilizables</small>
+        </summary>
+        <div className="admin-mailing-settings-content">
+          <section className="admin-mailing-settings-group">
+            <header>
+              <span className="material-symbols-outlined" aria-hidden="true">tune</span>
+              <div><h3>Comportamiento</h3><p>Decidi cuando el sistema puede incorporar nuevas publicaciones a la cola.</p></div>
+            </header>
+            <div className="admin-mailing-toggle-grid">
+              <label className="admin-mailing-toggle-card">
+                <input checked={settings.enabled} onChange={(event) => setSettings((current) => ({ ...current, enabled: event.target.checked }))} type="checkbox" />
+                <span className="admin-mailing-toggle-copy">
+                  <strong>Automatizacion activa <SettingHelp text="Es el interruptor maestro. Cuando esta apagado no se procesan ciclos automaticos ni se envian avisos pendientes. No elimina suscriptores, historial ni configuracion, y las pruebas o envios manuales siguen disponibles." /></strong>
+                  <small>Procesa automaticamente las publicaciones elegibles.</small>
+                </span>
+              </label>
+              <label className="admin-mailing-toggle-card">
+                <input checked={settings.automaticByDefault} onChange={(event) => setSettings((current) => ({ ...current, automaticByDefault: event.target.checked }))} type="checkbox" />
+                <span className="admin-mailing-toggle-copy">
+                  <strong>Avisar al publicar <SettingHelp text="Define el valor inicial del aviso dentro del modal de publicacion. Activarlo no envia el correo inmediatamente: cada nota puede excluirse antes de publicar y, si se incluye, respetara la espera, el ciclo y el limite semanal." /></strong>
+                  <small>Preselecciona el aviso para cada nueva nota.</small>
+                </span>
+              </label>
+            </div>
+          </section>
+
+          <section className="admin-mailing-settings-group">
+            <header>
+              <span className="material-symbols-outlined" aria-hidden="true">schedule</span>
+              <div><h3>Ritmo y limites</h3><p>Controla la frecuencia para evitar envios excesivos y dar margen de correccion.</p></div>
+            </header>
+            <div className="admin-mailing-settings-grid admin-mailing-timing-grid">
+              <MailingSettingField label="Limite semanal" help="Cantidad maxima de campanas automaticas que se pueden enviar durante una semana calculada en la zona horaria configurada. Al alcanzar el limite, las notas siguientes se conservan y se agrupan para un resumen posterior. El valor 0 pausa los envios automaticos; un envio manual forzado puede superar este limite.">
+                <input min="0" max="7" type="number" value={settings.weeklyLimit} onChange={(event) => setSettings((current) => ({ ...current, weeklyLimit: event.target.value }))} />
+              </MailingSettingField>
+              <MailingSettingField label="Frecuencia del ciclo" suffix="horas" help="Intervalo minimo entre dos ciclos automaticos. El proceso externo puede consultar antes, pero el backend no vuelve a despachar hasta que transcurra esta cantidad de horas. Acepta valores entre 1 hora y 7 dias.">
+                <input min="1" max="168" type="number" value={settings.dispatchIntervalHours} onChange={(event) => setSettings((current) => ({ ...current, dispatchIntervalHours: event.target.value }))} />
+              </MailingSettingField>
+              <MailingSettingField label="Espera despues de publicar" suffix="minutos" help="Tiempo durante el cual una nota publicada queda retenida antes de poder enviarse. Sirve para corregir titulo, portada o extracto, o para excluirla de la cola. Con 0 queda disponible para el proximo ciclo inmediatamente.">
+                <input min="0" max="1440" type="number" value={settings.gracePeriodMinutes} onChange={(event) => setSettings((current) => ({ ...current, gracePeriodMinutes: event.target.value }))} />
+              </MailingSettingField>
+              <MailingSettingField label="Cards completas" suffix="por resumen" help="Cantidad maxima de notas que se muestran como cards completas dentro de un correo apilado. Si existen mas notas, las restantes se presentan de forma compacta para mantener el email legible y liviano.">
+                <input min="1" max="12" type="number" value={settings.maxFullCards} onChange={(event) => setSettings((current) => ({ ...current, maxFullCards: event.target.value }))} />
+              </MailingSettingField>
+              <MailingSettingField className="admin-mailing-time-zone" label="Zona horaria" help="Se usa para determinar el inicio y cierre de cada semana, calcular el cupo disponible y mostrar el proximo ciclo. No cambia la zona horaria del lector ni la fecha publicada dentro de una nota.">
+                <input list="mailing-time-zones" value={settings.timeZone} onChange={(event) => setSettings((current) => ({ ...current, timeZone: event.target.value }))} />
+                <datalist id="mailing-time-zones"><option value="America/Argentina/Buenos_Aires" /><option value="America/Montevideo" /><option value="America/Santiago" /><option value="Europe/Madrid" /><option value="UTC" /></datalist>
+              </MailingSettingField>
+            </div>
+          </section>
+
+          <section className="admin-mailing-settings-group">
+            <header>
+              <span className="material-symbols-outlined" aria-hidden="true">mail</span>
+              <div><h3>Correo de una sola nota</h3><p>Textos usados cuando el ciclo envia una publicacion individual.</p></div>
+            </header>
+            <div className="admin-mailing-settings-grid">
+              <MailingSettingField className="admin-mailing-wide" label="Asunto individual" help="Asunto visible en la bandeja de entrada cuando se envia una sola nota. La variable {{title}} se reemplaza automaticamente por el titulo publicado; si la quitas, todos los correos individuales tendran un asunto fijo.">
+                <input value={settings.singleSubject} onChange={(event) => setSettings((current) => ({ ...current, singleSubject: event.target.value }))} />
+              </MailingSettingField>
+              <MailingSettingField className="admin-mailing-wide" label="Texto de previsualizacion individual" help="Resumen corto que algunos clientes de correo muestran al lado o debajo del asunto antes de abrir el mensaje. No es un parrafo visible del cuerpo y se limita a 180 caracteres.">
+                <input maxLength="180" value={settings.singlePreheader} onChange={(event) => setSettings((current) => ({ ...current, singlePreheader: event.target.value }))} />
+              </MailingSettingField>
+            </div>
+          </section>
+
+          <section className="admin-mailing-settings-group">
+            <header>
+              <span className="material-symbols-outlined" aria-hidden="true">view_agenda</span>
+              <div><h3>Resumen de varias notas</h3><p>Textos usados cuando varias publicaciones se agrupan en un unico correo.</p></div>
+            </header>
+            <div className="admin-mailing-settings-grid">
+              <MailingSettingField className="admin-mailing-wide" label="Asunto apilado" help="Asunto para un resumen con varias publicaciones. La variable {{count}} se reemplaza por la cantidad real de notas incluidas en el envio.">
+                <input value={settings.digestSubject} onChange={(event) => setSettings((current) => ({ ...current, digestSubject: event.target.value }))} />
+              </MailingSettingField>
+              <MailingSettingField className="admin-mailing-wide" label="Texto de previsualizacion apilado" help="Texto breve que acompana al asunto en la bandeja de entrada cuando el correo contiene varias notas. Ayuda a anticipar el contenido sin repetir literalmente el asunto.">
+                <input maxLength="180" value={settings.digestPreheader} onChange={(event) => setSettings((current) => ({ ...current, digestPreheader: event.target.value }))} />
+              </MailingSettingField>
+              <MailingSettingField className="admin-mailing-wide" label="Introduccion del resumen" help="Frase visible al comienzo del cuerpo del correo, antes de las cards de las notas. Conviene que sea breve y funcione con cualquier combinacion de publicaciones.">
+                <input value={settings.digestIntro} onChange={(event) => setSettings((current) => ({ ...current, digestIntro: event.target.value }))} />
+              </MailingSettingField>
+              <MailingSettingField label="Texto del boton" help="Etiqueta de la llamada a la accion que abre cada nota en el blog. Se reutiliza tanto en correos individuales como en resumenes; debe ser corta y describir claramente el destino.">
+                <input value={settings.ctaLabel} onChange={(event) => setSettings((current) => ({ ...current, ctaLabel: event.target.value }))} />
+              </MailingSettingField>
+            </div>
+          </section>
         </div>
-        <div className="admin-row-actions"><button className="btn btn-primary" disabled={Boolean(busy)} onClick={saveSettings} type="button">{busy === 'settings' ? 'Guardando...' : 'Guardar configuracion'}</button></div>
+        <div className="admin-mailing-settings-actions">
+          <button className="btn btn-ghost" disabled={Boolean(busy)} onClick={resetSettings} type="button">
+            <span aria-hidden="true" className="material-symbols-outlined">restart_alt</span>
+            Restaurar valores predeterminados
+          </button>
+          <button className="btn btn-primary" disabled={Boolean(busy)} onClick={saveSettings} type="button">{busy === 'settings' ? 'Guardando...' : 'Guardar configuracion'}</button>
+        </div>
       </details>
 
       <section className="admin-mailing-lab">
@@ -233,6 +311,42 @@ export default function MailingAdminPanel({ apiBase, currentEmail }) {
 
 function mailingStatusLabel(status) {
   return ({ queued: 'En cola', digest_pending: 'Apilado', sent: 'Enviado', excluded: 'Excluido', failed: 'Error', canceled: 'Cancelado' })[status] || status || 'Pendiente';
+}
+
+function MailingSettingField({ children, className = '', help, label, suffix = '' }) {
+  return (
+    <label className={`admin-mailing-setting-field ${className}`.trim()}>
+      <span className="admin-mailing-setting-label">
+        <span>{label}</span>
+        {suffix && <small>{suffix}</small>}
+        <SettingHelp text={help} />
+      </span>
+      {children}
+    </label>
+  );
+}
+
+function SettingHelp({ text }) {
+  function keepHelpFromChangingField(event) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  return (
+    <span
+      aria-label={`Ayuda: ${text}`}
+      className="admin-setting-help"
+      onClick={keepHelpFromChangingField}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') keepHelpFromChangingField(event);
+      }}
+      role="button"
+      tabIndex="0"
+    >
+      <span aria-hidden="true" className="material-symbols-outlined">help</span>
+      <span className="admin-setting-tooltip" role="tooltip">{text}</span>
+    </span>
+  );
 }
 
 function mailingStatusTone(status) {
