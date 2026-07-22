@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import RichTextEditor from './RichTextEditor';
+import { HelpTrigger } from './AdminHelp';
 
 const EMPTY_CAMPAIGN = {
   name: '',
@@ -280,10 +281,10 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
 
   return (
     <section className="admin-manager admin-newsletter-manager">
-      <div className="admin-manager-head">
+      <div className="admin-manager-head" data-help-id="newsletter-subscribers">
         <div>
           <span>Newsletter</span>
-          <h2>Campanas y suscriptores</h2>
+          <h2 className="admin-help-heading">Campanas y suscriptores <HelpTrigger topicId="newsletter-subscribers" /></h2>
           <p>Crea una prueba o un borrador antes de enviar novedades a la lista confirmada.</p>
         </div>
         {overview && (
@@ -345,11 +346,11 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
         </div>
       )}
 
-      <section className="admin-newsletter-template-library" aria-labelledby="newsletter-templates-title">
+      <section className="admin-newsletter-template-library" aria-labelledby="newsletter-templates-title" data-help-id="newsletter-templates">
         <div className="admin-newsletter-template-head">
           <div>
             <span>Plantillas</span>
-            <h3 id="newsletter-templates-title">Empezar desde una base</h3>
+            <h3 className="admin-help-heading" id="newsletter-templates-title">Empezar desde una base <HelpTrigger topicId="newsletter-templates" /></h3>
           </div>
           <button className="btn btn-ghost" disabled={!campaignReady || Boolean(busyAction)} onClick={openSaveTemplate} type="button">
             <span aria-hidden="true" className="material-symbols-outlined">bookmark_add</span>
@@ -382,7 +383,7 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
             Usar plantilla
           </button>
           {selectedTemplate && !selectedTemplate.builtIn && (
-            <button aria-label={`Eliminar plantilla ${selectedTemplate.name}`} className="admin-icon-button admin-newsletter-template-delete" disabled={Boolean(busyAction)} onClick={() => setTemplateDeleteTarget(selectedTemplate)} title="Eliminar plantilla" type="button">
+            <button aria-label={`Eliminar plantilla ${selectedTemplate.name}`} className="admin-icon-button admin-newsletter-template-delete" disabled={Boolean(busyAction)} onClick={() => setTemplateDeleteTarget(selectedTemplate)} type="button">
               <span aria-hidden="true" className="material-symbols-outlined">delete</span>
             </button>
           )}
@@ -405,8 +406,8 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
           Texto de previsualizacion
           <input maxLength="180" value={form.previewText} onChange={(event) => update('previewText', event.target.value)} placeholder="La linea que acompana al asunto en la bandeja" />
         </label>
-        <div className="admin-newsletter-editor">
-          <span>Contenido</span>
+        <div className="admin-newsletter-editor" data-help-id="newsletter-editor">
+          <span className="admin-field-label">Contenido <HelpTrigger topicId="newsletter-editor" /></span>
           <RichTextEditor
             onChange={(content) => update('content', content)}
             onUploadImage={uploadNewsletterImage}
@@ -415,7 +416,7 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
             value={form.content}
           />
         </div>
-        <div className="admin-newsletter-test-row">
+        <div className="admin-newsletter-test-row" data-help-id="newsletter-send">
           <label>
             Enviar prueba a
             <input type="email" value={form.testEmail} onChange={(event) => update('testEmail', event.target.value)} />
@@ -426,6 +427,7 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
         </div>
         {message && <div className="admin-profile-notice" role="status">{message}</div>}
         <div className="admin-manager-actions">
+          <HelpTrigger topicId="newsletter-send" />
           <span>{overview?.provider === 'console' ? 'Modo local: los envios se registran en consola.' : 'El envio usa el Segment configurado en Resend.'}</span>
           <button className="btn btn-ghost" disabled={!campaignReady || busyAction} onClick={() => openMailPreview('preview')} type="button">
             {busyAction === 'preview-preview' ? 'Preparando vista...' : 'Previsualizar'}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { HelpTrigger } from './AdminHelp';
 
 const METHOD_OPTIONS = ['', 'GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'];
 const STATUS_OPTIONS = [
@@ -118,11 +119,11 @@ export default function AdminOperationsPanel({ apiBase, currentEmail }) {
   const visibleItems = view === 'requests' ? visibleRequestLogs : visibleMailLogs;
 
   return (
-    <section className="admin-manager admin-operations-panel">
+    <section className="admin-manager admin-operations-panel" data-help-id="profile-logs">
       <div className="admin-manager-head admin-operations-head">
         <div>
           <span>Administracion</span>
-          <h2>Logs y diagnostico</h2>
+          <h2 className="admin-help-heading">Logs y diagnostico <HelpTrigger topicId="profile-logs" /></h2>
           <p>Revisa llamadas a la API y el ciclo de entrega de correos sin exponer credenciales ni contenido privado.</p>
         </div>
         <div className="admin-operations-head-actions">

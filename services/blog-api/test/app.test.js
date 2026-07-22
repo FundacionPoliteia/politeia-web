@@ -129,7 +129,7 @@ test('UI preferences sanitize fields and preserve partial updates per user', asy
       },
       privateData: 'ignored',
     }), {
-      version: 1,
+      version: 2,
       lastPanelTab: '',
       sections: {
         adminUsersOpen: true,
@@ -141,6 +141,10 @@ test('UI preferences sanitize fields and preserve partial updates per user', asy
         advancedOptionsOpen: false,
         mobilePostsOpen: false,
       },
+      help: {
+        completedGuides: {},
+        dismissedHints: [],
+      },
     });
 
     await updateUserUiPreferences('first@politeia.ar', {
@@ -148,6 +152,10 @@ test('UI preferences sanitize fields and preserve partial updates per user', asy
       sections: {
         adminUsersOpen: true,
         advancedOptionsOpen: true,
+      },
+      help: {
+        completedGuides: { blogs: 1, injected: 99 },
+        dismissedHints: ['editor-tip', '../invalid'],
       },
     });
     await updateUserUiPreferences('first@politeia.ar', {
@@ -160,6 +168,10 @@ test('UI preferences sanitize fields and preserve partial updates per user', asy
     assert.equal(first.sections.adminUsersOpen, true);
     assert.equal(first.sections.advancedOptionsOpen, true);
     assert.equal(first.sections.previewCardOpen, false);
+    assert.deepEqual(first.help, {
+      completedGuides: { blogs: 1 },
+      dismissedHints: ['editor-tip'],
+    });
     assert.equal(second.lastPanelTab, '');
     assert.deepEqual(second.sections, {
       adminUsersOpen: false,
@@ -171,6 +183,7 @@ test('UI preferences sanitize fields and preserve partial updates per user', asy
       advancedOptionsOpen: false,
       mobilePostsOpen: false,
     });
+    assert.deepEqual(second.help, { completedGuides: {}, dismissedHints: [] });
   } finally {
     setFirestoreForTests(null);
   }

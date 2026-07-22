@@ -10,6 +10,7 @@ import BlogIndex from './BlogIndex';
 import NewsletterAdminPanel from './NewsletterAdminPanel';
 import AdminOperationsPanel from './AdminOperationsPanel';
 import MailingAdminPanel from './MailingAdminPanel';
+import { AdminHelpNavButton, AdminHelpProvider, FieldHelper, HelpTrigger } from './AdminHelp';
 import { parseTagsText, sanitizeCategory, sanitizeTags, taxonomyKey } from '../lib/taxonomy';
 
 const API_BASE = process.env.NEXT_PUBLIC_BLOG_API_BASE_URL || '';
@@ -23,7 +24,7 @@ const NOTIFICATION_REFRESH_MS = 60 * 1000;
 const DEFAULT_NOTIFICATION_POLICY = { recentDays: 3, retentionDays: 7 };
 const UI_PREFERENCES_STORAGE_PREFIX = 'politeia:admin-ui:';
 const DEFAULT_UI_PREFERENCES = {
-  version: 1,
+  version: 2,
   lastPanelTab: '',
   sections: {
     adminUsersOpen: false,
@@ -34,6 +35,10 @@ const DEFAULT_UI_PREFERENCES = {
     previewCardOpen: true,
     advancedOptionsOpen: false,
     mobilePostsOpen: false,
+  },
+  help: {
+    completedGuides: {},
+    dismissedHints: [],
   },
 };
 
@@ -261,6 +266,7 @@ export default function AdminConsole() {
   const [mobilePostsOpen, setMobilePostsOpen] = useState(false);
   const [activePanelTab, setActivePanelTab] = useState('blogs');
   const [uiPreferencesHydrated, setUiPreferencesHydrated] = useState(false);
+  const [helpPreferences, setHelpPreferences] = useState(DEFAULT_UI_PREFERENCES.help);
   const [userProfile, setUserProfile] = useState(EMPTY_PROFILE);
   const [userProfileLoaded, setUserProfileLoaded] = useState(false);
   const [profileDraft, setProfileDraft] = useState(EMPTY_PROFILE);
@@ -529,6 +535,7 @@ export default function AdminConsole() {
       setPreviewCardOpen(sections.previewCardOpen);
       setAdvancedOptionsOpen(sections.advancedOptionsOpen);
       setMobilePostsOpen(sections.mobilePostsOpen);
+      setHelpPreferences(preferences.help);
       if (userProfileNeedsSetup) {
         setActivePanelTab('profile');
       } else {
@@ -583,6 +590,7 @@ export default function AdminConsole() {
         advancedOptionsOpen,
         mobilePostsOpen,
       },
+      help: helpPreferences,
     });
     window.localStorage.setItem(`${UI_PREFERENCES_STORAGE_PREFIX}${email}`, JSON.stringify(preferences));
     window.clearTimeout(uiPreferencesSaveTimerRef.current);
@@ -600,7 +608,7 @@ export default function AdminConsole() {
     }, 600);
 
     return () => window.clearTimeout(uiPreferencesSaveTimerRef.current);
-  }, [activePanelTab, adminManagerOpen, adminProfileClaimsOpen, adminProfileEditorOpen, adminUsersOpen, advancedOptionsOpen, allowedPanelTabs, canAccessPanel, defaultPanelTab, mobilePostsOpen, notificationPreferencesOpen, previewCardOpen, uiPreferencesHydrated, user?.email]);
+  }, [activePanelTab, adminManagerOpen, adminProfileClaimsOpen, adminProfileEditorOpen, adminUsersOpen, advancedOptionsOpen, allowedPanelTabs, canAccessPanel, defaultPanelTab, helpPreferences, mobilePostsOpen, notificationPreferencesOpen, previewCardOpen, uiPreferencesHydrated, user?.email]);
 
   useEffect(() => {
     setSelectedAdminPostIds((current) => current.filter((id) => posts.some((post) => post.id === id)));
@@ -2282,6 +2290,16 @@ export default function AdminConsole() {
   const messageKind = message ? adminMessageKind(message) : 'info';
 
   return (
+    <AdminHelpProvider
+      activeArea={activePanelTab}
+      completedGuides={helpPreferences.completedGuides}
+      onGuideComplete={(area, version) => setHelpPreferences((current) => ({
+        ...current,
+        completedGuides: { ...current.completedGuides, [area]: version },
+      }))}
+      ready={Boolean(user && canAccessPanel && uiPreferencesHydrated)}
+      roles={roles}
+    >
     <main className="admin-page">
       {message && (
         <div className={`admin-toast ${messageKind}`} role="alert" aria-live="polite">
@@ -2332,7 +2350,7 @@ export default function AdminConsole() {
             <div className="admin-inbox-head">
               <div>
                 <span>Notificaciones</span>
-                <h2>Actividad editorial</h2>
+                <h2 className="admin-help-heading">Actividad editorial <HelpTrigger topicId="notifications-inbox" /></h2>
                 <p>
                   {unreadNotificationCount ? `${unreadNotificationCount} sin leer` : 'Todo al dia'}
                   {' · '}Historial de {notificationPolicy.retentionDays} dias
@@ -2532,6 +2550,7 @@ export default function AdminConsole() {
                   )}
                 </nav>
                 <div className="admin-tabs-secondary">
+                  <AdminHelpNavButton />
                   {canAccessProfilePanel && (
                     <button
                       aria-label="Abrir mi perfil"
@@ -2585,11 +2604,11 @@ export default function AdminConsole() {
                       Salir
                     </button>
                   </div>
-                  <section className="admin-manager admin-profile">
+                  <section className="admin-manager admin-profile" data-help-id="profile-identity">
                     <div className="admin-manager-head">
                       <div>
                         <span>Perfil</span>
-                        <h2>Usuario y perfil</h2>
+                        <h2 className="admin-help-heading">Usuario y perfil <HelpTrigger topicId="profile-identity" /></h2>
                         <p>Estos datos se guardan separados de los roles. Se usan para firmar comentarios y prellenar el autor de nuevos blogs.</p>
                       </div>
                       <button className="btn btn-ghost" onClick={() => setProfilePreviewOpen(true)} type="button">
@@ -2674,19 +2693,19 @@ export default function AdminConsole() {
                           />
                         </label>
                         {canShowProfileOptIn ? (
-                          <label className="admin-profile-share">
+                          <label className="admin-profile-share" data-help-id="profile-public">
                             <input
                               checked={profileDraft.publicProfileEnabled}
                               onChange={(e) => updateProfileDraft('publicProfileEnabled', e.target.checked)}
                               type="checkbox"
                             />
                             <span>
-                              <strong>Publicar mi perfil de autor</strong>
+                              <strong className="admin-field-label">Publicar mi perfil de autor <HelpTrigger topicId="profile-public" /></strong>
                               <small>Permito que mis datos de autor se muestren en el blog cuando mi nombre coincida con una nota.</small>
                             </span>
                           </label>
                         ) : (
-                          <div className="admin-profile-warning">
+                          <div className="admin-profile-warning" data-help-id="profile-public">
                             <strong>Perfil publico no disponible todavia</strong>
                             <span>Para mostrarlo en el blog, el nombre y apellido deben coincidir con el autor usado en alguna nota existente.</span>
                           </div>
@@ -2701,9 +2720,9 @@ export default function AdminConsole() {
                       </div>
                     </div>
                     {(profileClaimMatch.candidate || profileClaimMatch.claim) && (
-                      <section className={`admin-profile-claim-card ${profileClaimMatch.claim?.status || 'available'}`}>
+                      <section className={`admin-profile-claim-card ${profileClaimMatch.claim?.status || 'available'}`} data-help-id="profile-claim">
                         <div>
-                          <span>Identidad editorial</span>
+                          <span className="admin-field-label">Identidad editorial <HelpTrigger topicId="profile-claim" /></span>
                           {profileClaimMatch.claim ? (
                             <>
                               <h3>{PROFILE_CLAIM_STATUS_LABELS[profileClaimMatch.claim.status] || 'Solicitud de vinculacion'}</h3>
@@ -2741,11 +2760,11 @@ export default function AdminConsole() {
                     )}
                   </section>
                   {SHOW_EMAIL_SETTINGS_UI && notificationPreferences && (
-                    <section className="admin-manager admin-notifications admin-profile-email-settings">
+                    <section className="admin-manager admin-notifications admin-profile-email-settings" data-help-id="profile-email">
                       <div className="admin-manager-head">
                         <div>
                           <span>Email</span>
-                          <h2>Avisos del flujo editorial</h2>
+                          <h2 className="admin-help-heading">Avisos del flujo editorial <HelpTrigger topicId="profile-email" /></h2>
                           <p>Elegis si queres recibir por email los movimientos internos que tambien aparecen en notificaciones.</p>
                         </div>
                         <button aria-expanded={notificationPreferencesOpen} className="btn btn-ghost" onClick={() => setNotificationPreferencesOpen((open) => !open)} type="button">
@@ -2798,11 +2817,11 @@ export default function AdminConsole() {
                   <div className="admin-profile-notice">
                     Si el nombre visible no coincide con el autor usado en una nota, el perfil no se va a mostrar correctamente y el usuario no podra activar la publicacion del perfil.
                   </div>
-                  <section className={`admin-profile-claims admin-collapsible-section ${adminProfileClaimsOpen ? 'is-open' : 'is-collapsed'} ${pendingAdminProfileClaimCount > 0 ? 'has-pending' : ''}`}>
+                  <section className={`admin-profile-claims admin-collapsible-section ${adminProfileClaimsOpen ? 'is-open' : 'is-collapsed'} ${pendingAdminProfileClaimCount > 0 ? 'has-pending' : ''}`} data-help-id="profiles-claims">
                     <div className="admin-manager-head compact">
                       <div>
                         <span>Solicitudes</span>
-                        <h3>Vinculacion de perfiles</h3>
+                        <h3 className="admin-help-heading">Vinculacion de perfiles <HelpTrigger topicId="profiles-claims" /></h3>
                         <p>Revisa quien solicita heredar un perfil gestionado y sus notas.</p>
                       </div>
                       <div className="admin-collapsible-head-actions">
@@ -2855,11 +2874,11 @@ export default function AdminConsole() {
                       </div>
                     )}
                   </section>
-                  <form className={`admin-managed-profile-form admin-collapsible-section ${adminProfileEditorOpen ? 'is-open' : 'is-collapsed'}`} onSubmit={saveAdminAuthorProfile}>
+                  <form className={`admin-managed-profile-form admin-collapsible-section ${adminProfileEditorOpen ? 'is-open' : 'is-collapsed'}`} data-help-id="profiles-manager" onSubmit={saveAdminAuthorProfile}>
                     <div className="admin-manager-head compact">
                       <div>
                         <span>{adminProfileEditingId ? (adminProfileBeingEdited?.managedAuthor ? 'Autor gestionado' : 'Cuenta de usuario') : 'Nuevo autor'}</span>
-                        <h3>{adminProfileEditingId ? 'Editar perfil' : 'Crear perfil sin cuenta'}</h3>
+                        <h3 className="admin-help-heading">{adminProfileEditingId ? 'Editar perfil' : 'Crear perfil sin cuenta'} <HelpTrigger topicId="profiles-manager" /></h3>
                         <p>{adminProfileEditingId
                           ? adminProfileBeingEdited?.managedAuthor
                             ? 'Actualiza los datos publicos del perfil gestionado.'
@@ -3125,11 +3144,11 @@ export default function AdminConsole() {
               {activePanelTab === 'access' && (
                 <>
               {SHOW_EMAIL_SETTINGS_UI && notificationPreferences && (
-                <section className="admin-manager admin-notifications">
+                <section className="admin-manager admin-notifications" data-help-id="access-email">
                   <div className="admin-manager-head">
                     <div>
                       <span>Email</span>
-                      <h2>Notificaciones</h2>
+                      <h2 className="admin-help-heading">Notificaciones <HelpTrigger topicId="access-email" /></h2>
                       <p>Activa avisos transaccionales del flujo editorial. Nadie recibe emails si no habilita esta opcion.</p>
                     </div>
                     <button
@@ -3186,11 +3205,11 @@ export default function AdminConsole() {
                 </section>
               )}
               {canManageUsers && (
-                <section className="admin-manager admin-users">
+                <section className="admin-manager admin-users" data-help-id="access-roles">
                   <div className="admin-manager-head">
                     <div>
                       <span>Usuarios</span>
-                      <h2>Roles y accesos</h2>
+                      <h2 className="admin-help-heading">Roles y accesos <HelpTrigger topicId="access-roles" /></h2>
                       <p>Agrega emails @{ALLOWED_EMAIL_DOMAIN} o @{ASSIGNED_EMAIL_DOMAIN}, asigna roles y guarda los cambios. Solo admins @{ALLOWED_EMAIL_DOMAIN} pueden habilitar usuarios.</p>
                     </div>
                     <button
@@ -3503,7 +3522,7 @@ export default function AdminConsole() {
               )}
 
               <div className="admin-grid">
-                <aside className="admin-list">
+                <aside className="admin-list" data-help-id="blog-list">
                   <div className="admin-list-head">
                     <button
                       aria-expanded={mobilePostsOpen}
@@ -3517,6 +3536,7 @@ export default function AdminConsole() {
                       </span>
                     </button>
                     <h2>Posts</h2>
+                    <HelpTrigger topicId="blogs-list" />
                     {!canUseReviewFilters && (
                       <select className="admin-list-status-desktop" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
                         {BLOG_STATUS_FILTERS.map((filter) => (
@@ -3645,7 +3665,7 @@ export default function AdminConsole() {
                     <input disabled={publishedAuthorLocked} value={form.title} onChange={(e) => updateForm('title', e.target.value)} required />
                   </label>
 
-                  <div className="admin-two">
+                  <div className="admin-two" data-help-id="blog-metadata">
                     <label>
                       Autor
                       <input disabled={publishedAuthorLocked} value={form.authorName} onChange={(e) => updateForm('authorName', e.target.value)} placeholder={user?.name || user?.email || 'Nombre visible'} />
@@ -3766,10 +3786,11 @@ export default function AdminConsole() {
                       onChange={(e) => updateForm('excerpt', e.target.value)}
                       rows="3"
                     />
+                    <FieldHelper description="Si queda vacio, se genera automaticamente a partir del contenido." topicId="blogs-metadata" />
                   </label>
 
-                  <label>
-                    Portada
+                  <label data-help-id="blog-cover">
+                    <span className="admin-field-label">Portada <HelpTrigger topicId="blogs-cover" /></span>
                     <div className="admin-radio-group">
                       <label>
                         <input
@@ -3875,9 +3896,9 @@ export default function AdminConsole() {
                     </div>
                   )}
 
-                  <div className="admin-content-head">
+                  <div className="admin-content-head" data-help-id="blog-editor">
                     <div>
-                      <span>Contenido</span>
+                      <span className="admin-field-label">Contenido <HelpTrigger topicId="blogs-editor" /></span>
                       <p>Redacta y da formato a la nota antes de guardarla.</p>
                     </div>
                     <div className="admin-content-actions">
@@ -3918,9 +3939,9 @@ export default function AdminConsole() {
                     value={form.contentMarkdown}
                   />
 
-                  <section className="admin-author-ending">
+                  <section className="admin-author-ending" data-help-id="blog-author-end">
                     <div>
-                      <span>Final de nota</span>
+                      <span className="admin-field-label">Final de nota <HelpTrigger topicId="blogs-author-end" /></span>
                       <p>Opcionalmente muestra el cierre de autor con foto, nombre y una frase breve al final.</p>
                     </div>
                     <label className="admin-cover-toggle">
@@ -3988,6 +4009,7 @@ export default function AdminConsole() {
 
                   <details
                     className="admin-advanced-options"
+                    data-help-id="blog-advanced"
                     onToggle={(event) => setAdvancedOptionsOpen(event.currentTarget.open)}
                     open={advancedOptionsOpen}
                   >
@@ -4007,7 +4029,8 @@ export default function AdminConsole() {
                   </details>
 
                   {!publishedAuthorLocked && (
-                  <div className="admin-actions">
+                  <div className="admin-actions" data-help-id="blog-workflow">
+                    <HelpTrigger topicId="blogs-workflow" />
                     <button className="btn btn-primary admin-action-save" disabled={busy || uploading || importing || isActionLoading('post-save') || publishedAuthorLocked || (!form.id && !canCreatePosts)} type="submit">
                       {isActionLoading('post-save') ? 'Guardando...' : form.id ? 'Guardar cambios' : 'Crear borrador'}
                       <ActionSpinner active={isActionLoading('post-save')} />
@@ -4097,9 +4120,9 @@ export default function AdminConsole() {
                   </section>
 
                   {reviewComments.length > 0 && (
-                    <section className="admin-review-panel">
+                    <section className="admin-review-panel" data-help-id="blog-comments">
                       <div className="admin-preview-head">
-                        <span>Comentarios</span>
+                        <span className="admin-field-label">Comentarios <HelpTrigger topicId="blogs-comments" /></span>
                         <p>{openReviewCommentCount} abiertos</p>
                       </div>
                       <div className="admin-review-filters" aria-label="Filtrar comentarios">
@@ -4699,6 +4722,7 @@ export default function AdminConsole() {
         </div>
       </section>
     </main>
+    </AdminHelpProvider>
   );
 
   function updateForm(field, value) {
@@ -5139,8 +5163,13 @@ function normalizeForm(value = {}) {
 function normalizeUiPreferences(value = {}) {
   const source = value && typeof value === 'object' ? value : {};
   const sourceSections = source.sections && typeof source.sections === 'object' ? source.sections : {};
+  const sourceHelp = source.help && typeof source.help === 'object' ? source.help : {};
+  const sourceCompletedGuides = sourceHelp.completedGuides && typeof sourceHelp.completedGuides === 'object'
+    ? sourceHelp.completedGuides
+    : {};
+  const allowedHelpAreas = new Set(['blogs', 'newsletter', 'mailing', 'access', 'profiles', 'profile']);
   return {
-    version: 1,
+    version: 2,
     lastPanelTab: typeof source.lastPanelTab === 'string' ? source.lastPanelTab : '',
     sections: Object.fromEntries(
       Object.entries(DEFAULT_UI_PREFERENCES.sections).map(([key, fallback]) => [
@@ -5148,6 +5177,16 @@ function normalizeUiPreferences(value = {}) {
         typeof sourceSections[key] === 'boolean' ? sourceSections[key] : fallback,
       ])
     ),
+    help: {
+      completedGuides: Object.fromEntries(
+        Object.entries(sourceCompletedGuides)
+          .map(([area, version]) => [area, Number(version)])
+          .filter(([area, version]) => allowedHelpAreas.has(area) && Number.isInteger(version) && version > 0 && version <= 1000)
+      ),
+      dismissedHints: Array.isArray(sourceHelp.dismissedHints)
+        ? [...new Set(sourceHelp.dismissedHints.map((item) => String(item || '').trim()).filter(Boolean))].slice(0, 100)
+        : [],
+    },
   };
 }
 

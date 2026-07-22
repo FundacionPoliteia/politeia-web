@@ -12,6 +12,7 @@ import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table
 import { marked } from 'marked';
 import TurndownService from 'turndown';
 import { gfm } from 'turndown-plugin-gfm';
+import { HelpTooltip } from './AdminHelp';
 
 const TOOLBAR_GROUPS = [
   [
@@ -231,66 +232,75 @@ export default function RichTextEditor({
         {TOOLBAR_GROUPS.map((group, index) => (
           <div className="rich-toolbar-group" key={index}>
             {group.map((tool) => (
-              <button
-                aria-pressed={editor ? Boolean(tool.active?.(editor)) : false}
-                className={editor && tool.active?.(editor) ? 'active' : ''}
-                disabled={disabled || !editor || tool.enabled?.(editor) === false}
-                key={tool.title}
-                onClick={() => tool.action(editor)}
-                title={tool.title}
-                type="button"
-              >
-                <ToolbarLabel tool={tool} />
-              </button>
+              <HelpTooltip key={tool.title} text={tool.title}>
+                <button
+                  aria-label={tool.title}
+                  aria-pressed={editor ? Boolean(tool.active?.(editor)) : false}
+                  className={editor && tool.active?.(editor) ? 'active' : ''}
+                  disabled={disabled || !editor || tool.enabled?.(editor) === false}
+                  onClick={() => tool.action(editor)}
+                  type="button"
+                >
+                  <ToolbarLabel tool={tool} />
+                </button>
+              </HelpTooltip>
             ))}
           </div>
         ))}
 
         <div className="rich-toolbar-group">
           {showCommentTools && (
+            <HelpTooltip text="Comentar seleccion">
             <button
+              aria-label="Comentar seleccion"
               disabled={disabled || !editor || !onCreateComment || editor.state.selection.empty || selectionHasReviewComment(editor)}
               onClick={addReviewComment}
-              title="Comentar seleccion"
               type="button"
             >
               <Icon name="add_comment" />
             </button>
+            </HelpTooltip>
           )}
-          <button disabled={disabled || !editor} onClick={setLink} title="Enlace" type="button">
-            <Icon name="link" />
-          </button>
+          <HelpTooltip text="Enlace">
+            <button aria-label="Enlace" disabled={disabled || !editor} onClick={setLink} type="button">
+              <Icon name="link" />
+            </button>
+          </HelpTooltip>
+          <HelpTooltip text="Subir imagen interna">
           <button
+            aria-label="Subir imagen interna"
             disabled={disabled || uploading || !editor}
             onClick={() => fileInputRef.current?.click()}
-            title="Subir imagen interna"
             type="button"
           >
             <Icon name={uploading ? 'hourglass_top' : 'add_photo_alternate'} />
           </button>
+          </HelpTooltip>
         </div>
 
         <div className="rich-toolbar-group rich-dropdown">
+          <HelpTooltip text="Herramientas de tabla">
           <button
             aria-expanded={tableMenuOpen}
+            aria-label="Herramientas de tabla"
             disabled={disabled || !editor}
             onClick={() => setTableMenuOpen((open) => !open)}
-            title="Herramientas de tabla"
             type="button"
           >
             <Icon name="table_chart" />
           </button>
+          </HelpTooltip>
           {tableMenuOpen && (
             <div className="rich-dropdown-menu">
               {TABLE_TOOLS.map((tool) => (
                 <button
+                  aria-label={tool.title}
                   disabled={disabled || !editor || tool.enabled?.(editor) === false}
                   key={tool.title}
                   onClick={() => {
                     tool.action(editor);
                     setTableMenuOpen(false);
                   }}
-                  title={tool.title}
                   type="button"
                 >
                   <Icon name={tool.icon} />
@@ -318,53 +328,59 @@ export default function RichTextEditor({
           shouldShow={({ editor, from, to }) => !disabled && editor.isEditable && from !== to}
         >
           <button
+            aria-label="Negrita"
             aria-pressed={editor.isActive('bold')}
             className={editor.isActive('bold') ? 'active' : ''}
+            data-tooltip="Negrita"
             onClick={() => editor.chain().focus().toggleBold().run()}
-            title="Negrita"
             type="button"
           >
             <Icon name="format_bold" />
           </button>
           <button
+            aria-label="Cursiva"
             aria-pressed={editor.isActive('italic')}
             className={editor.isActive('italic') ? 'active' : ''}
+            data-tooltip="Cursiva"
             onClick={() => editor.chain().focus().toggleItalic().run()}
-            title="Cursiva"
             type="button"
           >
             <Icon name="format_italic" />
           </button>
           <button
+            aria-label="Enlace"
             aria-pressed={editor.isActive('link')}
             className={editor.isActive('link') ? 'active' : ''}
+            data-tooltip="Enlace"
             onClick={setLink}
-            title="Enlace"
             type="button"
           >
             <Icon name="link" />
           </button>
           <button
+            aria-label="Cita"
             aria-pressed={editor.isActive('blockquote')}
             className={editor.isActive('blockquote') ? 'active' : ''}
+            data-tooltip="Cita"
             onClick={() => editor.chain().focus().toggleBlockquote().run()}
-            title="Cita"
             type="button"
           >
             <Icon name="format_quote" />
           </button>
           <button
+            aria-label="Separador horizontal"
+            data-tooltip="Separador horizontal"
             onClick={() => editor.chain().focus().setHorizontalRule().run()}
-            title="Separador horizontal"
             type="button"
           >
             <Icon name="horizontal_rule" />
           </button>
           {showCommentTools && (
             <button
+              aria-label="Comentar seleccion"
+              data-tooltip="Comentar seleccion"
               disabled={!onCreateComment || selectionHasReviewComment(editor)}
               onClick={addReviewComment}
-              title="Comentar seleccion"
               type="button"
             >
               <Icon name="add_comment" />

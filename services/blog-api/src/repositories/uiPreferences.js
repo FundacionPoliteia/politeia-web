@@ -14,6 +14,11 @@ export const UI_SECTION_DEFAULTS = Object.freeze({
   mobilePostsOpen: false,
 });
 
+export const UI_HELP_DEFAULTS = Object.freeze({
+  completedGuides: Object.freeze({}),
+  dismissedHints: Object.freeze([]),
+});
+
 const uiPreferences = () => db().collection('userUiPreferences');
 
 export async function getUserUiPreferences(email) {
@@ -36,6 +41,7 @@ export async function updateUserUiPreferences(email, input = {}) {
     version: next.version,
     lastPanelTab: next.lastPanelTab,
     sections: next.sections,
+    help: next.help,
     updatedAt: serverTimestamp(),
   }, { merge: true });
 
@@ -58,15 +64,20 @@ export function sanitizeUiPreferences(input = {}, fallback = defaultUiPreference
           : defaultValue,
     ])
   );
+  const fallbackHelp = sanitizeHelpPreferences(fallback?.help);
+  const help = source.help && typeof source.help === 'object'
+    ? sanitizeHelpPreferences(source.help, fallbackHelp)
+    : fallbackHelp;
 
   return {
-    version: 1,
+    version: 2,
     lastPanelTab: UI_PREFERENCE_TABS.includes(source.lastPanelTab)
       ? source.lastPanelTab
       : UI_PREFERENCE_TABS.includes(fallback?.lastPanelTab)
         ? fallback.lastPanelTab
         : '',
     sections,
+    help,
   };
 }
 
@@ -79,11 +90,41 @@ function toUiPreferences(item = {}) {
 
 function defaultUiPreferences() {
   return {
-    version: 1,
+    version: 2,
     lastPanelTab: '',
     sections: { ...UI_SECTION_DEFAULTS },
+    help: sanitizeHelpPreferences(UI_HELP_DEFAULTS),
     updatedAt: null,
   };
+}
+
+function sanitizeHelpPreferences(input = {}, fallback = UI_HELP_DEFAULTS) {
+  const source = input && typeof input === 'object' ? input : {};
+  const fallbackSource = fallback && typeof fallback === 'object' ? fallback : UI_HELP_DEFAULTS;
+  const sourceCompleted = source.completedGuides && typeof source.completedGuides === 'object'
+    ? source.completedGuides
+    : {};
+  const fallbackCompleted = fallbackSource.completedGuides && typeof fallbackSource.completedGuides === 'object'
+    ? fallbackSource.completedGuides
+    : {};
+  const completedGuides = {};
+  UI_PREFERENCE_TABS.forEach((area) => {
+    const value = sourceCompleted[area] ?? fallbackCompleted[area];
+    const version = Number(value);
+    if (Number.isInteger(version) && version > 0 && version <= 1000) completedGuides[area] = version;
+  });
+
+  const dismissedSource = Array.isArray(source.dismissedHints)
+    ? source.dismissedHints
+    : Array.isArray(fallbackSource.dismissedHints)
+      ? fallbackSource.dismissedHints
+      : [];
+  const dismissedHints = [...new Set(dismissedSource
+    .map((item) => String(item || '').trim())
+    .filter((item) => /^[a-z0-9][a-z0-9:_-]{0,79}$/i.test(item)))]
+    .slice(0, 100);
+
+  return { completedGuides, dismissedHints };
 }
 
 function preferenceId(email) {

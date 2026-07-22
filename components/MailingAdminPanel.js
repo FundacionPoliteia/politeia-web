@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { HelpTrigger, helpTopicFromText } from './AdminHelp';
 
 const DEFAULT_SETTINGS = {
   enabled: false,
@@ -159,9 +160,9 @@ export default function MailingAdminPanel({ apiBase, currentEmail }) {
         El dispatcher procesa la cola cada {settings.dispatchIntervalHours} horas. Proximo ciclo estimado: {formatDate(overview?.nextDispatchAt)}.
       </p>
 
-      <details className="admin-mailing-settings" open>
+      <details className="admin-mailing-settings" data-help-id="mailing-settings" open>
         <summary>
-          <span>Configuracion automatica</span>
+          <span className="admin-field-label">Configuracion automatica <HelpTrigger topicId="mailing-settings" /></span>
           <small>Reglas de envio y textos reutilizables</small>
         </summary>
         <div className="admin-mailing-settings-content">
@@ -258,8 +259,8 @@ export default function MailingAdminPanel({ apiBase, currentEmail }) {
         </div>
       </details>
 
-      <section className="admin-mailing-lab">
-        <div><span>Laboratorio</span><h3>Previsualizacion y pruebas</h3><p>Las pruebas no consumen cupos ni cambian el estado de la cola.</p></div>
+      <section className="admin-mailing-lab" data-help-id="mailing-lab">
+        <div><span>Laboratorio</span><h3 className="admin-help-heading">Previsualizacion y pruebas <HelpTrigger topicId="mailing-lab" /></h3><p>Las pruebas no consumen cupos ni cambian el estado de la cola.</p></div>
         <label>Enviar prueba a<input type="email" value={testEmail} onChange={(event) => setTestEmail(event.target.value)} /></label>
         <div className="admin-row-actions">
           <button className="btn btn-ghost" disabled={Boolean(busy)} onClick={() => openPreview(selected.length ? '' : 'single')} type="button">Previsualizar</button>
@@ -268,8 +269,8 @@ export default function MailingAdminPanel({ apiBase, currentEmail }) {
         </div>
       </section>
 
-      <section className="admin-mailing-queue">
-        <div className="admin-mailing-queue-head"><div><span>Cola inteligente</span><h3>Notas y estado de envio</h3></div><small>{selectedJobs.length} seleccionadas</small></div>
+      <section className="admin-mailing-queue" data-help-id="mailing-queue">
+        <div className="admin-mailing-queue-head"><div><span>Cola inteligente</span><h3 className="admin-help-heading">Notas y estado de envio <HelpTrigger topicId="mailing-queue" /></h3></div><small>{selectedJobs.length} seleccionadas</small></div>
         <div className="admin-mailing-batch-actions">
           <button className="btn btn-ghost" disabled={!selected.length || Boolean(busy)} onClick={() => runAction('queue')} type="button">Incluir</button>
           <button className="btn btn-ghost" disabled={!selected.length || Boolean(busy)} onClick={() => runAction('exclude')} type="button">Excluir</button>
@@ -327,26 +328,7 @@ function MailingSettingField({ children, className = '', help, label, suffix = '
 }
 
 function SettingHelp({ text }) {
-  function keepHelpFromChangingField(event) {
-    event.preventDefault();
-    event.stopPropagation();
-  }
-
-  return (
-    <span
-      aria-label={`Ayuda: ${text}`}
-      className="admin-setting-help"
-      onClick={keepHelpFromChangingField}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') keepHelpFromChangingField(event);
-      }}
-      role="button"
-      tabIndex="0"
-    >
-      <span aria-hidden="true" className="material-symbols-outlined">help</span>
-      <span className="admin-setting-tooltip" role="tooltip">{text}</span>
-    </span>
-  );
+  return <HelpTrigger help={helpTopicFromText('Como funciona', text, { summary: 'Abrir explicacion detallada de esta configuracion.' })} />;
 }
 
 function mailingStatusTone(status) {
