@@ -21,6 +21,21 @@ const ASSIGNED_EMAIL_DOMAIN = 'gmail.com';
 const SHOW_EMAIL_SETTINGS_UI = process.env.NEXT_PUBLIC_EMAIL_SETTINGS_ENABLED !== 'false';
 const NOTIFICATION_REFRESH_MS = 60 * 1000;
 const DEFAULT_NOTIFICATION_POLICY = { recentDays: 3, retentionDays: 7 };
+const UI_PREFERENCES_STORAGE_PREFIX = 'politeia:admin-ui:';
+const DEFAULT_UI_PREFERENCES = {
+  version: 1,
+  lastPanelTab: '',
+  sections: {
+    adminUsersOpen: false,
+    adminManagerOpen: false,
+    notificationPreferencesOpen: false,
+    adminProfileClaimsOpen: false,
+    adminProfileEditorOpen: true,
+    previewCardOpen: true,
+    advancedOptionsOpen: false,
+    mobilePostsOpen: false,
+  },
+};
 
 
 const EMPTY_FORM = {
@@ -206,6 +221,7 @@ export default function AdminConsole() {
   const [profilePreviewOpen, setProfilePreviewOpen] = useState(false);
   const [profileConsentOpen, setProfileConsentOpen] = useState(false);
   const [previewCardOpen, setPreviewCardOpen] = useState(true);
+  const [advancedOptionsOpen, setAdvancedOptionsOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState(null);
   const [mailingPublicationPolicy, setMailingPublicationPolicy] = useState({
     enabled: false,
@@ -244,7 +260,9 @@ export default function AdminConsole() {
   const [notificationHighlight, setNotificationHighlight] = useState({ target: '', nonce: 0 });
   const [mobilePostsOpen, setMobilePostsOpen] = useState(false);
   const [activePanelTab, setActivePanelTab] = useState('blogs');
+  const [uiPreferencesHydrated, setUiPreferencesHydrated] = useState(false);
   const [userProfile, setUserProfile] = useState(EMPTY_PROFILE);
+  const [userProfileLoaded, setUserProfileLoaded] = useState(false);
   const [profileDraft, setProfileDraft] = useState(EMPTY_PROFILE);
   const [adminProfiles, setAdminProfiles] = useState([]);
   const [adminProfileDraft, setAdminProfileDraft] = useState(EMPTY_MANAGED_AUTHOR_PROFILE);
@@ -276,6 +294,7 @@ export default function AdminConsole() {
   const adminProfilePhotoInputRef = useRef(null);
   const profilePermissionsRef = useRef(null);
   const coverValidationRef = useRef(0);
+  const uiPreferencesSaveTimerRef = useRef(null);
 
   const roles = user?.roles || [];
   const isAdmin = roles.includes('admin');
@@ -300,6 +319,15 @@ export default function AdminConsole() {
   const canAccessNewsletterPanel = isNewsletterManager;
   const canAccessMailingPanel = isAdmin;
   const defaultPanelTab = canAccessEditorialPanel ? 'blogs' : canAccessNewsletterPanel ? 'newsletter' : 'profile';
+  const userProfileNeedsSetup = profileNeedsSetup(userProfile);
+  const allowedPanelTabs = useMemo(() => [
+    ...(canAccessEditorialPanel ? ['blogs'] : []),
+    ...(canAccessNewsletterPanel ? ['newsletter'] : []),
+    ...(canAccessMailingPanel ? ['mailing'] : []),
+    ...(canAccessRolesMailPanel ? ['access'] : []),
+    ...(canReviewProfiles ? ['profiles'] : []),
+    ...(canAccessProfilePanel ? ['profile'] : []),
+  ], [canAccessEditorialPanel, canAccessMailingPanel, canAccessNewsletterPanel, canAccessProfilePanel, canAccessRolesMailPanel, canReviewProfiles]);
   const accountAuthorName = user?.name || user?.email || '';
   const profileAuthorName = profileDraft.fullName || userProfile.fullName || accountAuthorName;
   const profileClosingPhrase = profileDraft.closingPhrase || userProfile.closingPhrase || '';
@@ -454,6 +482,7 @@ export default function AdminConsole() {
   useEffect(() => {
     if (canAccessPanel) {
       loadNotificationPreferences();
+      setUserProfileLoaded(false);
       loadUserProfile();
       loadInAppNotifications({ silent: true });
       const intervalId = window.setInterval(() => {
@@ -471,13 +500,107 @@ export default function AdminConsole() {
       setNotificationPreferences(null);
       setUserProfile(EMPTY_PROFILE);
       setProfileDraft(EMPTY_PROFILE);
+      setUserProfileLoaded(false);
       setInAppNotifications([]);
       setUnreadNotificationCount(0);
       setNotificationsOpen(false);
       setShowPreviousNotifications(false);
       setNotificationPolicy(DEFAULT_NOTIFICATION_POLICY);
     }
-  }, [canAccessPanel]);
+  }, [canAccessPanel, user?.email]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const email = String(user?.email || '').trim().toLowerCase();
+    if (!email || !userProfileLoaded || !canAccessPanel) {
+      setUiPreferencesHydrated(false);
+      return undefined;
+    }
+
+    const storageKey = `${UI_PREFERENCES_STORAGE_PREFIX}${email}`;
+    const applyPreferences = (input) => {
+      const preferences = normalizeUiPreferences(input);
+      const sections = preferences.sections;
+      setAdminUsersOpen(sections.adminUsersOpen);
+      setAdminManagerOpen(sections.adminManagerOpen);
+      setNotificationPreferencesOpen(sections.notificationPreferencesOpen);
+      setAdminProfileClaimsOpen(sections.adminProfileClaimsOpen);
+      setAdminProfileEditorOpen(sections.adminProfileEditorOpen);
+      setPreviewCardOpen(sections.previewCardOpen);
+      setAdvancedOptionsOpen(sections.advancedOptionsOpen);
+      setMobilePostsOpen(sections.mobilePostsOpen);
+      if (userProfileNeedsSetup) {
+        setActivePanelTab('profile');
+      } else {
+        setActivePanelTab(allowedPanelTabs.includes(preferences.lastPanelTab) ? preferences.lastPanelTab : defaultPanelTab);
+      }
+    };
+
+    setUiPreferencesHydrated(false);
+    try {
+      const cached = window.localStorage.getItem(storageKey);
+      if (cached) applyPreferences(JSON.parse(cached));
+    } catch (_err) {
+      window.localStorage.removeItem(storageKey);
+    }
+
+    fetch(`${API_BASE}/v1/ui-preferences`, { credentials: 'include' })
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error?.message || `Error ${res.status}`);
+        return data.item;
+      })
+      .then((preferences) => {
+        if (cancelled) return;
+        applyPreferences(preferences);
+        window.localStorage.setItem(storageKey, JSON.stringify(normalizeUiPreferences(preferences)));
+      })
+      .catch(() => {
+        // Local cache keeps the panel usable if preference sync is temporarily unavailable.
+      })
+      .finally(() => {
+        if (!cancelled) setUiPreferencesHydrated(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [allowedPanelTabs, canAccessPanel, defaultPanelTab, user?.email, userProfileLoaded, userProfileNeedsSetup]);
+
+  useEffect(() => {
+    const email = String(user?.email || '').trim().toLowerCase();
+    if (!email || !uiPreferencesHydrated || !canAccessPanel) return undefined;
+
+    const preferences = normalizeUiPreferences({
+      lastPanelTab: allowedPanelTabs.includes(activePanelTab) ? activePanelTab : defaultPanelTab,
+      sections: {
+        adminUsersOpen,
+        adminManagerOpen,
+        notificationPreferencesOpen,
+        adminProfileClaimsOpen,
+        adminProfileEditorOpen,
+        previewCardOpen,
+        advancedOptionsOpen,
+        mobilePostsOpen,
+      },
+    });
+    window.localStorage.setItem(`${UI_PREFERENCES_STORAGE_PREFIX}${email}`, JSON.stringify(preferences));
+    window.clearTimeout(uiPreferencesSaveTimerRef.current);
+    uiPreferencesSaveTimerRef.current = window.setTimeout(() => {
+      fetch(`${API_BASE}/v1/ui-preferences`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(preferences),
+      }).then((res) => {
+        if (!res.ok) throw new Error(`Error ${res.status}`);
+      }).catch(() => {
+        // The local copy is retained and the next interaction retries the remote sync.
+      });
+    }, 600);
+
+    return () => window.clearTimeout(uiPreferencesSaveTimerRef.current);
+  }, [activePanelTab, adminManagerOpen, adminProfileClaimsOpen, adminProfileEditorOpen, adminUsersOpen, advancedOptionsOpen, allowedPanelTabs, canAccessPanel, defaultPanelTab, mobilePostsOpen, notificationPreferencesOpen, previewCardOpen, uiPreferencesHydrated, user?.email]);
 
   useEffect(() => {
     setSelectedAdminPostIds((current) => current.filter((id) => posts.some((post) => post.id === id)));
@@ -713,6 +836,9 @@ export default function AdminConsole() {
       setUser(data.user);
     } catch (err) {
       setUser(null);
+      setUiPreferencesHydrated(false);
+      setUserProfileLoaded(false);
+      window.clearTimeout(uiPreferencesSaveTimerRef.current);
       if (!silent) setMessage(authErrorMessage(err));
     } finally {
       setCheckingSession(false);
@@ -783,6 +909,7 @@ export default function AdminConsole() {
       setAdminUserNewRoles(['blog']);
       setAdminUserSearch('');
       setAdminManagerOpen(false);
+      setAdvancedOptionsOpen(false);
       setSelectedAdminPostIds([]);
       setNotificationPreferences(null);
       setNotificationPreferencesOpen(false);
@@ -848,7 +975,7 @@ export default function AdminConsole() {
       setAdminUserDrafts((current) => {
         const next = { ...current };
         items.forEach((item) => {
-          if (!next[item.email]) next[item.email] = item.roles || [];
+          if (!next[item.email]) next[item.email] = normalizeAssignedRoleSelection(item.roles || []);
         });
         return next;
       });
@@ -1083,6 +1210,8 @@ export default function AdminConsole() {
       await loadProfileClaimMatch();
     } catch (err) {
       setMessage(err.message);
+    } finally {
+      setUserProfileLoaded(true);
     }
   }
 
@@ -1929,27 +2058,33 @@ export default function AdminConsole() {
         ? current
         : [{ email, roles: [], active: true, isDraft: true }, ...current]
     ));
-    setAdminUserDrafts((current) => ({ ...current, [email]: current[email] || adminUserNewRoles }));
+    setAdminUserDrafts((current) => ({ ...current, [email]: current[email] || normalizeAssignedRoleSelection(adminUserNewRoles) }));
     setAdminUserEmail('');
     setAdminUsersOpen(true);
   }
 
   function toggleNewAdminUserRole(role) {
     setAdminUserNewRoles((current) => {
+      if (role === 'admin') return current.includes('admin') ? [] : ['admin'];
+      if (current.includes('admin')) return current;
       const nextRoles = current.includes(role)
         ? current.filter((item) => item !== role)
         : [...current, role];
-      return ASSIGNABLE_ROLES.map((item) => item.value).filter((item) => nextRoles.includes(item));
+      return normalizeAssignedRoleSelection(nextRoles);
     });
   }
 
   function toggleAdminUserRole(email, role) {
     setAdminUserDrafts((current) => {
       const roles = current[email] || [];
+      if (role === 'admin') {
+        return { ...current, [email]: roles.includes('admin') ? [] : ['admin'] };
+      }
+      if (roles.includes('admin')) return current;
       const nextRoles = roles.includes(role)
         ? roles.filter((item) => item !== role)
         : [...roles, role];
-      return { ...current, [email]: ASSIGNABLE_ROLES.map((item) => item.value).filter((item) => nextRoles.includes(item)) };
+      return { ...current, [email]: normalizeAssignedRoleSelection(nextRoles) };
     });
   }
 
@@ -1963,7 +2098,7 @@ export default function AdminConsole() {
       }));
       setMessage(`Roles actualizados para ${email}.`);
       setAdminUsers((current) => upsertAdminUserItem(current, data.item));
-      setAdminUserDrafts((current) => ({ ...current, [email]: data.item?.roles || [] }));
+      setAdminUserDrafts((current) => ({ ...current, [email]: normalizeAssignedRoleSelection(data.item?.roles || []) }));
     } catch (err) {
       setMessage(err.message);
     } finally {
@@ -3104,10 +3239,10 @@ export default function AdminConsole() {
                           <span>Rol inicial</span>
                           <div className="admin-role-checks admin-role-checks-inline">
                             {ASSIGNABLE_ROLES.map((role) => (
-                              <label key={role.value}>
+                              <label className={adminUserNewRoles.includes('admin') && role.value !== 'admin' ? 'is-inherited' : ''} key={role.value}>
                                 <input
-                                  checked={adminUserNewRoles.includes(role.value)}
-                                  disabled={busy}
+                                  checked={adminUserNewRoles.includes('admin') || adminUserNewRoles.includes(role.value)}
+                                  disabled={busy || (adminUserNewRoles.includes('admin') && role.value !== 'admin')}
                                   onChange={() => toggleNewAdminUserRole(role.value)}
                                   type="checkbox"
                                 />
@@ -3146,10 +3281,10 @@ export default function AdminConsole() {
                                   <td>
                                     <div className="admin-role-checks">
                                       {ASSIGNABLE_ROLES.map((role) => (
-                                        <label key={role.value}>
+                                        <label className={draftRoles.includes('admin') && role.value !== 'admin' ? 'is-inherited' : ''} key={role.value}>
                                           <input
-                                            checked={draftRoles.includes(role.value)}
-                                            disabled={busy}
+                                            checked={draftRoles.includes('admin') || draftRoles.includes(role.value)}
+                                            disabled={busy || (draftRoles.includes('admin') && role.value !== 'admin')}
                                             onChange={() => toggleAdminUserRole(item.email, role.value)}
                                             type="checkbox"
                                           />
@@ -3851,7 +3986,11 @@ export default function AdminConsole() {
                   </section>
 
 
-                  <details className="admin-advanced-options">
+                  <details
+                    className="admin-advanced-options"
+                    onToggle={(event) => setAdvancedOptionsOpen(event.currentTarget.open)}
+                    open={advancedOptionsOpen}
+                  >
                     <summary>
                       <span>Opciones avanzadas</span>
                       <span aria-hidden="true" className="material-symbols-outlined">expand_more</span>
@@ -4680,9 +4819,18 @@ function isPrimaryDomainEmail(email) {
 }
 
 function sameRoleSet(left = [], right = []) {
-  const cleanLeft = ASSIGNABLE_ROLES.map((role) => role.value).filter((role) => left.includes(role));
-  const cleanRight = ASSIGNABLE_ROLES.map((role) => role.value).filter((role) => right.includes(role));
+  const cleanLeft = normalizeAssignedRoleSelection(left);
+  const cleanRight = normalizeAssignedRoleSelection(right);
   return cleanLeft.length === cleanRight.length && cleanLeft.every((role) => cleanRight.includes(role));
+}
+
+function normalizeAssignedRoleSelection(value = []) {
+  const source = Array.isArray(value) ? value : [];
+  const selected = new Set(source.map((role) => String(role).trim().toLowerCase()));
+  const cleanRoles = ASSIGNABLE_ROLES
+    .map((role) => role.value)
+    .filter((role) => selected.has(role));
+  return cleanRoles.includes('admin') ? ['admin'] : cleanRoles;
 }
 
 function upsertAdminUserItem(items, nextItem) {
@@ -4986,6 +5134,21 @@ function normalizeForm(value = {}) {
   next.showCoverInPost = next.showCoverInPost !== false;
   next.showAuthorNote = next.showAuthorNote === true;
   return next;
+}
+
+function normalizeUiPreferences(value = {}) {
+  const source = value && typeof value === 'object' ? value : {};
+  const sourceSections = source.sections && typeof source.sections === 'object' ? source.sections : {};
+  return {
+    version: 1,
+    lastPanelTab: typeof source.lastPanelTab === 'string' ? source.lastPanelTab : '',
+    sections: Object.fromEntries(
+      Object.entries(DEFAULT_UI_PREFERENCES.sections).map(([key, fallback]) => [
+        key,
+        typeof sourceSections[key] === 'boolean' ? sourceSections[key] : fallback,
+      ])
+    ),
+  };
 }
 
 function normalizeProfile(value = {}) {

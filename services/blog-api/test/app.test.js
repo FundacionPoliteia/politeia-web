@@ -76,6 +76,11 @@ import {
   updateMailingSettings,
 } from '../src/repositories/mailingAutomation.js';
 import { createMailThumbnail } from '../src/repositories/media.js';
+import {
+  getUserUiPreferences,
+  sanitizeUiPreferences,
+  updateUserUiPreferences,
+} from '../src/repositories/uiPreferences.js';
 
 test('GET /healthz returns service health', async () => {
   const res = await request(createApp()).get('/healthz').expect(200);
@@ -107,6 +112,102 @@ test('GET /v1/me accepts a valid session cookie', async () => {
     assert.equal(res.body.user.authMode, 'session');
   } finally {
     config.devAuth = previousDevAuth;
+  }
+});
+
+test('UI preferences sanitize fields and preserve partial updates per user', async () => {
+  const firestore = createMemoryFirestore();
+  setFirestoreForTests(firestore);
+
+  try {
+    assert.deepEqual(sanitizeUiPreferences({
+      lastPanelTab: 'unknown',
+      sections: {
+        adminUsersOpen: true,
+        previewCardOpen: 'yes',
+        injectedSetting: true,
+      },
+      privateData: 'ignored',
+    }), {
+      version: 1,
+      lastPanelTab: '',
+      sections: {
+        adminUsersOpen: true,
+        adminManagerOpen: false,
+        notificationPreferencesOpen: false,
+        adminProfileClaimsOpen: false,
+        adminProfileEditorOpen: true,
+        previewCardOpen: true,
+        advancedOptionsOpen: false,
+        mobilePostsOpen: false,
+      },
+    });
+
+    await updateUserUiPreferences('first@politeia.ar', {
+      lastPanelTab: 'profiles',
+      sections: {
+        adminUsersOpen: true,
+        advancedOptionsOpen: true,
+      },
+    });
+    await updateUserUiPreferences('first@politeia.ar', {
+      sections: { previewCardOpen: false },
+    });
+
+    const first = await getUserUiPreferences('first@politeia.ar');
+    const second = await getUserUiPreferences('second@politeia.ar');
+    assert.equal(first.lastPanelTab, 'profiles');
+    assert.equal(first.sections.adminUsersOpen, true);
+    assert.equal(first.sections.advancedOptionsOpen, true);
+    assert.equal(first.sections.previewCardOpen, false);
+    assert.equal(second.lastPanelTab, '');
+    assert.deepEqual(second.sections, {
+      adminUsersOpen: false,
+      adminManagerOpen: false,
+      notificationPreferencesOpen: false,
+      adminProfileClaimsOpen: false,
+      adminProfileEditorOpen: true,
+      previewCardOpen: true,
+      advancedOptionsOpen: false,
+      mobilePostsOpen: false,
+    });
+  } finally {
+    setFirestoreForTests(null);
+  }
+});
+
+test('UI preference endpoints require a session and isolate account state', async () => {
+  const firestore = createMemoryFirestore();
+  const previousDevAuth = config.devAuth;
+  setFirestoreForTests(firestore);
+  config.devAuth = false;
+  const sessionFor = (email) => `${config.sessionCookieName}=${encodeURIComponent(buildSessionCookie({ email, name: email, roles: ['admin'] }))}`;
+
+  try {
+    const app = createApp();
+    await request(app).get('/v1/ui-preferences').expect(401);
+    await request(app)
+      .patch('/v1/ui-preferences')
+      .set('Cookie', sessionFor('dev@politeia.ar'))
+      .send({ lastPanelTab: 'mailing', sections: { adminManagerOpen: true } })
+      .expect(200);
+
+    const first = await request(app)
+      .get('/v1/ui-preferences')
+      .set('Cookie', sessionFor('dev@politeia.ar'))
+      .expect(200);
+    const second = await request(app)
+      .get('/v1/ui-preferences')
+      .set('Cookie', sessionFor('info@politeia.ar'))
+      .expect(200);
+
+    assert.equal(first.body.item.lastPanelTab, 'mailing');
+    assert.equal(first.body.item.sections.adminManagerOpen, true);
+    assert.equal(second.body.item.lastPanelTab, '');
+    assert.equal(second.body.item.sections.adminManagerOpen, false);
+  } finally {
+    config.devAuth = previousDevAuth;
+    setFirestoreForTests(null);
   }
 });
 
@@ -203,7 +304,8 @@ test('built-in admins do not require role assignments', () => {
 });
 
 test('role assignments allow primary-domain and configured external Gmail emails', () => {
-  assert.deepEqual(sanitizeAssignedRoles(['ADMIN', 'reviewer', 'blog', 'newsletter', 'owner', 'admin']), ['admin', 'reviewer', 'blog', 'newsletter']);
+  assert.deepEqual(sanitizeAssignedRoles(['ADMIN', 'reviewer', 'blog', 'newsletter', 'owner', 'admin']), ['admin']);
+  assert.deepEqual(sanitizeAssignedRoles(['reviewer', 'blog', 'newsletter']), ['reviewer', 'blog', 'newsletter']);
   assert.equal(isAllowedRoleEmail('persona@politeia.ar'), true);
   assert.equal(isAllowedRoleEmail('persona@gmail.com'), true);
   assert.equal(isAllowedRoleEmail('persona@example.com'), false);

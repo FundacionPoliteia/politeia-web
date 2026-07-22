@@ -136,6 +136,7 @@ export async function grantBlogRoleForProfileClaim(email, actorEmail, claimId) {
 export function sanitizeAssignedRoles(value) {
   const source = Array.isArray(value) ? value : [];
   const roles = new Set(source.map((role) => String(role).trim().toLowerCase()));
+  if (roles.has('admin')) return ['admin'];
   return ASSIGNABLE_ROLES.filter((role) => roles.has(role));
 }
 

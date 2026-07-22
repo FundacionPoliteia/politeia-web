@@ -20,6 +20,7 @@ import { handleResendWebhook } from './routes/mailWebhook.js';
 import { apiRequestLogger } from './middleware/apiRequestLogger.js';
 import { adminOperationsRouter } from './routes/adminOperations.js';
 import { mailingRouter } from './routes/mailing.js';
+import { uiPreferencesRouter } from './routes/uiPreferences.js';
 
 export function createApp() {
   const app = express();
@@ -63,6 +64,7 @@ export function createApp() {
   app.use('/v1/newsletter', requireGoogleCloudCredentials, newsletterRouter({ writeLimiter }));
   app.use('/v1/mailing', requireGoogleCloudCredentials, mailingRouter({ writeLimiter }));
   app.use('/v1/profile', requireGoogleCloudCredentials, profileRouter({ writeLimiter }));
+  app.use('/v1/ui-preferences', requireGoogleCloudCredentials, uiPreferencesRouter({ writeLimiter }));
   app.use('/v1/admin', requireGoogleCloudCredentials, adminOperationsRouter({ writeLimiter }));
 
   app.get('/v1/me', requireAuth, (req, res) => {
