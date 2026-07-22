@@ -3992,7 +3992,7 @@ a {
   outline: none
 }
 
-.admin-help-tooltip {
+.admin-help-trigger-wrap > .admin-help-tooltip {
   width: max-content;
   max-width: min(280px, calc(100vw - 32px));
   position: absolute;
@@ -4018,8 +4018,8 @@ a {
   visibility: hidden
 }
 
-.admin-help-trigger-wrap:hover .admin-help-tooltip,
-.admin-help-trigger-wrap:focus-within .admin-help-tooltip {
+.admin-help-trigger-wrap:hover > .admin-help-tooltip,
+.admin-help-trigger-wrap:focus-within > .admin-help-tooltip {
   opacity: 1;
   transform: translate(-50%, 0);
   visibility: visible
@@ -4027,6 +4027,19 @@ a {
 
 .admin-help-trigger[aria-expanded='true'] + .admin-help-tooltip {
   display: none
+}
+
+.admin-list .admin-help-trigger-wrap > .admin-help-tooltip {
+  width: 230px;
+  max-width: min(230px, calc(100vw - 48px));
+  right: -2px;
+  left: auto;
+  transform: translateY(-3px)
+}
+
+.admin-list .admin-help-trigger-wrap:hover > .admin-help-tooltip,
+.admin-list .admin-help-trigger-wrap:focus-within > .admin-help-tooltip {
+  transform: translateY(0)
 }
 
 .admin-help-popover {
@@ -4451,7 +4464,7 @@ a {
     width: 100%
   }
 
-  .admin-help-tooltip,
+  .admin-help-trigger-wrap > .admin-help-tooltip,
   .admin-control-tooltip > [role='tooltip'],
   .rich-toolbar button[data-tooltip]::after,
   .rich-bubble-menu button[data-tooltip]::after {
@@ -4462,7 +4475,7 @@ a {
 @media(prefers-reduced-motion:reduce) {
   .admin-help-progress span,
   .admin-help-trigger,
-  .admin-help-tooltip,
+  .admin-help-trigger-wrap > .admin-help-tooltip,
   .admin-help-highlight-target {
     scroll-behavior: auto;
     transition: none
@@ -4752,7 +4765,8 @@ a {
   position: sticky;
   top: 92px;
   max-height: calc(100vh - 120px);
-  overflow: auto
+  overflow-x: hidden;
+  overflow-y: auto
 }
 
 .admin-list-head,

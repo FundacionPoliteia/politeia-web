@@ -3143,67 +3143,6 @@ export default function AdminConsole() {
 
               {activePanelTab === 'access' && (
                 <>
-              {SHOW_EMAIL_SETTINGS_UI && notificationPreferences && (
-                <section className="admin-manager admin-notifications" data-help-id="access-email">
-                  <div className="admin-manager-head">
-                    <div>
-                      <span>Email</span>
-                      <h2 className="admin-help-heading">Notificaciones <HelpTrigger topicId="access-email" /></h2>
-                      <p>Activa avisos transaccionales del flujo editorial. Nadie recibe emails si no habilita esta opcion.</p>
-                    </div>
-                    <button
-                      aria-expanded={notificationPreferencesOpen}
-                      className="btn btn-ghost"
-                      onClick={() => setNotificationPreferencesOpen((open) => !open)}
-                      type="button"
-                    >
-                      {notificationPreferencesOpen ? 'Ocultar email' : 'Configurar email'}
-                    </button>
-                  </div>
-                  {notificationPreferencesOpen && (
-                    <div className="admin-notification-body">
-                      <label className="admin-switch-row">
-                        <input
-                          checked={notificationPreferences.enabled}
-                          onChange={(event) => updateNotificationPreference('enabled', event.target.checked)}
-                          type="checkbox"
-                        />
-                        <span>
-                          <strong>Recibir emails del panel</strong>
-                          <small>El opt-in se guarda para {notificationPreferences.email || user.email}.</small>
-                        </span>
-                      </label>
-                      <div className="admin-notification-options">
-                        {NOTIFICATION_EVENT_LABELS
-                          .filter((event) => event.always || event.roles.some((role) => roles.includes(role)))
-                          .map((event) => (
-                            <label key={event.value}>
-                              <input
-                                checked={notificationPreferences.events[event.value] === true}
-                                disabled={!notificationPreferences.enabled}
-                                onChange={() => toggleNotificationEvent(event.value)}
-                                type="checkbox"
-                              />
-                              {event.label}
-                            </label>
-                          ))}
-                      </div>
-                      <div className="admin-manager-actions">
-                        <span>{notificationPreferences.enabled ? 'Emails activos para eventos seleccionados.' : 'Emails desactivados.'}</span>
-                        <button
-                          className="btn btn-primary"
-                          disabled={savingNotificationPreferences || isActionLoading('notification-save')}
-                          onClick={saveNotificationPreferences}
-                          type="button"
-                        >
-                          {isActionLoading('notification-save') ? 'Guardando preferencias...' : 'Guardar preferencias'}
-                          <ActionSpinner active={isActionLoading('notification-save')} />
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </section>
-              )}
               {canManageUsers && (
                 <section className="admin-manager admin-users" data-help-id="access-roles">
                   <div className="admin-manager-head">
@@ -3344,11 +3283,6 @@ export default function AdminConsole() {
                     </div>
                   )}
                 </section>
-              )}
-              {SHOW_EMAIL_SETTINGS_UI && !notificationPreferences && !canManageUsers && (
-                <div className="admin-empty">
-                  Cargando configuracion de mails.
-                </div>
               )}
                 </>
               )}
