@@ -297,12 +297,14 @@ async function sendMailingCampaign(jobs, { actorEmail = 'scheduler', forced = fa
 function renderPostMail(items, settings, { testEmail = '' } = {}) {
   const posts = items.map(toMailPost);
   const stacked = posts.length > 1;
-  const subject = interpolate(stacked ? settings.digestSubject : settings.singleSubject, {
+  const templateValues = {
     title: posts[0]?.title || 'Nueva nota',
     count: posts.length,
-  });
-  const previewText = stacked ? settings.digestPreheader : settings.singlePreheader;
-  const bodyHtml = `${stacked ? `<p style="margin:0 0 24px">${escapeHtml(settings.digestIntro)}</p>` : ''}${posts.slice(0, settings.maxFullCards).map((post) => renderPostCard(post, settings.ctaLabel)).join('')}${posts.length > settings.maxFullCards ? `<p style="margin:20px 0"><strong>Y ${posts.length - settings.maxFullCards} notas mas.</strong></p>` : ''}`;
+  };
+  const subject = interpolate(stacked ? settings.digestSubject : settings.singleSubject, templateValues);
+  const previewText = interpolate(stacked ? settings.digestPreheader : settings.singlePreheader, templateValues);
+  const digestIntro = interpolate(settings.digestIntro, templateValues);
+  const bodyHtml = `${stacked ? `<p style="margin:0 0 24px">${escapeHtml(digestIntro)}</p>` : ''}${posts.slice(0, settings.maxFullCards).map((post) => renderPostCard(post, settings.ctaLabel, posts.length)).join('')}${posts.length > settings.maxFullCards ? `<p style="margin:20px 0"><strong>Y ${posts.length - settings.maxFullCards} notas mas.</strong></p>` : ''}`;
   const bodyText = posts.map((post) => `${post.title}\n${post.excerpt}\n${post.url}`).join('\n\n');
   const preferencesUrl = testEmail
     ? createNewsletterPreferencesUrl(testEmail)
@@ -318,11 +320,12 @@ function renderPostMail(items, settings, { testEmail = '' } = {}) {
   return { ...rendered, subject, previewText, posts };
 }
 
-function renderPostCard(post, ctaLabel) {
+function renderPostCard(post, ctaLabel, postCount) {
   const image = post.coverImage
     ? `<td width="148" valign="top" style="width:148px;padding:20px 0 20px 20px"><img alt="" src="${escapeHtml(post.coverImage)}" width="128" height="92" style="display:block;width:128px;height:92px;object-fit:cover;border:0;border-radius:6px"></td>`
     : '';
-  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;margin:0 0 24px;border:1px solid #dcdde3;border-top:4px solid #137a9f"><tr>${image}<td valign="top" style="padding:20px"><p style="margin:0 0 7px;color:#137a9f;font-size:11px;font-weight:800;text-transform:uppercase">${escapeHtml(post.category || 'Nota')}</p><h2 style="margin:0 0 8px;color:#1a1a37;font-family:'Fraunces',Georgia,serif;font-size:22px;line-height:1.2">${escapeHtml(post.title)}</h2><p style="margin:0 0 10px;color:#42445b;font-size:14px;line-height:1.5">${escapeHtml(post.excerpt)}</p><p style="margin:0 0 14px;color:#737489;font-size:12px">${escapeHtml(post.authorName)}</p><a href="${escapeHtml(post.url)}" style="display:inline-block;padding:9px 13px;border-radius:6px;background:#137a9f;color:#fff;text-decoration:none;font-size:14px;font-weight:700">${escapeHtml(ctaLabel)}</a></td></tr></table>`;
+  const renderedCtaLabel = interpolate(ctaLabel, { title: post.title, count: postCount });
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;margin:0 0 24px;border:1px solid #dcdde3;border-top:4px solid #137a9f"><tr>${image}<td valign="top" style="padding:20px"><p style="margin:0 0 7px;color:#137a9f;font-size:11px;font-weight:800;text-transform:uppercase">${escapeHtml(post.category || 'Nota')}</p><h2 style="margin:0 0 8px;color:#1a1a37;font-family:'Fraunces',Georgia,serif;font-size:22px;line-height:1.2">${escapeHtml(post.title)}</h2><p style="margin:0 0 10px;color:#42445b;font-size:14px;line-height:1.5">${escapeHtml(post.excerpt)}</p><p style="margin:0 0 14px;color:#737489;font-size:12px">${escapeHtml(post.authorName)}</p><a href="${escapeHtml(post.url)}" style="display:inline-block;padding:9px 13px;border-radius:6px;background:#137a9f;color:#fff;text-decoration:none;font-size:14px;font-weight:700">${escapeHtml(renderedCtaLabel)}</a></td></tr></table>`;
 }
 
 function toMailPost(item = {}) {

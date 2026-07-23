@@ -1,6 +1,17 @@
 'use client';
 
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import {
+  Children,
+  cloneElement,
+  forwardRef,
+  isValidElement,
+  useEffect,
+  useId,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { HelpTrigger, helpTopicFromText } from './AdminHelp';
 
 const DEFAULT_SETTINGS = {
@@ -23,15 +34,24 @@ const MAIL_TEMPLATE_VARIABLES = {
   title: {
     label: 'Titulo de la nota',
     shortLabel: 'Titulo',
-    description: 'Se reemplaza por el titulo de la publicacion incluida en el correo.',
-    target: 'Asunto individual',
+    description: 'Usa el titulo de la nota. En un resumen toma la primera publicacion.',
   },
   count: {
     label: 'Cantidad de notas',
     shortLabel: 'Cantidad',
-    description: 'Se reemplaza por el numero de publicaciones incluidas en el resumen.',
-    target: 'Asunto apilado',
+    description: 'Usa el numero total de publicaciones incluidas en el correo.',
   },
+};
+
+const MAIL_TEMPLATE_TOKEN_NAMES = Object.keys(MAIL_TEMPLATE_VARIABLES);
+
+const MAIL_TEMPLATE_FIELDS = {
+  singleSubject: { label: 'Asunto individual', maxLength: 180 },
+  singlePreheader: { label: 'Texto de previsualizacion individual', maxLength: 180 },
+  digestSubject: { label: 'Asunto apilado', maxLength: 180 },
+  digestPreheader: { label: 'Texto de previsualizacion apilado', maxLength: 180 },
+  digestIntro: { label: 'Introduccion del resumen', maxLength: 300 },
+  ctaLabel: { label: 'Texto del boton', maxLength: 40 },
 };
 
 export default function MailingAdminPanel({ apiBase, currentEmail }) {
@@ -42,8 +62,8 @@ export default function MailingAdminPanel({ apiBase, currentEmail }) {
   const [message, setMessage] = useState('');
   const [testEmail, setTestEmail] = useState(currentEmail || '');
   const [preview, setPreview] = useState(null);
-  const singleSubjectRef = useRef(null);
-  const digestSubjectRef = useRef(null);
+  const [activeTemplateField, setActiveTemplateField] = useState('singleSubject');
+  const templateInputsRef = useRef({});
 
   useEffect(() => { loadOverview(); }, []);
   useEffect(() => {
@@ -100,6 +120,16 @@ export default function MailingAdminPanel({ apiBase, currentEmail }) {
   function resetSettings() {
     setSettings({ ...DEFAULT_SETTINGS });
     setMessage('Restauramos los valores predeterminados en el formulario. Revisa los cambios y guardalos para aplicarlos.');
+  }
+
+  function registerTemplateInput(field, control) {
+    templateInputsRef.current[field] = control;
+  }
+
+  function insertTemplateToken(token) {
+    const activeControl = templateInputsRef.current[activeTemplateField]
+      || templateInputsRef.current.singleSubject;
+    activeControl?.insertToken(token);
   }
 
   async function runAction(action) {
@@ -239,16 +269,25 @@ export default function MailingAdminPanel({ apiBase, currentEmail }) {
             <div className="admin-mailing-settings-grid">
               <MailingSettingField className="admin-mailing-wide" label="Asunto individual" help="Asunto visible en la bandeja de entrada cuando se envia una sola nota. El chip Titulo se reemplaza automaticamente por el titulo publicado; si lo quitas, todos los correos individuales tendran un asunto fijo.">
                 <TemplateTokenInput
-                  allowedTokens={['title']}
+                  allowedTokens={MAIL_TEMPLATE_TOKEN_NAMES}
                   ariaLabel="Asunto individual"
                   maxLength={180}
+                  onActivate={() => setActiveTemplateField('singleSubject')}
                   onChange={(singleSubject) => setSettings((current) => ({ ...current, singleSubject }))}
-                  ref={singleSubjectRef}
+                  ref={(control) => registerTemplateInput('singleSubject', control)}
                   value={settings.singleSubject}
                 />
               </MailingSettingField>
               <MailingSettingField className="admin-mailing-wide" label="Texto de previsualizacion individual" help="Resumen corto que algunos clientes de correo muestran al lado o debajo del asunto antes de abrir el mensaje. No es un parrafo visible del cuerpo y se limita a 180 caracteres.">
-                <input maxLength="180" value={settings.singlePreheader} onChange={(event) => setSettings((current) => ({ ...current, singlePreheader: event.target.value }))} />
+                <TemplateTokenInput
+                  allowedTokens={MAIL_TEMPLATE_TOKEN_NAMES}
+                  ariaLabel="Texto de previsualizacion individual"
+                  maxLength={180}
+                  onActivate={() => setActiveTemplateField('singlePreheader')}
+                  onChange={(singlePreheader) => setSettings((current) => ({ ...current, singlePreheader }))}
+                  ref={(control) => registerTemplateInput('singlePreheader', control)}
+                  value={settings.singlePreheader}
+                />
               </MailingSettingField>
             </div>
           </section>
@@ -261,22 +300,47 @@ export default function MailingAdminPanel({ apiBase, currentEmail }) {
             <div className="admin-mailing-settings-grid">
               <MailingSettingField className="admin-mailing-wide" label="Asunto apilado" help="Asunto para un resumen con varias publicaciones. El chip Cantidad se reemplaza por la cantidad real de notas incluidas en el envio.">
                 <TemplateTokenInput
-                  allowedTokens={['count']}
+                  allowedTokens={MAIL_TEMPLATE_TOKEN_NAMES}
                   ariaLabel="Asunto apilado"
                   maxLength={180}
+                  onActivate={() => setActiveTemplateField('digestSubject')}
                   onChange={(digestSubject) => setSettings((current) => ({ ...current, digestSubject }))}
-                  ref={digestSubjectRef}
+                  ref={(control) => registerTemplateInput('digestSubject', control)}
                   value={settings.digestSubject}
                 />
               </MailingSettingField>
               <MailingSettingField className="admin-mailing-wide" label="Texto de previsualizacion apilado" help="Texto breve que acompana al asunto en la bandeja de entrada cuando el correo contiene varias notas. Ayuda a anticipar el contenido sin repetir literalmente el asunto.">
-                <input maxLength="180" value={settings.digestPreheader} onChange={(event) => setSettings((current) => ({ ...current, digestPreheader: event.target.value }))} />
+                <TemplateTokenInput
+                  allowedTokens={MAIL_TEMPLATE_TOKEN_NAMES}
+                  ariaLabel="Texto de previsualizacion apilado"
+                  maxLength={180}
+                  onActivate={() => setActiveTemplateField('digestPreheader')}
+                  onChange={(digestPreheader) => setSettings((current) => ({ ...current, digestPreheader }))}
+                  ref={(control) => registerTemplateInput('digestPreheader', control)}
+                  value={settings.digestPreheader}
+                />
               </MailingSettingField>
               <MailingSettingField className="admin-mailing-wide" label="Introduccion del resumen" help="Frase visible al comienzo del cuerpo del correo, antes de las cards de las notas. Conviene que sea breve y funcione con cualquier combinacion de publicaciones.">
-                <input value={settings.digestIntro} onChange={(event) => setSettings((current) => ({ ...current, digestIntro: event.target.value }))} />
+                <TemplateTokenInput
+                  allowedTokens={MAIL_TEMPLATE_TOKEN_NAMES}
+                  ariaLabel="Introduccion del resumen"
+                  maxLength={300}
+                  onActivate={() => setActiveTemplateField('digestIntro')}
+                  onChange={(digestIntro) => setSettings((current) => ({ ...current, digestIntro }))}
+                  ref={(control) => registerTemplateInput('digestIntro', control)}
+                  value={settings.digestIntro}
+                />
               </MailingSettingField>
               <MailingSettingField label="Texto del boton" help="Etiqueta de la llamada a la accion que abre cada nota en el blog. Se reutiliza tanto en correos individuales como en resumenes; debe ser corta y describir claramente el destino.">
-                <input value={settings.ctaLabel} onChange={(event) => setSettings((current) => ({ ...current, ctaLabel: event.target.value }))} />
+                <TemplateTokenInput
+                  allowedTokens={MAIL_TEMPLATE_TOKEN_NAMES}
+                  ariaLabel="Texto del boton"
+                  maxLength={40}
+                  onActivate={() => setActiveTemplateField('ctaLabel')}
+                  onChange={(ctaLabel) => setSettings((current) => ({ ...current, ctaLabel }))}
+                  ref={(control) => registerTemplateInput('ctaLabel', control)}
+                  value={settings.ctaLabel}
+                />
               </MailingSettingField>
             </div>
           </section>
@@ -290,12 +354,14 @@ export default function MailingAdminPanel({ apiBase, currentEmail }) {
               </div>
             </header>
             <div className="admin-mailing-variable-list">
-              <TemplateVariableButton onInsert={() => singleSubjectRef.current?.insertToken('title')} token="title" />
-              <TemplateVariableButton onInsert={() => digestSubjectRef.current?.insertToken('count')} token="count" />
+              <TemplateVariableButton onInsert={() => insertTemplateToken('title')} token="title" />
+              <TemplateVariableButton onInsert={() => insertTemplateToken('count')} token="count" />
             </div>
             <p className="admin-mailing-variable-note">
               <span className="material-symbols-outlined" aria-hidden="true">touch_app</span>
-              Hace click en una variable para agregarla en su campo compatible. Podes moverla o borrarla como parte del texto.
+              <span>
+                Campo activo: <strong>{MAIL_TEMPLATE_FIELDS[activeTemplateField]?.label}</strong>. Hace click en una variable para insertarla donde dejaste el cursor.
+              </span>
             </p>
           </section>
         </div>
@@ -364,15 +430,21 @@ function mailingStatusLabel(status) {
 }
 
 function MailingSettingField({ children, className = '', help, label, suffix = '' }) {
+  const labelId = `mailing-setting-${useId().replaceAll(':', '')}`;
+  const labelledChildren = Children.map(children, (child, index) => (
+    index === 0 && isValidElement(child) && typeof child.type === 'string'
+      ? cloneElement(child, { 'aria-labelledby': child.props['aria-label'] ? undefined : labelId })
+      : child
+  ));
   return (
-    <label className={`admin-mailing-setting-field ${className}`.trim()}>
-      <span className="admin-mailing-setting-label">
+    <div className={`admin-mailing-setting-field ${className}`.trim()}>
+      <span className="admin-mailing-setting-label" id={labelId}>
         <span>{label}</span>
         {suffix && <small>{suffix}</small>}
         <SettingHelp text={help} />
       </span>
-      {children}
-    </label>
+      {labelledChildren}
+    </div>
   );
 }
 
@@ -384,6 +456,7 @@ const TemplateTokenInput = forwardRef(function TemplateTokenInput({
   allowedTokens,
   ariaLabel,
   maxLength = 180,
+  onActivate,
   onChange,
   value,
 }, ref) {
@@ -482,6 +555,7 @@ const TemplateTokenInput = forwardRef(function TemplateTokenInput({
       data-placeholder="Escribi el asunto"
       onBlur={normalizeEditor}
       onClick={rememberSelection}
+      onFocus={onActivate}
       onInput={emitValue}
       onKeyDown={(event) => {
         if (event.key === 'Enter') event.preventDefault();
@@ -512,7 +586,7 @@ function TemplateVariableButton({ onInsert, token }) {
       <span className="admin-mailing-variable-copy">
         <strong>{variable.label}</strong>
         <small>{variable.description}</small>
-        <span>{variable.target}</span>
+        <span>Disponible en todos los textos</span>
       </span>
       <span className="material-symbols-outlined admin-mailing-variable-add" aria-hidden="true">add_circle</span>
     </button>

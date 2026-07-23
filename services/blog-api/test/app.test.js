@@ -1319,6 +1319,35 @@ test('post mailing respects the weekly cap and the configurable 12 hour dispatch
   }
 });
 
+test('post mailing variables work in every configurable mail text', async () => {
+  const firestore = createMemoryFirestore();
+  setFirestoreForTests(firestore);
+
+  try {
+    await updateMailingSettings({
+      singleSubject: '{{count}} nota: {{title}}',
+      singlePreheader: 'Abrir {{title}}',
+      digestSubject: '{{count}} notas: {{title}}',
+      digestPreheader: 'Hay {{count}} lecturas; empieza por {{title}}',
+      digestIntro: 'Publicamos {{count}} notas. La primera es {{title}}.',
+      ctaLabel: 'Leer {{title}}',
+    }, 'admin@politeia.ar');
+
+    const single = await renderMailingPreview({ mode: 'single' });
+    assert.equal(single.subject, '1 nota: Una nueva mirada sobre la politica cotidiana');
+    assert.equal(single.previewText, 'Abrir Una nueva mirada sobre la politica cotidiana');
+    assert.match(single.html, />Leer Una nueva mirada sobre la politica cotidiana<\/a>/);
+
+    const digest = await renderMailingPreview({ mode: 'stack' });
+    assert.equal(digest.subject, '4 notas: Una nueva mirada sobre la politica cotidiana');
+    assert.equal(digest.previewText, 'Hay 4 lecturas; empieza por Una nueva mirada sobre la politica cotidiana');
+    assert.match(digest.html, /Publicamos 4 notas\. La primera es Una nueva mirada sobre la politica cotidiana\./);
+    assert.match(digest.html, />Leer Nota de ejemplo 2<\/a>/);
+  } finally {
+    setFirestoreForTests(null);
+  }
+});
+
 test('mailing uses a compact WebP cover thumbnail when one is available', async () => {
   const source = await sharp({
     create: {
