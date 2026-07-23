@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { HelpTrigger, helpTopicFromText } from './AdminHelp';
 
 const DEFAULT_SETTINGS = {
@@ -19,6 +19,21 @@ const DEFAULT_SETTINGS = {
   maxFullCards: 6,
 };
 
+const MAIL_TEMPLATE_VARIABLES = {
+  title: {
+    label: 'Titulo de la nota',
+    shortLabel: 'Titulo',
+    description: 'Se reemplaza por el titulo de la publicacion incluida en el correo.',
+    target: 'Asunto individual',
+  },
+  count: {
+    label: 'Cantidad de notas',
+    shortLabel: 'Cantidad',
+    description: 'Se reemplaza por el numero de publicaciones incluidas en el resumen.',
+    target: 'Asunto apilado',
+  },
+};
+
 export default function MailingAdminPanel({ apiBase, currentEmail }) {
   const [overview, setOverview] = useState(null);
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
@@ -27,6 +42,8 @@ export default function MailingAdminPanel({ apiBase, currentEmail }) {
   const [message, setMessage] = useState('');
   const [testEmail, setTestEmail] = useState(currentEmail || '');
   const [preview, setPreview] = useState(null);
+  const singleSubjectRef = useRef(null);
+  const digestSubjectRef = useRef(null);
 
   useEffect(() => { loadOverview(); }, []);
   useEffect(() => {
@@ -220,8 +237,15 @@ export default function MailingAdminPanel({ apiBase, currentEmail }) {
               <div><h3>Correo de una sola nota</h3><p>Textos usados cuando el ciclo envia una publicacion individual.</p></div>
             </header>
             <div className="admin-mailing-settings-grid">
-              <MailingSettingField className="admin-mailing-wide" label="Asunto individual" help="Asunto visible en la bandeja de entrada cuando se envia una sola nota. La variable {{title}} se reemplaza automaticamente por el titulo publicado; si la quitas, todos los correos individuales tendran un asunto fijo.">
-                <input value={settings.singleSubject} onChange={(event) => setSettings((current) => ({ ...current, singleSubject: event.target.value }))} />
+              <MailingSettingField className="admin-mailing-wide" label="Asunto individual" help="Asunto visible en la bandeja de entrada cuando se envia una sola nota. El chip Titulo se reemplaza automaticamente por el titulo publicado; si lo quitas, todos los correos individuales tendran un asunto fijo.">
+                <TemplateTokenInput
+                  allowedTokens={['title']}
+                  ariaLabel="Asunto individual"
+                  maxLength={180}
+                  onChange={(singleSubject) => setSettings((current) => ({ ...current, singleSubject }))}
+                  ref={singleSubjectRef}
+                  value={settings.singleSubject}
+                />
               </MailingSettingField>
               <MailingSettingField className="admin-mailing-wide" label="Texto de previsualizacion individual" help="Resumen corto que algunos clientes de correo muestran al lado o debajo del asunto antes de abrir el mensaje. No es un parrafo visible del cuerpo y se limita a 180 caracteres.">
                 <input maxLength="180" value={settings.singlePreheader} onChange={(event) => setSettings((current) => ({ ...current, singlePreheader: event.target.value }))} />
@@ -235,8 +259,15 @@ export default function MailingAdminPanel({ apiBase, currentEmail }) {
               <div><h3>Resumen de varias notas</h3><p>Textos usados cuando varias publicaciones se agrupan en un unico correo.</p></div>
             </header>
             <div className="admin-mailing-settings-grid">
-              <MailingSettingField className="admin-mailing-wide" label="Asunto apilado" help="Asunto para un resumen con varias publicaciones. La variable {{count}} se reemplaza por la cantidad real de notas incluidas en el envio.">
-                <input value={settings.digestSubject} onChange={(event) => setSettings((current) => ({ ...current, digestSubject: event.target.value }))} />
+              <MailingSettingField className="admin-mailing-wide" label="Asunto apilado" help="Asunto para un resumen con varias publicaciones. El chip Cantidad se reemplaza por la cantidad real de notas incluidas en el envio.">
+                <TemplateTokenInput
+                  allowedTokens={['count']}
+                  ariaLabel="Asunto apilado"
+                  maxLength={180}
+                  onChange={(digestSubject) => setSettings((current) => ({ ...current, digestSubject }))}
+                  ref={digestSubjectRef}
+                  value={settings.digestSubject}
+                />
               </MailingSettingField>
               <MailingSettingField className="admin-mailing-wide" label="Texto de previsualizacion apilado" help="Texto breve que acompana al asunto en la bandeja de entrada cuando el correo contiene varias notas. Ayuda a anticipar el contenido sin repetir literalmente el asunto.">
                 <input maxLength="180" value={settings.digestPreheader} onChange={(event) => setSettings((current) => ({ ...current, digestPreheader: event.target.value }))} />
@@ -248,6 +279,24 @@ export default function MailingAdminPanel({ apiBase, currentEmail }) {
                 <input value={settings.ctaLabel} onChange={(event) => setSettings((current) => ({ ...current, ctaLabel: event.target.value }))} />
               </MailingSettingField>
             </div>
+          </section>
+
+          <section aria-labelledby="mailing-template-variables-title" className="admin-mailing-variable-sheet">
+            <header>
+              <span className="material-symbols-outlined" aria-hidden="true">data_object</span>
+              <div>
+                <h3 id="mailing-template-variables-title">Variables disponibles</h3>
+                <p>Inserta datos dinamicos en los asuntos. Al enviar, el sistema los reemplaza con la informacion de cada correo.</p>
+              </div>
+            </header>
+            <div className="admin-mailing-variable-list">
+              <TemplateVariableButton onInsert={() => singleSubjectRef.current?.insertToken('title')} token="title" />
+              <TemplateVariableButton onInsert={() => digestSubjectRef.current?.insertToken('count')} token="count" />
+            </div>
+            <p className="admin-mailing-variable-note">
+              <span className="material-symbols-outlined" aria-hidden="true">touch_app</span>
+              Hace click en una variable para agregarla en su campo compatible. Podes moverla o borrarla como parte del texto.
+            </p>
           </section>
         </div>
         <div className="admin-mailing-settings-actions">
@@ -329,6 +378,189 @@ function MailingSettingField({ children, className = '', help, label, suffix = '
 
 function SettingHelp({ text }) {
   return <HelpTrigger help={helpTopicFromText('Como funciona', text, { summary: 'Abrir explicacion detallada de esta configuracion.' })} />;
+}
+
+const TemplateTokenInput = forwardRef(function TemplateTokenInput({
+  allowedTokens,
+  ariaLabel,
+  maxLength = 180,
+  onChange,
+  value,
+}, ref) {
+  const editorRef = useRef(null);
+  const lastEmittedValueRef = useRef(null);
+  const selectionRangeRef = useRef(null);
+  const allowedTokenKey = allowedTokens.join('|');
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    const nextValue = String(value || '');
+    if (!editor || nextValue === lastEmittedValueRef.current) return;
+    renderTemplateValue(editor, nextValue, allowedTokens);
+    lastEmittedValueRef.current = nextValue;
+  }, [allowedTokenKey, value]);
+
+  function rememberSelection() {
+    const editor = editorRef.current;
+    const selection = window.getSelection();
+    if (!editor || !selection?.rangeCount) return;
+    const range = selection.getRangeAt(0);
+    if (editor.contains(range.commonAncestorContainer)) selectionRangeRef.current = range.cloneRange();
+  }
+
+  function emitValue() {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const serializedValue = serializeTemplateValue(editor);
+    const nextValue = serializedValue.slice(0, maxLength);
+    if (nextValue !== serializedValue) renderTemplateValue(editor, nextValue, allowedTokens);
+    lastEmittedValueRef.current = nextValue;
+    onChange(nextValue);
+  }
+
+  function normalizeEditor() {
+    const editor = editorRef.current;
+    if (!editor) return;
+    const nextValue = serializeTemplateValue(editor).slice(0, maxLength);
+    renderTemplateValue(editor, nextValue, allowedTokens);
+    lastEmittedValueRef.current = nextValue;
+    onChange(nextValue);
+  }
+
+  useImperativeHandle(ref, () => ({
+    insertToken(token) {
+      if (!allowedTokens.includes(token)) return;
+      const editor = editorRef.current;
+      if (!editor) return;
+      editor.focus();
+
+      const storedRange = selectionRangeRef.current;
+      const range = storedRange && editor.contains(storedRange.commonAncestorContainer)
+        ? storedRange
+        : document.createRange();
+      if (!storedRange || !editor.contains(storedRange.commonAncestorContainer)) {
+        range.selectNodeContents(editor);
+        range.collapse(false);
+      }
+
+      range.deleteContents();
+      const chip = createTemplateChip(token);
+      range.insertNode(chip);
+      range.setStartAfter(chip);
+      range.collapse(true);
+
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+      selectionRangeRef.current = range.cloneRange();
+      emitValue();
+    },
+  }), [allowedTokenKey, maxLength, onChange]);
+
+  function handlePaste(event) {
+    event.preventDefault();
+    const text = event.clipboardData.getData('text/plain').replace(/[\r\n]+/g, ' ');
+    const selection = window.getSelection();
+    if (!selection?.rangeCount) return;
+    const range = selection.getRangeAt(0);
+    range.deleteContents();
+    const textNode = document.createTextNode(text);
+    range.insertNode(textNode);
+    range.setStartAfter(textNode);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    selectionRangeRef.current = range.cloneRange();
+    emitValue();
+  }
+
+  return (
+    <div
+      aria-label={ariaLabel}
+      className="admin-mailing-template-input"
+      contentEditable
+      data-placeholder="Escribi el asunto"
+      onBlur={normalizeEditor}
+      onClick={rememberSelection}
+      onInput={emitValue}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') event.preventDefault();
+      }}
+      onKeyUp={rememberSelection}
+      onPaste={handlePaste}
+      ref={editorRef}
+      role="textbox"
+      spellCheck="true"
+      suppressContentEditableWarning
+    />
+  );
+});
+
+function TemplateVariableButton({ onInsert, token }) {
+  const variable = MAIL_TEMPLATE_VARIABLES[token];
+  return (
+    <button
+      className="admin-mailing-variable-button"
+      onClick={onInsert}
+      onMouseDown={(event) => event.preventDefault()}
+      type="button"
+    >
+      <span className="admin-mailing-template-chip" aria-hidden="true">
+        <span className="material-symbols-outlined">data_object</span>
+        {variable.shortLabel}
+      </span>
+      <span className="admin-mailing-variable-copy">
+        <strong>{variable.label}</strong>
+        <small>{variable.description}</small>
+        <span>{variable.target}</span>
+      </span>
+      <span className="material-symbols-outlined admin-mailing-variable-add" aria-hidden="true">add_circle</span>
+    </button>
+  );
+}
+
+function renderTemplateValue(editor, value, allowedTokens) {
+  editor.replaceChildren();
+  const allowed = new Set(allowedTokens);
+  const tokenPattern = /\{\{([a-z][a-z0-9_]*)\}\}/gi;
+  let cursor = 0;
+  let match = tokenPattern.exec(value);
+  while (match) {
+    if (match.index > cursor) editor.append(document.createTextNode(value.slice(cursor, match.index)));
+    const token = match[1].toLowerCase();
+    if (allowed.has(token)) editor.append(createTemplateChip(token));
+    else editor.append(document.createTextNode(match[0]));
+    cursor = tokenPattern.lastIndex;
+    match = tokenPattern.exec(value);
+  }
+  if (cursor < value.length) editor.append(document.createTextNode(value.slice(cursor)));
+}
+
+function createTemplateChip(token) {
+  const variable = MAIL_TEMPLATE_VARIABLES[token];
+  const chip = document.createElement('span');
+  chip.className = 'admin-mailing-template-chip';
+  chip.contentEditable = 'false';
+  chip.dataset.templateToken = token;
+  chip.setAttribute('aria-label', `Variable: ${variable?.label || token}`);
+
+  const icon = document.createElement('span');
+  icon.className = 'material-symbols-outlined';
+  icon.setAttribute('aria-hidden', 'true');
+  icon.textContent = 'data_object';
+
+  chip.append(icon, document.createTextNode(variable?.shortLabel || token));
+  return chip;
+}
+
+function serializeTemplateValue(root) {
+  return Array.from(root.childNodes).map((node) => {
+    if (node.nodeType === Node.TEXT_NODE) return node.textContent || '';
+    if (node.nodeType !== Node.ELEMENT_NODE) return '';
+    if (node.dataset?.templateToken) return `{{${node.dataset.templateToken}}}`;
+    if (node.tagName === 'BR') return ' ';
+    return serializeTemplateValue(node);
+  }).join('').replace(/\u00a0/g, ' ');
 }
 
 function mailingStatusTone(status) {
