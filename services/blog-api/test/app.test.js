@@ -709,6 +709,75 @@ test('POST /v1/posts stores author note', async () => {
   }
 });
 
+test('reviewer can preserve a historical publication date when publishing a migrated post', async () => {
+  const firestore = createMemoryFirestore();
+  setFirestoreForTests(firestore);
+  const previousDevAuth = config.devAuth;
+  config.devAuth = false;
+  const session = buildSessionCookie({
+    email: 'reviewer@politeia.ar',
+    name: 'Reviewer Politeia',
+    roles: ['reviewer'],
+  });
+
+  try {
+    const created = await request(createApp())
+      .post('/v1/posts')
+      .set('Cookie', `${config.sessionCookieName}=${encodeURIComponent(session)}`)
+      .send({
+        title: 'Nota historica',
+        contentMarkdown: 'Contenido migrado',
+        authorName: 'Autora Historica',
+        publicationDate: '2020-05-15',
+        tags: [],
+      })
+      .expect(201);
+
+    assert.equal(created.body.item.publicationDate, '2020-05-15');
+
+    const published = await request(createApp())
+      .post(`/v1/posts/${created.body.item.id}/publish`)
+      .set('Cookie', `${config.sessionCookieName}=${encodeURIComponent(session)}`)
+      .send({ notifySubscribers: false })
+      .expect(200);
+
+    assert.equal(published.body.item.publishedAt._seconds, Date.parse('2020-05-15T12:00:00.000Z') / 1000);
+  } finally {
+    config.devAuth = previousDevAuth;
+    setFirestoreForTests(null);
+  }
+});
+
+test('blog role cannot choose a historical publication date', async () => {
+  const firestore = createMemoryFirestore();
+  setFirestoreForTests(firestore);
+  const previousDevAuth = config.devAuth;
+  config.devAuth = false;
+  const session = buildSessionCookie({
+    email: 'author@politeia.ar',
+    name: 'Autor Politeia',
+    roles: ['blog'],
+  });
+
+  try {
+    const res = await request(createApp())
+      .post('/v1/posts')
+      .set('Cookie', `${config.sessionCookieName}=${encodeURIComponent(session)}`)
+      .send({
+        title: 'Nota sin permiso de fecha',
+        contentMarkdown: 'Contenido',
+        publicationDate: '2020-05-15',
+        tags: [],
+      })
+      .expect(403);
+
+    assert.match(res.body.error.message, /publicationDate/);
+  } finally {
+    config.devAuth = previousDevAuth;
+    setFirestoreForTests(null);
+  }
+});
+
 test('in-app notifications target roles and emails independently from email opt-in', async () => {
   const firestore = createMemoryFirestore();
   setFirestoreForTests(firestore);

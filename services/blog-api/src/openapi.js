@@ -41,6 +41,7 @@ export const openApiSpec = {
           createdAt: { type: 'string', format: 'date-time' },
           updatedAt: { type: 'string', format: 'date-time' },
           publishedAt: { type: 'string', format: 'date-time', nullable: true },
+          publicationDate: { type: 'string', format: 'date', nullable: true },
           editRequestedAt: { type: 'string', format: 'date-time', nullable: true },
           editRequestedBy: { type: 'string' },
           deletedAt: { type: 'string', format: 'date-time', nullable: true },
@@ -141,6 +142,7 @@ export const openApiSpec = {
                 properties: {
                   title: { type: 'string' },
                   slug: { type: 'string' },
+                  publicationDate: { type: 'string', format: 'date' },
                   excerpt: { type: 'string' },
                   contentMarkdown: { type: 'string' },
                   coverImage: { type: 'string' },

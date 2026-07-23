@@ -217,6 +217,7 @@ function buildPostPayload(body, user) {
   assertOptionalString(body.authorName, 'authorName');
   assertOptionalString(body.authorNote, 'authorNote');
   assertOptionalString(body.authorEmail, 'authorEmail');
+  assertOptionalString(body.publicationDate, 'publicationDate');
   assertOptionalBoolean(body.showCoverInPost, 'showCoverInPost');
   assertOptionalBoolean(body.showAuthorNote, 'showAuthorNote');
   assertStringArray(body.tags, 'tags');
@@ -225,9 +226,13 @@ function buildPostPayload(body, user) {
   if (body.slug && !canChooseSlug(user)) {
     throw new HttpError(403, 'Only admin or reviewer users can choose slug');
   }
+  if (body.publicationDate !== undefined && !canChooseSlug(user)) {
+    throw new HttpError(403, 'Only admin or reviewer users can choose publicationDate');
+  }
 
   const slug = body.slug?.trim() || '';
   if (slug && !isValidSlug(slug)) throw new HttpError(400, 'slug is invalid');
+  const publicationDate = normalizePublicationDate(body.publicationDate);
   const contentHtml = markdownToSafeHtml(body.contentMarkdown);
 
   return {
@@ -245,6 +250,7 @@ function buildPostPayload(body, user) {
     showAuthorNote: body.showAuthorNote === true,
     category: sanitizeCategory(body.category),
     tags: sanitizeTags(body.tags),
+    publicationDate: publicationDate || null,
   };
 }
 
@@ -261,6 +267,13 @@ function buildPostPatch(body, user) {
     assertNonEmptyString(body.slug, 'slug');
     if (!isValidSlug(body.slug)) throw new HttpError(400, 'slug is invalid');
     patch.slug = body.slug;
+  }
+  if (body.publicationDate !== undefined) {
+    if (!canChooseSlug(user)) {
+      throw new HttpError(403, 'Only admin or reviewer users can choose publicationDate');
+    }
+    assertOptionalString(body.publicationDate, 'publicationDate');
+    patch.publicationDate = normalizePublicationDate(body.publicationDate) || null;
   }
   if (body.contentMarkdown !== undefined) {
     assertNonEmptyString(body.contentMarkdown, 'contentMarkdown');
@@ -318,6 +331,22 @@ function buildPostPatch(body, user) {
 
 function normalizeAuthorNote(value = '') {
   return typeof value === 'string' ? value.trim().replace(/\s+/g, ' ').slice(0, 500) : '';
+}
+
+function normalizePublicationDate(value = '') {
+  const cleanValue = typeof value === 'string' ? value.trim() : '';
+  if (!cleanValue) return '';
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(cleanValue)) {
+    throw new HttpError(400, 'publicationDate must use YYYY-MM-DD');
+  }
+  const date = new Date(`${cleanValue}T12:00:00.000Z`);
+  if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== cleanValue) {
+    throw new HttpError(400, 'publicationDate is invalid');
+  }
+  if (cleanValue > new Date().toISOString().slice(0, 10)) {
+    throw new HttpError(400, 'publicationDate cannot be in the future');
+  }
+  return cleanValue;
 }
 
 function canChooseSlug(user) {

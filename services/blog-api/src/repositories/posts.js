@@ -163,7 +163,7 @@ export async function transitionPost(id, status, actorUser, action) {
     patch.editionSubmittedBy = actorUser.email;
   }
   if (status === 'published') {
-    patch.publishedAt = serverTimestamp();
+    patch.publishedAt = resolvePublishedAt(before);
     patch.editionSubmittedAt = null;
     patch.editionSubmittedBy = '';
     Object.assign(patch, buildPublicSnapshot(before));
@@ -287,6 +287,17 @@ function buildPublicSnapshot(post = {}) {
   return Object.fromEntries(
     PUBLIC_FIELDS.map((field) => [`public${field.charAt(0).toUpperCase()}${field.slice(1)}`, post[field] ?? null])
   );
+}
+
+function resolvePublishedAt(post = {}) {
+  if (post.publicationDate) {
+    return Timestamp.fromDate(new Date(`${post.publicationDate}T12:00:00.000Z`));
+  }
+  if (post.publishedAt) {
+    const currentDate = new Date(post.publishedAt);
+    if (!Number.isNaN(currentDate.getTime())) return Timestamp.fromDate(currentDate);
+  }
+  return serverTimestamp();
 }
 
 function toPublicPost(post = {}) {

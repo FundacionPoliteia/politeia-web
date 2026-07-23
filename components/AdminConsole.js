@@ -47,6 +47,7 @@ const EMPTY_FORM = {
   id: '',
   title: '',
   slug: '',
+  publicationDate: '',
   excerpt: '',
   contentMarkdown: '',
   coverImage: '',
@@ -544,9 +545,13 @@ export default function AdminConsole() {
     };
 
     setUiPreferencesHydrated(false);
+    let cachedPreferences = null;
     try {
       const cached = window.localStorage.getItem(storageKey);
-      if (cached) applyPreferences(JSON.parse(cached));
+      if (cached) {
+        cachedPreferences = normalizeUiPreferences(JSON.parse(cached));
+        applyPreferences(cachedPreferences);
+      }
     } catch (_err) {
       window.localStorage.removeItem(storageKey);
     }
@@ -559,8 +564,9 @@ export default function AdminConsole() {
       })
       .then((preferences) => {
         if (cancelled) return;
-        applyPreferences(preferences);
-        window.localStorage.setItem(storageKey, JSON.stringify(normalizeUiPreferences(preferences)));
+        const mergedPreferences = mergeUiPreferences(preferences, cachedPreferences);
+        applyPreferences(mergedPreferences);
+        window.localStorage.setItem(storageKey, JSON.stringify(mergedPreferences));
       })
       .catch(() => {
         // Local cache keeps the panel usable if preference sync is temporarily unavailable.
@@ -609,6 +615,47 @@ export default function AdminConsole() {
 
     return () => window.clearTimeout(uiPreferencesSaveTimerRef.current);
   }, [activePanelTab, adminManagerOpen, adminProfileClaimsOpen, adminProfileEditorOpen, adminUsersOpen, advancedOptionsOpen, allowedPanelTabs, canAccessPanel, defaultPanelTab, helpPreferences, mobilePostsOpen, notificationPreferencesOpen, previewCardOpen, uiPreferencesHydrated, user?.email]);
+
+  function completeHelpGuide(area, version) {
+    const nextHelpPreferences = {
+      ...helpPreferences,
+      completedGuides: {
+        ...helpPreferences.completedGuides,
+        [area]: Math.max(Number(helpPreferences.completedGuides?.[area] || 0), Number(version) || 0),
+      },
+    };
+    setHelpPreferences(nextHelpPreferences);
+
+    const email = String(user?.email || '').trim().toLowerCase();
+    if (!email || !uiPreferencesHydrated || !canAccessPanel) return;
+    const preferences = normalizeUiPreferences({
+      lastPanelTab: allowedPanelTabs.includes(activePanelTab) ? activePanelTab : defaultPanelTab,
+      sections: {
+        adminUsersOpen,
+        adminManagerOpen,
+        notificationPreferencesOpen,
+        adminProfileClaimsOpen,
+        adminProfileEditorOpen,
+        previewCardOpen,
+        advancedOptionsOpen,
+        mobilePostsOpen,
+      },
+      help: nextHelpPreferences,
+    });
+
+    window.localStorage.setItem(`${UI_PREFERENCES_STORAGE_PREFIX}${email}`, JSON.stringify(preferences));
+    window.clearTimeout(uiPreferencesSaveTimerRef.current);
+    fetch(`${API_BASE}/v1/ui-preferences`, {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(preferences),
+    }).then((response) => {
+      if (!response.ok) throw new Error(`Error ${response.status}`);
+    }).catch(() => {
+      // The monotonic local merge keeps the completion until remote sync succeeds.
+    });
+  }
 
   useEffect(() => {
     setSelectedAdminPostIds((current) => current.filter((id) => posts.some((post) => post.id === id)));
@@ -2210,8 +2257,8 @@ export default function AdminConsole() {
     [form.contentMarkdown]
   );
   const previewDate = useMemo(
-    () => new Intl.DateTimeFormat('es-AR', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date()),
-    []
+    () => formatPublicationPreviewDate(form.publicationDate),
+    [form.publicationDate]
   );
   const previewTags = useMemo(() => {
     const tags = parseTagsText(form.tagsText);
@@ -2293,10 +2340,7 @@ export default function AdminConsole() {
     <AdminHelpProvider
       activeArea={activePanelTab}
       completedGuides={helpPreferences.completedGuides}
-      onGuideComplete={(area, version) => setHelpPreferences((current) => ({
-        ...current,
-        completedGuides: { ...current.completedGuides, [area]: version },
-      }))}
+      onGuideComplete={completeHelpGuide}
       ready={Boolean(user && canAccessPanel && uiPreferencesHydrated)}
       roles={roles}
     >
@@ -3600,8 +3644,8 @@ export default function AdminConsole() {
                   </label>
 
                   <div className="admin-two" data-help-id="blog-metadata">
-                    <label>
-                      Autor
+                    <label data-help-id="blog-author">
+                      <span className="admin-field-label">Autor <HelpTrigger topicId="blogs-author" /></span>
                       <input disabled={publishedAuthorLocked} value={form.authorName} onChange={(e) => updateForm('authorName', e.target.value)} placeholder={user?.name || user?.email || 'Nombre visible'} />
                     </label>
                     <label>
@@ -3809,8 +3853,8 @@ export default function AdminConsole() {
                     )}
                   </label>
 
-                  <label>
-                    Tags
+                  <label data-help-id="blog-tags">
+                    <span className="admin-field-label">Tags <HelpTrigger topicId="blogs-tags" /></span>
                     <input
                       list="admin-tag-options"
                       disabled={publishedAuthorLocked}
@@ -3951,20 +3995,38 @@ export default function AdminConsole() {
                       <span>Opciones avanzadas</span>
                       <span aria-hidden="true" className="material-symbols-outlined">expand_more</span>
                     </summary>
-                    <label>
-                      Slug
-                      <input
-                        disabled={!canChooseSlug || publishedAuthorLocked}
-                        value={form.slug}
-                        onChange={(e) => updateForm('slug', e.target.value)}
-                        placeholder={canChooseSlug ? 'se-genera-si-lo-dejas-vacio' : 'lo genera el sistema'}
-                      />
-                    </label>
+                    <div className="admin-two">
+                      <label>
+                        Slug
+                        <input
+                          disabled={!canChooseSlug || publishedAuthorLocked}
+                          value={form.slug}
+                          onChange={(e) => updateForm('slug', e.target.value)}
+                          placeholder={canChooseSlug ? 'se-genera-si-lo-dejas-vacio' : 'lo genera el sistema'}
+                        />
+                      </label>
+                      {canChooseSlug && (
+                        <label>
+                          Fecha de publicacion
+                          <input
+                            disabled={publishedAuthorLocked}
+                            max={todayDateInputValue()}
+                            onChange={(e) => updateForm('publicationDate', e.target.value)}
+                            type="date"
+                            value={form.publicationDate}
+                          />
+                          <FieldHelper
+                            description="Usala para migrar notas antiguas. Si queda vacia, se usa la fecha del momento de publicacion."
+                            topicId="blogs-advanced"
+                          />
+                        </label>
+                      )}
+                    </div>
                   </details>
 
                   {!publishedAuthorLocked && (
                   <div className="admin-actions" data-help-id="blog-workflow">
-                    <HelpTrigger topicId="blogs-workflow" />
+                    <HelpTrigger topicId={canPublishPosts ? 'blogs-workflow' : 'blogs-workflow-author'} />
                     <button className="btn btn-primary admin-action-save" disabled={busy || uploading || importing || isActionLoading('post-save') || publishedAuthorLocked || (!form.id && !canCreatePosts)} type="submit">
                       {isActionLoading('post-save') ? 'Guardando...' : form.id ? 'Guardar cambios' : 'Crear borrador'}
                       <ActionSpinner active={isActionLoading('post-save')} />
@@ -4718,7 +4780,10 @@ function AdminArticlePreview({
 function buildPayload(form, canChooseSlug = false) {
   return {
     title: form.title,
-    ...(canChooseSlug ? { slug: form.slug || undefined } : {}),
+    ...(canChooseSlug ? {
+      slug: form.slug || undefined,
+      publicationDate: form.publicationDate || '',
+    } : {}),
     excerpt: form.excerpt || undefined,
     contentMarkdown: form.contentMarkdown,
     coverImage: form.coverImage || undefined,
@@ -5124,6 +5189,27 @@ function normalizeUiPreferences(value = {}) {
   };
 }
 
+function mergeUiPreferences(remoteValue, localValue) {
+  const remote = normalizeUiPreferences(remoteValue);
+  const local = normalizeUiPreferences(localValue);
+  const completedGuides = { ...remote.help.completedGuides };
+
+  Object.entries(local.help.completedGuides).forEach(([area, version]) => {
+    completedGuides[area] = Math.max(Number(completedGuides[area] || 0), Number(version) || 0);
+  });
+
+  return normalizeUiPreferences({
+    ...remote,
+    help: {
+      completedGuides,
+      dismissedHints: [...new Set([
+        ...remote.help.dismissedHints,
+        ...local.help.dismissedHints,
+      ])],
+    },
+  });
+}
+
 function normalizeProfile(value = {}) {
   const firstName = normalizeInputValue(value.firstName).trimStart();
   const lastName = normalizeInputValue(value.lastName).trimStart();
@@ -5168,6 +5254,7 @@ function postToForm(post = {}) {
     id: post.id,
     title: post.title,
     slug: post.slug,
+    publicationDate: dateInputValue(post.publicationDate || post.publishedAt),
     excerpt: post.excerpt,
     contentMarkdown: post.contentMarkdown,
     coverImage: post.coverImage,
@@ -5189,6 +5276,7 @@ function serializeForm(form) {
     id: form.id || '',
     title: form.title || '',
     slug: form.slug || '',
+    publicationDate: form.publicationDate || '',
     excerpt: form.excerpt || '',
     contentMarkdown: form.contentMarkdown || '',
     coverImage: form.coverImage || '',
@@ -5203,6 +5291,38 @@ function serializeForm(form) {
     editRequestedBy: form.editRequestedBy || '',
     showCoverInPost: form.showCoverInPost !== false,
   });
+}
+
+function dateInputValue(value) {
+  if (!value) return '';
+  const cleanValue = String(value);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(cleanValue)) return cleanValue;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('en-US', {
+    day: '2-digit',
+    month: '2-digit',
+    timeZone: 'America/Argentina/Buenos_Aires',
+    year: 'numeric',
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function todayDateInputValue() {
+  return dateInputValue(new Date());
+}
+
+function formatPublicationPreviewDate(value) {
+  const date = value
+    ? new Date(`${value}T12:00:00.000Z`)
+    : new Date();
+  return new Intl.DateTimeFormat('es-AR', {
+    day: 'numeric',
+    month: 'long',
+    timeZone: 'America/Argentina/Buenos_Aires',
+    year: 'numeric',
+  }).format(date);
 }
 
 function formatAdminDate(value) {
