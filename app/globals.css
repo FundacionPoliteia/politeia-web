@@ -617,7 +617,7 @@ a {
 .post-author:hover,
 .art-author:hover {
   text-decoration: underline;
-  text-underline-offset: 3px
+  text-underline-offset: 3px;
 }
 
 .blog-filter-clear {

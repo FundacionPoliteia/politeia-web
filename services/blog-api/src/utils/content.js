@@ -64,8 +64,9 @@ export function htmlToMarkdown(html = '') {
 
 export function stripMarkdown(markdown = '') {
   return stripReviewCommentMarkup(markdown)
+    .replace(/<table\b[\s\S]*?<\/table>/gi, ' ')
     .replace(/!\[[^\]]*]\([^)]+\)/g, '')
-    .replace(/\[[^\]]+]\([^)]+\)/g, '')
+    .replace(/\[([^\]]+)]\([^)]+\)/g, '$1')
     .replace(/<[^>]+>/g, '')
     .replace(/[`*_>#-]/g, '')
     .replace(/\s+/g, ' ')

@@ -3,6 +3,7 @@ import { HttpError } from '../errors.js';
 import { writeAuditLog } from './audit.js';
 import { createCategory } from './categories.js';
 import { buildGeneratedSlug } from '../utils/slug.js';
+import { buildExcerpt, normalizeExcerptMode } from '../utils/content.js';
 
 const posts = () => db().collection('posts');
 const PUBLIC_FIELDS = [
@@ -131,7 +132,19 @@ export async function updatePost(id, data, actorUser) {
   if (data.slug) await ensureSlugAvailable(data.slug, id);
   if (data.category) await createCategory(data.category, actorUser.email);
 
-  await ref.update({ ...data, updatedAt: serverTimestamp() });
+  const nextData = { ...data };
+  const excerptMode = normalizeExcerptMode(nextData.excerptMode ?? before.excerptMode, {
+    hasExcerpt: Boolean(before.excerpt),
+  });
+  if (
+    excerptMode === 'auto'
+    && (nextData.contentMarkdown !== undefined || nextData.excerptMode === 'auto')
+  ) {
+    nextData.excerptMode = 'auto';
+    nextData.excerpt = buildExcerpt(nextData.contentMarkdown ?? before.contentMarkdown ?? '');
+  }
+
+  await ref.update({ ...nextData, updatedAt: serverTimestamp() });
   const after = serializeDoc(await ref.get());
   await writeAuditLog({
     actorEmail: actorUser.email,
@@ -308,7 +321,7 @@ function toPublicPost(post = {}) {
   const next = { ...post, status: 'published' };
   for (const field of PUBLIC_FIELDS) {
     const key = `public${field.charAt(0).toUpperCase()}${field.slice(1)}`;
-    if (post[key] !== undefined && post[key] !== null) next[field] = post[key];
+    if (Object.hasOwn(post, key)) next[field] = post[key];
   }
   return next;
 }

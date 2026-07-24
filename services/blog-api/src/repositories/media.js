@@ -93,7 +93,10 @@ export async function inspectUploadedImage(file = {}) {
     throw new HttpError(400, 'image file is invalid or corrupted');
   }
 
-  const detected = SUPPORTED_IMAGE_FORMATS[metadata.format];
+  const detectedFormat = metadata.format === 'heif' && metadata.compression === 'av1'
+    ? 'avif'
+    : metadata.format;
+  const detected = SUPPORTED_IMAGE_FORMATS[detectedFormat];
   if (!detected) {
     throw new HttpError(400, 'file must be JPEG, PNG, WebP, AVIF, or GIF');
   }

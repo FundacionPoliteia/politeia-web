@@ -137,6 +137,60 @@ test('post content helpers preserve manual mode and sanitize references', () => 
 test('automatic excerpts strip formatting and cut at a word boundary', () => {
   const excerpt = buildExcerpt('## Titulo\n\nUn texto **largo** con palabras completas para el resumen.', '', 30);
   assert.equal(excerpt, 'Titulo Un texto largo con...');
+
+  const structuredExcerpt = buildExcerpt(
+    '[Texto enlazado](https://example.com) <table><tr><td>Dato tabular</td></tr></table> Cierre visible.'
+  );
+  assert.equal(structuredExcerpt, 'Texto enlazado Cierre visible.');
+});
+
+test('uploaded image inspection accepts modern web formats and rejects unsafe content', async () => {
+  const formats = [
+    ['jpeg', 'image/jpeg', 'jpg'],
+    ['png', 'image/png', 'png'],
+    ['webp', 'image/webp', 'webp'],
+    ['avif', 'image/avif', 'avif'],
+    ['gif', 'image/gif', 'gif'],
+  ];
+
+  for (const [format, mimetype, extension] of formats) {
+    const buffer = await sharp({
+      create: {
+        width: 8,
+        height: 8,
+        channels: 4,
+        background: { r: 20, g: 110, b: 145, alpha: 1 },
+      },
+    })[format]().toBuffer();
+    const inspected = await inspectUploadedImage({ buffer, mimetype, size: buffer.length });
+    assert.equal(inspected.contentType, mimetype);
+    assert.equal(inspected.extension, extension);
+  }
+
+  const jpeg = await sharp({
+    create: {
+      width: 4,
+      height: 4,
+      channels: 3,
+      background: { r: 10, g: 20, b: 30 },
+    },
+  }).jpeg().toBuffer();
+
+  await assert.rejects(
+    () => inspectUploadedImage({ buffer: jpeg, mimetype: 'image/png', size: jpeg.length }),
+    /does not match its file type/
+  );
+  await assert.rejects(
+    () => inspectUploadedImage({
+      buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>'),
+      mimetype: 'image/svg+xml',
+    }),
+    /JPEG, PNG, WebP, AVIF, or GIF/
+  );
+  await assert.rejects(
+    () => inspectUploadedImage({ buffer: Buffer.from('not-an-image'), mimetype: 'image/png' }),
+    /invalid or corrupted/
+  );
 });
 
 test('UI preferences sanitize fields and preserve partial updates per user', async () => {
@@ -766,6 +820,119 @@ test('reviewer can preserve a historical publication date when publishing a migr
       .expect(200);
 
     assert.equal(published.body.item.publishedAt._seconds, Date.parse('2020-05-15T12:00:00.000Z') / 1000);
+  } finally {
+    config.devAuth = previousDevAuth;
+    setFirestoreForTests(null);
+  }
+});
+
+test('legacy manual excerpts stay unchanged while automatic excerpts follow content updates', async () => {
+  const firestore = createMemoryFirestore();
+  setFirestoreForTests(firestore);
+  const previousDevAuth = config.devAuth;
+  config.devAuth = false;
+  const session = buildSessionCookie({
+    email: 'reviewer@politeia.ar',
+    name: 'Reviewer Politeia',
+    roles: ['reviewer'],
+  });
+  const posts = firestore.collection('posts');
+
+  try {
+    await posts.doc('legacy-excerpt').set({
+      title: 'Nota anterior',
+      slug: 'nota-anterior',
+      contentMarkdown: 'Contenido original',
+      contentHtml: '<p>Contenido original</p>',
+      excerpt: 'Extracto manual conservado.',
+      authorEmail: 'reviewer@politeia.ar',
+      authorName: 'Reviewer Politeia',
+      status: 'draft',
+      deletedAt: null,
+    });
+
+    const manual = await request(createApp())
+      .patch('/v1/posts/legacy-excerpt')
+      .set('Cookie', `${config.sessionCookieName}=${encodeURIComponent(session)}`)
+      .send({ contentMarkdown: 'Contenido nuevo que no debe reemplazar el extracto manual.' })
+      .expect(200);
+
+    assert.equal(manual.body.item.excerpt, 'Extracto manual conservado.');
+
+    await posts.doc('legacy-excerpt').update({ excerptMode: 'auto' });
+    const automatic = await request(createApp())
+      .patch('/v1/posts/legacy-excerpt')
+      .set('Cookie', `${config.sessionCookieName}=${encodeURIComponent(session)}`)
+      .send({ contentMarkdown: 'Contenido automatico actualizado para la card.' })
+      .expect(200);
+
+    assert.equal(automatic.body.item.excerptMode, 'auto');
+    assert.equal(automatic.body.item.excerpt, 'Contenido automatico actualizado para la card.');
+  } finally {
+    config.devAuth = previousDevAuth;
+    setFirestoreForTests(null);
+  }
+});
+
+test('published edition keeps the frozen excerpt, references and empty cover until republished', async () => {
+  const firestore = createMemoryFirestore();
+  setFirestoreForTests(firestore);
+  const previousDevAuth = config.devAuth;
+  config.devAuth = false;
+  const session = buildSessionCookie({
+    email: 'reviewer@politeia.ar',
+    name: 'Reviewer Politeia',
+    roles: ['reviewer'],
+  });
+
+  try {
+    const created = await request(createApp())
+      .post('/v1/posts')
+      .set('Cookie', `${config.sessionCookieName}=${encodeURIComponent(session)}`)
+      .send({
+        title: 'Nota con version publica',
+        contentMarkdown: 'Contenido publico original.',
+        excerptMode: 'manual',
+        excerpt: 'Extracto publico original.',
+        authorName: 'Reviewer Politeia',
+        tags: ['Prueba'],
+        references: [{ text: 'Fuente original', url: 'https://example.com/original' }],
+      })
+      .expect(201);
+
+    await request(createApp())
+      .post(`/v1/posts/${created.body.item.id}/publish`)
+      .set('Cookie', `${config.sessionCookieName}=${encodeURIComponent(session)}`)
+      .send({ notifySubscribers: false })
+      .expect(200);
+
+    await request(createApp())
+      .post(`/v1/posts/${created.body.item.id}/enable-edit`)
+      .set('Cookie', `${config.sessionCookieName}=${encodeURIComponent(session)}`)
+      .send({})
+      .expect(200);
+
+    await request(createApp())
+      .patch(`/v1/posts/${created.body.item.id}`)
+      .set('Cookie', `${config.sessionCookieName}=${encodeURIComponent(session)}`)
+      .send({
+        contentMarkdown: 'Contenido nuevo todavia no publicado.',
+        excerptMode: 'manual',
+        excerpt: 'Extracto nuevo todavia no publicado.',
+        coverImage: 'https://example.com/nueva-portada.webp',
+        references: [{ text: 'Fuente nueva', url: 'https://example.com/nueva' }],
+      })
+      .expect(200);
+
+    const publicPost = await request(createApp())
+      .get(`/v1/posts/${created.body.item.slug}`)
+      .expect(200);
+
+    assert.equal(publicPost.body.item.excerpt, 'Extracto publico original.');
+    assert.equal(publicPost.body.item.coverImage, null);
+    assert.deepEqual(publicPost.body.item.references, [
+      { text: 'Fuente original', url: 'https://example.com/original' },
+    ]);
   } finally {
     config.devAuth = previousDevAuth;
     setFirestoreForTests(null);

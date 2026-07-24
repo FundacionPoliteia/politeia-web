@@ -14,7 +14,7 @@ import PostCard from './PostCard';
 import PostReferences from './PostReferences';
 import { AdminHelpNavButton, AdminHelpProvider, FieldHelper, HelpTrigger } from './AdminHelp';
 import { parseTagsText, sanitizeCategory, sanitizeTags, taxonomyKey } from '../lib/taxonomy';
-import { IMAGE_UPLOAD_ACCEPT, IMAGE_UPLOAD_HELP } from '../lib/media';
+import { IMAGE_UPLOAD_ACCEPT, IMAGE_UPLOAD_HELP, validateImageUploadFile } from '../lib/media';
 
 const API_BASE = process.env.NEXT_PUBLIC_BLOG_API_BASE_URL || '';
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
@@ -1552,6 +1552,16 @@ export default function AdminConsole() {
       throw new Error('Solicita edicion para modificar un post publicado.');
     }
 
+    const invalidReferenceIndex = form.references.findIndex((reference) => (
+      reference.text.trim()
+      && reference.url.trim()
+      && !isValidHttpsUrl(reference.url)
+    ));
+    if (invalidReferenceIndex >= 0) {
+      document.getElementById(`reference-url-${invalidReferenceIndex}`)?.focus();
+      throw new Error('Revisa el enlace de la referencia: debe ser una URL HTTPS valida.');
+    }
+
     const payload = buildPayload(form, canChooseSlug);
     const isEditing = Boolean(form.id);
     const data = await api(isEditing ? `/v1/posts/${form.id}` : '/v1/posts', {
@@ -1570,6 +1580,7 @@ export default function AdminConsole() {
 
   async function uploadMedia(file) {
     if (!file) return null;
+    validateImageUploadFile(file);
     const body = new FormData();
     body.append('file', file);
     const data = await api('/v1/media', { method: 'POST', body });
@@ -2702,6 +2713,7 @@ export default function AdminConsole() {
                           {isActionLoading('profile-photo') ? 'Subiendo foto...' : 'Subir foto'}
                           <ActionSpinner active={isActionLoading('profile-photo')} />
                         </button>
+                        <small className="admin-field-info">{IMAGE_UPLOAD_HELP}</small>
                         {profileDraft.photoUrl && (
                           <button className="btn btn-ghost danger" onClick={() => updateProfileDraft('photoUrl', '')} type="button">
                             Quitar foto
@@ -3049,6 +3061,9 @@ export default function AdminConsole() {
                           Subiendo foto...
                           <ActionSpinner active />
                         </p>
+                      )}
+                      {adminProfilePhotoMode === 'upload' && (
+                        <FieldHelper description={IMAGE_UPLOAD_HELP} />
                       )}
                       {adminProfileDraft.photoUrl && (
                         <div className="admin-managed-photo-preview">
@@ -3993,7 +4008,11 @@ export default function AdminConsole() {
                         <p className="admin-muted">Todavía no agregaste referencias.</p>
                       ) : (
                         <div className="admin-reference-list">
-                          {form.references.map((reference, index) => (
+                          {form.references.map((reference, index) => {
+                            const urlError = reference.text.trim()
+                              && reference.url.trim()
+                              && !isValidHttpsUrl(reference.url);
+                            return (
                             <div className="admin-reference-row" key={`reference-${index}`}>
                               <label>
                                 Referencia
@@ -4008,12 +4027,21 @@ export default function AdminConsole() {
                               <label>
                                 Enlace opcional
                                 <input
+                                  aria-describedby={urlError ? `reference-url-error-${index}` : undefined}
+                                  aria-invalid={urlError ? 'true' : 'false'}
+                                  className={urlError ? 'is-invalid' : ''}
                                   disabled={publishedAuthorLocked}
+                                  id={`reference-url-${index}`}
                                   onChange={(event) => updateReference(index, 'url', event.target.value)}
                                   placeholder="https://..."
                                   type="url"
                                   value={reference.url}
                                 />
+                                {urlError && (
+                                  <span className="admin-field-error" id={`reference-url-error-${index}`}>
+                                    Usa un enlace completo que comience con https://
+                                  </span>
+                                )}
                               </label>
                               <div className="admin-reference-actions">
                                 <button
@@ -4043,7 +4071,8 @@ export default function AdminConsole() {
                                 </button>
                               </div>
                             </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       )}
                       <button
@@ -4239,6 +4268,7 @@ export default function AdminConsole() {
                             ? `${form.publicationDate}T12:00:00.000Z`
                             : new Date().toISOString(),
                           imagen: form.coverImage || null,
+                          imagenCard: form.coverImageThumbnail || form.coverImage || null,
                           autor: form.authorName,
                           tags: previewTags,
                         }}
@@ -5057,8 +5087,26 @@ function sanitizeFormReferences(value = []) {
     .map((reference) => reference.url ? reference : { text: reference.text });
 }
 
-function imageLoadErrorMessage() {
+function imageLoadErrorMessage(error) {
+  const message = String(error?.message || '').trim();
+  if (/supera el limite|tama(?:ñ|n)o|too large/i.test(message)) {
+    return 'La imagen supera el limite de 5 MB.';
+  }
+  if (/JPEG|PNG|WebP|AVIF|GIF|file type|formato/i.test(message)) {
+    return 'Usa una imagen JPEG, PNG, WebP, AVIF o GIF.';
+  }
+  if (/vacia|empty|corrupt|invalid|does not match/i.test(message)) {
+    return 'El archivo no contiene una imagen valida. Elegi otro e intenta nuevamente.';
+  }
   return 'No pudimos cargar la imagen. Intenta nuevamente la carga.';
+}
+
+function isValidHttpsUrl(value = '') {
+  try {
+    return new URL(String(value || '').trim()).protocol === 'https:';
+  } catch {
+    return false;
+  }
 }
 
 function stripReviewCommentMarkup(markdown = '') {

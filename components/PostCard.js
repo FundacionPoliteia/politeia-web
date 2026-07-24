@@ -51,19 +51,20 @@ export default function PostCard({
 }
 
 function PostCover({ post, onImageError, onImageLoad }) {
+  const imageUrl = post?.imagenCard || post?.imagen;
   return (
     <div
       className="post-img"
-      style={post?.imagen ? { backgroundImage: `url('${post.imagen}')` } : {}}
+      style={imageUrl ? { backgroundImage: `url('${imageUrl}')` } : {}}
     >
-      {post?.imagen && (onImageError || onImageLoad) && (
+      {imageUrl && (onImageError || onImageLoad) && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           alt=""
           className="admin-cover-probe"
           onError={onImageError}
           onLoad={onImageLoad}
-          src={post.imagen}
+          src={imageUrl}
         />
       )}
     </div>

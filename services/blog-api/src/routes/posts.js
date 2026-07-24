@@ -295,20 +295,17 @@ function buildPostPatch(body, user) {
     assertNonEmptyString(body.contentMarkdown, 'contentMarkdown');
     patch.contentMarkdown = body.contentMarkdown;
     patch.contentHtml = markdownToSafeHtml(body.contentMarkdown);
-    if (body.excerptMode === 'auto' || (body.excerptMode === undefined && body.excerpt === undefined)) {
-      patch.excerpt = buildExcerpt(body.contentMarkdown);
-    }
   }
   if (body.excerptMode !== undefined) {
     assertExcerptMode(body.excerptMode);
     patch.excerptMode = body.excerptMode;
-    if (body.excerptMode === 'auto') {
-      patch.excerpt = buildExcerpt(body.contentMarkdown || '');
-    }
   }
   if (body.excerpt !== undefined) {
     assertOptionalString(body.excerpt, 'excerpt');
-    if (body.excerptMode !== 'auto') patch.excerpt = buildExcerpt('', body.excerpt);
+    if (body.excerptMode !== 'auto') {
+      patch.excerpt = buildExcerpt('', body.excerpt);
+      if (body.excerptMode === undefined) patch.excerptMode = 'manual';
+    }
   }
   if (body.coverImage !== undefined) {
     if (body.coverImage) assertHttpsUrl(body.coverImage, 'coverImage');

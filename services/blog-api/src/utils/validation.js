@@ -3,6 +3,7 @@ import { HttpError } from '../errors.js';
 export const POST_STATUSES = new Set(['draft', 'review', 'published', 'archived']);
 export const IMAGE_MIME_TYPES = new Set([
   'image/jpeg',
+  'image/jpg',
   'image/png',
   'image/webp',
   'image/avif',
