@@ -4,7 +4,6 @@ export default function PostReferences({ references = [], preview = false }) {
 
   return (
     <section className={`post-references ${preview ? 'is-preview' : ''}`} aria-labelledby={preview ? undefined : 'post-references-title'}>
-      <span className="eyebrow">Fuentes</span>
       <h2 id={preview ? undefined : 'post-references-title'}>Referencias</h2>
       <ol>
         {items.map((reference, index) => (
