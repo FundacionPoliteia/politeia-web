@@ -79,11 +79,7 @@ export default function BlogIndex({ posts = [], autorFiltro = '', categoriaFiltr
             )}
             {filtrandoAutor || filtrandoCategoria ? (
               <Link href="/blog" className="btn btn-ghost blog-filter-clear">Ver todos</Link>
-            ) : (
-              <Link href="/blog/autores" className="btn btn-ghost blog-filter-clear">
-                Conoce a nuestros autores
-              </Link>
-            )}
+            ) : ''}
           </div>
           {filtrandoAutor && authorPhoto && (
             <aside className="blog-author-card" aria-label={`Perfil de ${authorName}`}>
