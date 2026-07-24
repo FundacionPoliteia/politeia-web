@@ -10,8 +10,11 @@ import BlogIndex from './BlogIndex';
 import NewsletterAdminPanel from './NewsletterAdminPanel';
 import AdminOperationsPanel from './AdminOperationsPanel';
 import MailingAdminPanel from './MailingAdminPanel';
+import PostCard from './PostCard';
+import PostReferences from './PostReferences';
 import { AdminHelpNavButton, AdminHelpProvider, FieldHelper, HelpTrigger } from './AdminHelp';
 import { parseTagsText, sanitizeCategory, sanitizeTags, taxonomyKey } from '../lib/taxonomy';
+import { IMAGE_UPLOAD_ACCEPT, IMAGE_UPLOAD_HELP } from '../lib/media';
 
 const API_BASE = process.env.NEXT_PUBLIC_BLOG_API_BASE_URL || '';
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
@@ -49,6 +52,7 @@ const EMPTY_FORM = {
   slug: '',
   publicationDate: '',
   excerpt: '',
+  excerptMode: 'auto',
   contentMarkdown: '',
   coverImage: '',
   coverImageThumbnail: '',
@@ -57,13 +61,14 @@ const EMPTY_FORM = {
   showAuthorNote: false,
   category: '',
   tagsText: '',
+  references: [],
   status: '',
   editRequestedAt: '',
   editRequestedBy: '',
   showCoverInPost: true,
 };
 
-const FORM_STRING_FIELDS = Object.keys(EMPTY_FORM).filter((field) => !['showCoverInPost', 'showAuthorNote'].includes(field));
+const FORM_STRING_FIELDS = Object.keys(EMPTY_FORM).filter((field) => !['showCoverInPost', 'showAuthorNote', 'references'].includes(field));
 
 const STATUS_LABELS = {
   draft: 'Borrador',
@@ -216,6 +221,7 @@ export default function AdminConsole() {
   const [savedForm, setSavedForm] = useState(EMPTY_FORM);
   const [statusFilter, setStatusFilter] = useState('');
   const [postSearch, setPostSearch] = useState('');
+  const [tagDraft, setTagDraft] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [actionBusy, setActionBusy] = useState({});
@@ -934,6 +940,7 @@ export default function AdminConsole() {
       setCategories([]);
       setActionBusy({});
       setPostSearch('');
+      setTagDraft('');
       setForm(EMPTY_FORM);
       setSavedForm(EMPTY_FORM);
       setUseManualAuthorNote(false);
@@ -1957,6 +1964,7 @@ export default function AdminConsole() {
     setForm(nextForm);
     setSavedForm(nextForm);
     setUseManualAuthorNote(Boolean(nextForm.authorNote));
+    setTagDraft('');
     setCategorySearchTerm('');
     setCoverImageError('');
   }
@@ -2019,6 +2027,7 @@ export default function AdminConsole() {
         setForm(EMPTY_FORM);
         setSavedForm(EMPTY_FORM);
         setUseManualAuthorNote(false);
+        setTagDraft('');
         setCategorySearchTerm('');
         setCoverImageError('');
       }
@@ -2044,6 +2053,7 @@ export default function AdminConsole() {
         setForm(EMPTY_FORM);
         setSavedForm(EMPTY_FORM);
         setUseManualAuthorNote(false);
+        setTagDraft('');
         setCategorySearchTerm('');
         setCoverImageError('');
       }
@@ -2260,10 +2270,13 @@ export default function AdminConsole() {
     () => formatPublicationPreviewDate(form.publicationDate),
     [form.publicationDate]
   );
+  const currentTags = useMemo(
+    () => parseTagsText(form.tagsText),
+    [form.tagsText]
+  );
   const previewTags = useMemo(() => {
-    const tags = parseTagsText(form.tagsText);
-    return tags.length ? tags : ['Nota'];
-  }, [form.tagsText]);
+    return currentTags.length ? currentTags : ['Nota'];
+  }, [currentTags]);
   const previewUsesCurrentProfile = taxonomyKey(form.authorName) === taxonomyKey(profileAuthorName);
   const previewAuthorPhoto = previewUsesCurrentProfile
     ? profileDraft.photoUrl || userProfile.photoUrl || ''
@@ -2670,7 +2683,7 @@ export default function AdminConsole() {
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img alt="" src={profileDraft.photoUrl || DEFAULT_PROFILE_PHOTO} />
                         <input
-                          accept="image/jpeg,image/png,image/webp"
+                          accept={IMAGE_UPLOAD_ACCEPT}
                           hidden
                           onChange={(event) => {
                             const file = event.target.files?.[0];
@@ -3024,7 +3037,7 @@ export default function AdminConsole() {
                         />
                       ) : (
                         <input
-                          accept="image/jpeg,image/png,image/webp"
+                          accept={IMAGE_UPLOAD_ACCEPT}
                           disabled={isActionLoading('admin-profile-photo')}
                           onChange={(event) => uploadAdminProfilePhoto(event.target.files?.[0])}
                           ref={adminProfilePhotoInputRef}
@@ -3569,6 +3582,7 @@ export default function AdminConsole() {
                         setForm(nextForm);
                         setSavedForm(nextForm);
                         setUseManualAuthorNote(false);
+                        setTagDraft('');
                         setCategorySearchTerm('');
                         setCoverImageError('');
                       }}
@@ -3755,16 +3769,48 @@ export default function AdminConsole() {
                     ))}
                   </datalist>
 
-                  <label>
-                    Extracto
+                  <label data-help-id="blog-excerpt">
+                    <span className="admin-field-label">
+                      Extracto
+                      <span className={`admin-excerpt-mode is-${form.excerptMode}`}>
+                        {form.excerptMode === 'auto' ? 'Automático' : 'Manual'}
+                      </span>
+                    </span>
                     <textarea
-                      placeholder="El extracto se genera automaticamente si lo dejas vacio."
+                      placeholder="El extracto se genera automáticamente a partir del contenido."
                       disabled={publishedAuthorLocked}
                       value={form.excerpt}
-                      onChange={(e) => updateForm('excerpt', e.target.value)}
+                      onChange={(e) => {
+                        setForm((current) => normalizeForm({
+                          ...current,
+                          excerpt: e.target.value,
+                          excerptMode: 'manual',
+                        }));
+                      }}
                       rows="3"
                     />
-                    <FieldHelper description="Si queda vacio, se genera automaticamente a partir del contenido." topicId="blogs-metadata" />
+                    <div className="admin-field-helper-row">
+                      <FieldHelper
+                        description={form.excerptMode === 'auto'
+                          ? 'Se actualiza mientras redactás el contenido.'
+                          : 'Tu versión manual se conservará aunque cambie el contenido.'}
+                        topicId="blogs-excerpt"
+                      />
+                      {form.excerptMode === 'manual' && (
+                        <button
+                          className="admin-inline-action"
+                          disabled={publishedAuthorLocked}
+                          onClick={() => setForm((current) => normalizeForm({
+                            ...current,
+                            excerptMode: 'auto',
+                            excerpt: deriveExcerpt(current.contentMarkdown),
+                          }))}
+                          type="button"
+                        >
+                          Volver a automático
+                        </button>
+                      )}
+                    </div>
                   </label>
 
                   <label data-help-id="blog-cover">
@@ -3819,7 +3865,7 @@ export default function AdminConsole() {
                         aria-describedby={coverImageError ? 'cover-image-error' : undefined}
                         className={coverImageError ? 'is-invalid' : ''}
                         type="file"
-                        accept="image/jpeg,image/png,image/webp"
+                        accept={IMAGE_UPLOAD_ACCEPT}
                         onChange={(e) => {
                           const file = e.target.files?.[0];
                           clearCoverImageError();
@@ -3840,6 +3886,9 @@ export default function AdminConsole() {
                         <ActionSpinner active />
                       </p>
                     )}
+                    {coverMode === 'upload' && !coverImageError && (
+                      <FieldHelper description={IMAGE_UPLOAD_HELP} topicId="blogs-cover" />
+                    )}
                     {form.coverImage && (
                       <label className="admin-cover-toggle">
                         <input
@@ -3853,17 +3902,30 @@ export default function AdminConsole() {
                     )}
                   </label>
 
-                  <label data-help-id="blog-tags">
+                  <div data-help-id="blog-tags">
                     <span className="admin-field-label">Tags <HelpTrigger topicId="blogs-tags" /></span>
-                    <input
-                      list="admin-tag-options"
-                      disabled={publishedAuthorLocked}
-                      value={form.tagsText}
-                      onBlur={() => updateForm('tagsText', parseTagsText(form.tagsText).join(', '))}
-                      onChange={(e) => updateForm('tagsText', e.target.value)}
-                      placeholder="política, democracia, análisis"
-                    />
-                  </label>
+                    <div className={`admin-tag-editor ${publishedAuthorLocked ? 'is-disabled' : ''}`}>
+                      {currentTags.map((tag) => (
+                        <span className="admin-tag-chip" key={tag}>
+                          {tag}
+                          {!publishedAuthorLocked && (
+                            <button aria-label={`Quitar ${tag}`} onClick={() => removeTag(tag)} type="button">
+                              <span aria-hidden="true" className="material-symbols-outlined">close</span>
+                            </button>
+                          )}
+                        </span>
+                      ))}
+                      <input
+                        disabled={publishedAuthorLocked}
+                        value={tagDraft}
+                        onBlur={() => commitTagDraft()}
+                        onChange={(event) => handleTagDraftChange(event.target.value)}
+                        onKeyDown={handleTagKeyDown}
+                        placeholder={currentTags.length ? 'Agregar otro tag' : 'Política, democracia, análisis'}
+                      />
+                    </div>
+                    <FieldHelper description="Separá los temas con coma o Enter. Cada uno se convierte en un tag." topicId="blogs-tags" />
+                  </div>
                   {tagOptions.length > 0 && (
                     <div className="admin-taxonomy-suggestions">
                       {tagOptions.slice(0, 14).map((option) => (
@@ -3916,6 +3978,85 @@ export default function AdminConsole() {
                     onUploadImage={uploadInlineImage}
                     value={form.contentMarkdown}
                   />
+
+                  <details className="admin-references" data-help-id="blog-references">
+                    <summary>
+                      <span>
+                        Referencias
+                        <HelpTrigger topicId="blogs-references" />
+                      </span>
+                      <span aria-hidden="true" className="material-symbols-outlined">expand_more</span>
+                    </summary>
+                    <div className="admin-references-body">
+                      <p>Agregá las fuentes utilizadas. El enlace es opcional y debe comenzar con HTTPS.</p>
+                      {form.references.length === 0 ? (
+                        <p className="admin-muted">Todavía no agregaste referencias.</p>
+                      ) : (
+                        <div className="admin-reference-list">
+                          {form.references.map((reference, index) => (
+                            <div className="admin-reference-row" key={`reference-${index}`}>
+                              <label>
+                                Referencia
+                                <input
+                                  disabled={publishedAuthorLocked}
+                                  maxLength="1000"
+                                  onChange={(event) => updateReference(index, 'text', event.target.value)}
+                                  placeholder="Título, informe, nota o fuente utilizada"
+                                  value={reference.text}
+                                />
+                              </label>
+                              <label>
+                                Enlace opcional
+                                <input
+                                  disabled={publishedAuthorLocked}
+                                  onChange={(event) => updateReference(index, 'url', event.target.value)}
+                                  placeholder="https://..."
+                                  type="url"
+                                  value={reference.url}
+                                />
+                              </label>
+                              <div className="admin-reference-actions">
+                                <button
+                                  aria-label="Mover referencia hacia arriba"
+                                  disabled={publishedAuthorLocked || index === 0}
+                                  onClick={() => moveReference(index, -1)}
+                                  type="button"
+                                >
+                                  <span aria-hidden="true" className="material-symbols-outlined">arrow_upward</span>
+                                </button>
+                                <button
+                                  aria-label="Mover referencia hacia abajo"
+                                  disabled={publishedAuthorLocked || index === form.references.length - 1}
+                                  onClick={() => moveReference(index, 1)}
+                                  type="button"
+                                >
+                                  <span aria-hidden="true" className="material-symbols-outlined">arrow_downward</span>
+                                </button>
+                                <button
+                                  aria-label="Eliminar referencia"
+                                  className="danger"
+                                  disabled={publishedAuthorLocked}
+                                  onClick={() => removeReference(index)}
+                                  type="button"
+                                >
+                                  <span aria-hidden="true" className="material-symbols-outlined">delete</span>
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <button
+                        className="btn btn-ghost admin-reference-add"
+                        disabled={publishedAuthorLocked || form.references.length >= 50}
+                        onClick={addReference}
+                        type="button"
+                      >
+                        <span aria-hidden="true" className="material-symbols-outlined">add</span>
+                        Agregar referencia
+                      </button>
+                    </div>
+                  </details>
 
                   <section className="admin-author-ending" data-help-id="blog-author-end">
                     <div>
@@ -4085,33 +4226,23 @@ export default function AdminConsole() {
                       </span>
                     </button>
                     {previewCardOpen && (
-                      <article className="post admin-card-preview">
-                        <div
-                          className="post-img"
-                          style={form.coverImage ? { backgroundImage: `url('${form.coverImage}')` } : {}}
-                        >
-                          {form.coverImage && (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              alt=""
-                              className="admin-cover-probe"
-                              onError={() => failCoverImageLoad()}
-                              onLoad={() => setCoverImageError('')}
-                              src={form.coverImage}
-                            />
-                          )}
-                        </div>
-                        <div className="post-body">
-                          <div className="post-tags" aria-label="Tags">
-                            {previewTags.slice(0, 3).map((tag) => (
-                              <span className="post-cat" key={tag}>{tag}</span>
-                            ))}
-                          </div>
-                          <h4>{form.title || 'Titulo del blog'}</h4>
-                          <p>{form.excerpt || 'El extracto de la nota se vera aqui.'}</p>
-                          <div className="meta">{form.authorName ? `${form.authorName} - ` : ''}{previewDate}</div>
-                        </div>
-                      </article>
+                      <PostCard
+                        className="admin-card-preview"
+                        interactive={false}
+                        onImageError={() => failCoverImageLoad()}
+                        onImageLoad={() => setCoverImageError('')}
+                        post={{
+                          slug: form.slug,
+                          titulo: form.title || 'Título del blog',
+                          extracto: form.excerpt || 'El extracto de la nota se verá aquí.',
+                          fecha: form.publicationDate
+                            ? `${form.publicationDate}T12:00:00.000Z`
+                            : new Date().toISOString(),
+                          imagen: form.coverImage || null,
+                          autor: form.authorName,
+                          tags: previewTags,
+                        }}
+                      />
                     )}
                   </section>
 
@@ -4722,7 +4853,13 @@ export default function AdminConsole() {
   );
 
   function updateForm(field, value) {
-    setForm((current) => normalizeForm({ ...current, [field]: value }));
+    setForm((current) => normalizeForm({
+      ...current,
+      [field]: value,
+      ...(field === 'contentMarkdown' && current.excerptMode === 'auto'
+        ? { excerpt: deriveExcerpt(value) }
+        : {}),
+    }));
   }
 
   function addTagSuggestion(tag) {
@@ -4731,6 +4868,84 @@ export default function AdminConsole() {
       const nextTag = sanitizeTags([tag])[0];
       if (nextTag && !tags.some((item) => taxonomyKey(item) === taxonomyKey(nextTag))) tags.push(nextTag);
       return normalizeForm({ ...current, tagsText: tags.join(', ') });
+    });
+  }
+
+  function commitTagDraft(value = tagDraft) {
+    const candidates = String(value || '').split(',');
+    setForm((current) => normalizeForm({
+      ...current,
+      tagsText: sanitizeTags([
+        ...parseTagsText(current.tagsText),
+        ...candidates,
+      ]).join(', '),
+    }));
+    setTagDraft('');
+  }
+
+  function handleTagDraftChange(value) {
+    const pieces = String(value || '').split(',');
+    if (pieces.length === 1) {
+      setTagDraft(value);
+      return;
+    }
+    commitTagDraft(pieces.slice(0, -1).join(','));
+    setTagDraft(pieces.at(-1) || '');
+  }
+
+  function handleTagKeyDown(event) {
+    if (event.key === 'Enter' || event.key === ',') {
+      event.preventDefault();
+      commitTagDraft();
+      return;
+    }
+    if (event.key === 'Backspace' && !tagDraft) {
+      const tags = parseTagsText(form.tagsText);
+      if (!tags.length) return;
+      event.preventDefault();
+      updateForm('tagsText', tags.slice(0, -1).join(', '));
+    }
+  }
+
+  function removeTag(tag) {
+    updateForm(
+      'tagsText',
+      parseTagsText(form.tagsText)
+        .filter((item) => taxonomyKey(item) !== taxonomyKey(tag))
+        .join(', ')
+    );
+  }
+
+  function addReference() {
+    setForm((current) => normalizeForm({
+      ...current,
+      references: [...current.references, { text: '', url: '' }],
+    }));
+  }
+
+  function updateReference(index, field, value) {
+    setForm((current) => normalizeForm({
+      ...current,
+      references: current.references.map((reference, referenceIndex) => (
+        referenceIndex === index ? { ...reference, [field]: value } : reference
+      )),
+    }));
+  }
+
+  function removeReference(index) {
+    setForm((current) => normalizeForm({
+      ...current,
+      references: current.references.filter((_, referenceIndex) => referenceIndex !== index),
+    }));
+  }
+
+  function moveReference(index, direction) {
+    setForm((current) => {
+      const targetIndex = index + direction;
+      if (targetIndex < 0 || targetIndex >= current.references.length) return current;
+      const references = [...current.references];
+      [references[index], references[targetIndex]] = [references[targetIndex], references[index]];
+      return normalizeForm({ ...current, references });
     });
   }
 }
@@ -4765,6 +4980,7 @@ function AdminArticlePreview({
         />
       )}
       <div className="art-body" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+      <PostReferences preview references={form.references} />
       {form.showAuthorNote && (
         <AuthorEnd
           fullName={form.authorName}
@@ -4784,7 +5000,8 @@ function buildPayload(form, canChooseSlug = false) {
       slug: form.slug || undefined,
       publicationDate: form.publicationDate || '',
     } : {}),
-    excerpt: form.excerpt || undefined,
+    excerptMode: form.excerptMode,
+    excerpt: form.excerptMode === 'manual' ? form.excerpt : undefined,
     contentMarkdown: form.contentMarkdown,
     coverImage: form.coverImage || undefined,
     coverImageThumbnail: form.coverImageThumbnail || '',
@@ -4794,7 +5011,50 @@ function buildPayload(form, canChooseSlug = false) {
     showAuthorNote: form.showAuthorNote === true,
     category: sanitizeCategory(form.category) || undefined,
     tags: parseTagsText(form.tagsText),
+    references: sanitizeFormReferences(form.references),
   };
+}
+
+function deriveExcerpt(markdown = '', maxLength = 180) {
+  const html = marked.parse(stripReviewCommentMarkup(String(markdown || '')), {
+    async: false,
+    gfm: true,
+  });
+  const text = String(html)
+    .replace(/<table\b[\s\S]*?<\/table>/gi, ' ')
+    .replace(/<img\b[^>]*>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (text.length <= maxLength) return text;
+  const clipped = text.slice(0, maxLength + 1);
+  const lastSpace = clipped.lastIndexOf(' ');
+  const safeText = lastSpace > Math.floor(maxLength * 0.6)
+    ? clipped.slice(0, lastSpace)
+    : clipped.slice(0, maxLength);
+  return `${safeText.trim()}...`;
+}
+
+function normalizeFormReferences(value = []) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 50).map((reference) => ({
+    text: normalizeInputValue(reference?.text),
+    url: normalizeInputValue(reference?.url),
+  }));
+}
+
+function sanitizeFormReferences(value = []) {
+  return normalizeFormReferences(value)
+    .map((reference) => ({
+      text: reference.text.trim().replace(/\s+/g, ' '),
+      url: reference.url.trim(),
+    }))
+    .filter((reference) => reference.text)
+    .map((reference) => reference.url ? reference : { text: reference.text });
 }
 
 function imageLoadErrorMessage() {
@@ -5156,6 +5416,8 @@ function normalizeForm(value = {}) {
   });
   next.showCoverInPost = next.showCoverInPost !== false;
   next.showAuthorNote = next.showAuthorNote === true;
+  next.excerptMode = next.excerptMode === 'manual' ? 'manual' : 'auto';
+  next.references = normalizeFormReferences(next.references);
   return next;
 }
 
@@ -5256,6 +5518,7 @@ function postToForm(post = {}) {
     slug: post.slug,
     publicationDate: dateInputValue(post.publicationDate || post.publishedAt),
     excerpt: post.excerpt,
+    excerptMode: post.excerptMode === 'auto' ? 'auto' : 'manual',
     contentMarkdown: post.contentMarkdown,
     coverImage: post.coverImage,
     coverImageThumbnail: post.coverImageThumbnail,
@@ -5264,6 +5527,7 @@ function postToForm(post = {}) {
     showAuthorNote: post.showAuthorNote === true,
     category: sanitizeCategory(post.category),
     tagsText: sanitizeTags(post.tags || []).join(', '),
+    references: sanitizeFormReferences(post.references),
     status: post.status,
     editRequestedAt: post.editRequestedAt,
     editRequestedBy: post.editRequestedBy,
@@ -5278,6 +5542,7 @@ function serializeForm(form) {
     slug: form.slug || '',
     publicationDate: form.publicationDate || '',
     excerpt: form.excerpt || '',
+    excerptMode: form.excerptMode || 'auto',
     contentMarkdown: form.contentMarkdown || '',
     coverImage: form.coverImage || '',
     coverImageThumbnail: form.coverImageThumbnail || '',
@@ -5286,6 +5551,7 @@ function serializeForm(form) {
     showAuthorNote: form.showAuthorNote === true,
     category: form.category || '',
     tagsText: form.tagsText || '',
+    references: sanitizeFormReferences(form.references),
     status: form.status || '',
     editRequestedAt: form.editRequestedAt || '',
     editRequestedBy: form.editRequestedBy || '',

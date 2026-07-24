@@ -19,19 +19,29 @@ const AdminHelpContext = createContext(null);
 export function AdminHelpProvider({ activeArea, children, completedGuides = {}, onGuideComplete, ready = false, roles = [] }) {
   const [guideOpen, setGuideOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [updatesOnly, setUpdatesOnly] = useState(false);
   const triggerRef = useRef(null);
   const openedThisSessionRef = useRef(new Set());
   const topics = useMemo(() => getAdminHelpTopics(activeArea, roles), [activeArea, roles]);
   const guideVersion = HELP_GUIDE_VERSIONS[activeArea] || 1;
-  const guideComplete = Number(completedGuides?.[activeArea] || 0) >= guideVersion;
+  const completedVersion = Number(completedGuides?.[activeArea] || 0);
+  const guideComplete = completedVersion >= guideVersion;
+  const updatedTopics = useMemo(
+    () => topics.filter((topic) => topic.introducedIn > completedVersion),
+    [completedVersion, topics]
+  );
+  const visibleTopics = updatesOnly && updatedTopics.length ? updatedTopics : topics;
 
-  const openGuide = useCallback((topicId = '', source = null) => {
+  const openGuide = useCallback((topicId = '', source = null, options = {}) => {
     if (!topics.length) return;
-    const topicIndex = topicId ? topics.findIndex((topic) => topic.id === topicId) : 0;
+    const useUpdates = options.updatesOnly === true && updatedTopics.length > 0;
+    const nextTopics = useUpdates ? updatedTopics : topics;
+    const topicIndex = topicId ? nextTopics.findIndex((topic) => topic.id === topicId) : 0;
     triggerRef.current = source || document.activeElement;
+    setUpdatesOnly(useUpdates);
     setActiveIndex(topicIndex >= 0 ? topicIndex : 0);
     setGuideOpen(true);
-  }, [topics]);
+  }, [topics, updatedTopics]);
 
   const closeGuide = useCallback(() => {
     setGuideOpen(false);
@@ -45,16 +55,17 @@ export function AdminHelpProvider({ activeArea, children, completedGuides = {}, 
 
   useEffect(() => {
     setActiveIndex(0);
+    setUpdatesOnly(false);
   }, [activeArea]);
 
   useEffect(() => {
     if (!ready || !topics.length || guideComplete || openedThisSessionRef.current.has(activeArea)) return undefined;
     const timer = window.setTimeout(() => {
       openedThisSessionRef.current.add(activeArea);
-      openGuide();
+      openGuide('', null, { updatesOnly: completedVersion > 0 });
     }, 450);
     return () => window.clearTimeout(timer);
-  }, [activeArea, guideComplete, openGuide, ready, topics.length]);
+  }, [activeArea, completedVersion, guideComplete, openGuide, ready, topics.length]);
 
   useEffect(() => {
     if (!guideOpen) return undefined;
@@ -74,7 +85,7 @@ export function AdminHelpProvider({ activeArea, children, completedGuides = {}, 
     roles,
   }), [activeArea, closeGuide, guideOpen, openGuide, roles]);
 
-  const activeTopic = topics[activeIndex] || topics[0] || null;
+  const activeTopic = visibleTopics[activeIndex] || visibleTopics[0] || null;
 
   return (
     <AdminHelpContext.Provider value={contextValue}>
@@ -86,7 +97,7 @@ export function AdminHelpProvider({ activeArea, children, completedGuides = {}, 
           onClose={closeGuide}
           onComplete={completeGuide}
           onSelect={setActiveIndex}
-          topics={topics}
+          topics={visibleTopics}
         />,
         document.body
       )}

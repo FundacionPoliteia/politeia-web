@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { taxonomyKey } from '../lib/taxonomy';
 import NewsletterForm from './NewsletterForm';
+import PostCard from './PostCard';
 
 const DEFAULT_PROFILE_PHOTO = '/default_profile.png';
 
@@ -144,38 +145,11 @@ export default function BlogIndex({ posts = [], autorFiltro = '', categoriaFiltr
 
                       <div className="posts">
                         {seccion.posts.map((p) => (
-                          <article key={p.id} className="post">
-                            <Link href={`/blog/${p.slug}`} className="post-cover-link" aria-label={`Leer ${p.titulo}`}>
-                              <div
-                                className="post-img"
-                                style={p.imagen ? { backgroundImage: `url('${p.imagen}')` } : {}}
-                              ></div>
-                            </Link>
-                            <div className="post-body">
-                              <div className="post-tags" aria-label="Tags">
-                                {etiquetasPost(p).slice(0, 3).map((tag) => (
-                                  <span className="post-cat" key={tag}>{tag}</span>
-                                ))}
-                              </div>
-                              <h4>
-                                <Link href={`/blog/${p.slug}`} className="post-title-link">{p.titulo}</Link>
-                              </h4>
-                              {p.extracto && <p className="post-excerpt">{p.extracto}</p>}
-                              <div className="meta">
-                                {p.autor && (
-                                  <>
-                                    {publicAuthorKeys.has(taxonomyKey(p.autor)) ? (
-                                      <Link href={hrefAutorBlog(p.autor)} className="post-author">{p.autor}</Link>
-                                    ) : (
-                                      <span className="post-author-name">{p.autor}</span>
-                                    )}
-                                    {' - '}
-                                  </>
-                                )}
-                                {formatearFecha(p.fecha)}
-                              </div>
-                            </div>
-                          </article>
+                          <PostCard
+                            authorIsPublic={publicAuthorKeys.has(taxonomyKey(p.autor))}
+                            key={p.id}
+                            post={p}
+                          />
                         ))}
                       </div>
                     </section>
@@ -284,10 +258,23 @@ function agruparPorCategoria(posts) {
     grupos.get(categoria).push(post);
   });
 
-  return Array.from(grupos, ([categoria, items]) => ({
-    categoria,
-    posts: items,
-  }));
+  return Array.from(grupos, ([categoria, items]) => {
+    const sortedPosts = [...items].sort((a, b) => postTimestamp(b) - postTimestamp(a));
+    return {
+      categoria,
+      posts: sortedPosts,
+      latestTimestamp: postTimestamp(sortedPosts[0]),
+    };
+  })
+    .sort((a, b) => b.latestTimestamp - a.latestTimestamp
+      || a.categoria.localeCompare(b.categoria, 'es'))
+    .map(({ latestTimestamp, ...group }) => group);
+}
+
+function postTimestamp(post = {}) {
+  const value = post.fecha || post.publishedAt || post.publicationDate || post.createdAt;
+  const timestamp = new Date(value || 0).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
 function categorySectionId(categoria) {

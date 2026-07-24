@@ -13,6 +13,7 @@ import { marked } from 'marked';
 import TurndownService from 'turndown';
 import { gfm } from 'turndown-plugin-gfm';
 import { HelpTooltip } from './AdminHelp';
+import { IMAGE_UPLOAD_ACCEPT } from '../lib/media';
 
 const TOOLBAR_GROUPS = [
   [
@@ -312,7 +313,7 @@ export default function RichTextEditor({
         </div>
 
         <input
-          accept="image/jpeg,image/png,image/webp"
+          accept={IMAGE_UPLOAD_ACCEPT}
           hidden
           onChange={(event) => uploadInlineImage(event.target.files?.[0])}
           ref={fileInputRef}

@@ -22,7 +22,7 @@ mediaRouter.post('/', upload.single('file'), async (req, res, next) => {
 
     if (!req.file) throw new HttpError(400, 'file or url is required');
     if (!IMAGE_MIME_TYPES.has(req.file.mimetype)) {
-      throw new HttpError(400, 'file must be image/jpeg, image/png, or image/webp');
+      throw new HttpError(400, 'file must be JPEG, PNG, WebP, AVIF, or GIF');
     }
     if (!config.mediaBucket) requireConfig(['mediaBucket']);
 

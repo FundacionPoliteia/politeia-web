@@ -1,7 +1,12 @@
 import { Router } from 'express';
 import { requireAnyRole, requireAuth, requireRole } from '../auth.js';
 import { HttpError } from '../errors.js';
-import { buildExcerpt, markdownToSafeHtml } from '../utils/content.js';
+import {
+  buildExcerpt,
+  markdownToSafeHtml,
+  normalizeExcerptMode,
+  sanitizeReferences,
+} from '../utils/content.js';
 import { isValidSlug } from '../utils/slug.js';
 import { sanitizeCategory, sanitizeTags } from '../utils/taxonomy.js';
 import {
@@ -10,6 +15,8 @@ import {
   assertStringArray,
   assertHttpsUrl,
   assertOptionalBoolean,
+  assertExcerptMode,
+  assertReferences,
 } from '../utils/validation.js';
 import {
   createPostComment,
@@ -211,6 +218,8 @@ function buildPostPayload(body, user) {
   assertNonEmptyString(body.contentMarkdown, 'contentMarkdown');
   assertOptionalString(body.slug, 'slug');
   assertOptionalString(body.excerpt, 'excerpt');
+  assertExcerptMode(body.excerptMode);
+  assertReferences(body.references);
   assertOptionalString(body.coverImage, 'coverImage');
   assertOptionalString(body.coverImageThumbnail, 'coverImageThumbnail');
   assertOptionalString(body.category, 'category');
@@ -234,11 +243,17 @@ function buildPostPayload(body, user) {
   if (slug && !isValidSlug(slug)) throw new HttpError(400, 'slug is invalid');
   const publicationDate = normalizePublicationDate(body.publicationDate);
   const contentHtml = markdownToSafeHtml(body.contentMarkdown);
+  const excerptMode = normalizeExcerptMode(body.excerptMode, {
+    hasExcerpt: body.excerpt !== undefined,
+  });
 
   return {
     title: body.title.trim(),
     slug: slug || null,
-    excerpt: buildExcerpt(body.contentMarkdown, body.excerpt),
+    excerptMode,
+    excerpt: excerptMode === 'auto'
+      ? buildExcerpt(body.contentMarkdown)
+      : buildExcerpt('', body.excerpt || ''),
     contentMarkdown: body.contentMarkdown,
     contentHtml,
     coverImage: body.coverImage || null,
@@ -250,6 +265,7 @@ function buildPostPayload(body, user) {
     showAuthorNote: body.showAuthorNote === true,
     category: sanitizeCategory(body.category),
     tags: sanitizeTags(body.tags),
+    references: sanitizeReferences(body.references),
     publicationDate: publicationDate || null,
   };
 }
@@ -279,13 +295,20 @@ function buildPostPatch(body, user) {
     assertNonEmptyString(body.contentMarkdown, 'contentMarkdown');
     patch.contentMarkdown = body.contentMarkdown;
     patch.contentHtml = markdownToSafeHtml(body.contentMarkdown);
-    if (body.excerpt === undefined) {
+    if (body.excerptMode === 'auto' || (body.excerptMode === undefined && body.excerpt === undefined)) {
       patch.excerpt = buildExcerpt(body.contentMarkdown);
+    }
+  }
+  if (body.excerptMode !== undefined) {
+    assertExcerptMode(body.excerptMode);
+    patch.excerptMode = body.excerptMode;
+    if (body.excerptMode === 'auto') {
+      patch.excerpt = buildExcerpt(body.contentMarkdown || '');
     }
   }
   if (body.excerpt !== undefined) {
     assertOptionalString(body.excerpt, 'excerpt');
-    patch.excerpt = buildExcerpt(body.contentMarkdown || '', body.excerpt);
+    if (body.excerptMode !== 'auto') patch.excerpt = buildExcerpt('', body.excerpt);
   }
   if (body.coverImage !== undefined) {
     if (body.coverImage) assertHttpsUrl(body.coverImage, 'coverImage');
@@ -306,6 +329,10 @@ function buildPostPatch(body, user) {
   if (body.tags !== undefined) {
     assertStringArray(body.tags, 'tags');
     patch.tags = sanitizeTags(body.tags);
+  }
+  if (body.references !== undefined) {
+    assertReferences(body.references);
+    patch.references = sanitizeReferences(body.references);
   }
   if (body.authorName !== undefined) {
     assertOptionalString(body.authorName, 'authorName');

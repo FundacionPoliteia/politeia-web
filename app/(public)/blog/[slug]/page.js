@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getPost, formatearFecha, etiquetasPost, hrefAutorBlog } from '../../../../lib/blogApi';
 import AuthorEnd from '../../../../components/AuthorEnd';
+import PostReferences from '../../../../components/PostReferences';
 
 export const dynamic = 'force-dynamic';
 
@@ -76,6 +77,7 @@ export default async function NotaPage({ params }) {
         className="art-body"
         dangerouslySetInnerHTML={{ __html: post.contenido }}
       />
+      <PostReferences references={post.references} />
       {post.mostrarCierreAutor && (
         <AuthorEnd fullName={autorNombre} photoUrl={autorFoto} closingPhrase={cierreAutor} />
       )}

@@ -75,7 +75,12 @@ import {
   renderMailingPreview,
   updateMailingSettings,
 } from '../src/repositories/mailingAutomation.js';
-import { createMailThumbnail } from '../src/repositories/media.js';
+import { createMailThumbnail, inspectUploadedImage } from '../src/repositories/media.js';
+import {
+  buildExcerpt,
+  normalizeExcerptMode,
+  sanitizeReferences,
+} from '../src/utils/content.js';
 import {
   getUserUiPreferences,
   sanitizeUiPreferences,
@@ -113,6 +118,25 @@ test('GET /v1/me accepts a valid session cookie', async () => {
   } finally {
     config.devAuth = previousDevAuth;
   }
+});
+
+test('post content helpers preserve manual mode and sanitize references', () => {
+  assert.equal(normalizeExcerptMode(undefined, { hasExcerpt: true }), 'manual');
+  assert.equal(normalizeExcerptMode(undefined, { hasExcerpt: false }), 'auto');
+  assert.equal(normalizeExcerptMode('auto', { hasExcerpt: true }), 'auto');
+  assert.deepEqual(sanitizeReferences([
+    { text: '  Informe   anual ', url: ' https://example.com/informe ' },
+    { text: 'Fuente sin enlace', url: '' },
+    { text: '   ', url: 'https://example.com/vacia' },
+  ]), [
+    { text: 'Informe anual', url: 'https://example.com/informe' },
+    { text: 'Fuente sin enlace' },
+  ]);
+});
+
+test('automatic excerpts strip formatting and cut at a word boundary', () => {
+  const excerpt = buildExcerpt('## Titulo\n\nUn texto **largo** con palabras completas para el resumen.', '', 30);
+  assert.equal(excerpt, 'Titulo Un texto largo con...');
 });
 
 test('UI preferences sanitize fields and preserve partial updates per user', async () => {

@@ -9,6 +9,7 @@ const PUBLIC_FIELDS = [
   'title',
   'slug',
   'excerpt',
+  'excerptMode',
   'contentMarkdown',
   'contentHtml',
   'coverImage',
@@ -20,6 +21,8 @@ const PUBLIC_FIELDS = [
   'showAuthorNote',
   'category',
   'tags',
+  'references',
+  'publicationDate',
 ];
 const PUBLIC_STATUSES = ['published', 'published-edition'];
 

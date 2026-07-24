@@ -75,7 +75,30 @@ export function stripMarkdown(markdown = '') {
 export function buildExcerpt(markdown = '', fallback = '', maxLength = 180) {
   const text = (fallback || stripMarkdown(markdown)).trim();
   if (text.length <= maxLength) return text;
-  return `${text.slice(0, maxLength).trim()}...`;
+  const clipped = text.slice(0, maxLength + 1);
+  const lastSpace = clipped.lastIndexOf(' ');
+  const safeText = lastSpace > Math.floor(maxLength * 0.6)
+    ? clipped.slice(0, lastSpace)
+    : clipped.slice(0, maxLength);
+  return `${safeText.trim()}...`;
+}
+
+export function normalizeExcerptMode(value, { hasExcerpt = false } = {}) {
+  if (value === 'auto' || value === 'manual') return value;
+  return hasExcerpt ? 'manual' : 'auto';
+}
+
+export function sanitizeReferences(value = []) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((reference) => ({
+      text: typeof reference?.text === 'string'
+        ? reference.text.trim().replace(/\s+/g, ' ')
+        : '',
+      url: typeof reference?.url === 'string' ? reference.url.trim() : '',
+    }))
+    .filter((reference) => reference.text)
+    .map((reference) => reference.url ? reference : { text: reference.text });
 }
 
 function stripImageAlt(markdown = '') {

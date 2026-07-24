@@ -26,6 +26,7 @@ export const openApiSpec = {
           slug: { type: 'string' },
           title: { type: 'string' },
           excerpt: { type: 'string' },
+          excerptMode: { type: 'string', enum: ['auto', 'manual'] },
           contentMarkdown: { type: 'string' },
           contentHtml: { type: 'string' },
           coverImage: { type: 'string', nullable: true },
@@ -38,6 +39,17 @@ export const openApiSpec = {
           showAuthorNote: { type: 'boolean' },
           category: { type: 'string' },
           tags: { type: 'array', items: { type: 'string' } },
+          references: {
+            type: 'array',
+            items: {
+              type: 'object',
+              required: ['text'],
+              properties: {
+                text: { type: 'string' },
+                url: { type: 'string', format: 'uri' },
+              },
+            },
+          },
           createdAt: { type: 'string', format: 'date-time' },
           updatedAt: { type: 'string', format: 'date-time' },
           publishedAt: { type: 'string', format: 'date-time', nullable: true },
@@ -144,6 +156,7 @@ export const openApiSpec = {
                   slug: { type: 'string' },
                   publicationDate: { type: 'string', format: 'date' },
                   excerpt: { type: 'string' },
+                  excerptMode: { type: 'string', enum: ['auto', 'manual'] },
                   contentMarkdown: { type: 'string' },
                   coverImage: { type: 'string' },
                   coverImageThumbnail: { type: 'string' },
@@ -154,6 +167,17 @@ export const openApiSpec = {
                   authorEmail: { type: 'string' },
                   category: { type: 'string' },
                   tags: { type: 'array', items: { type: 'string' } },
+                  references: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      required: ['text'],
+                      properties: {
+                        text: { type: 'string' },
+                        url: { type: 'string', format: 'uri' },
+                      },
+                    },
+                  },
                 },
               },
             },
@@ -185,6 +209,13 @@ export const openApiSpec = {
         summary: 'Update post',
         security: [{ googleIdToken: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/Post' },
+            },
+          },
+        },
         responses: { 200: { description: 'Updated post' } },
       },
       delete: {
