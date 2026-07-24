@@ -1308,7 +1308,7 @@ a {
   .blog-index-section .posts {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 32px;
-    direction: rtl
+    direction: ltr
   }
 
   .blog-index-section .post {
