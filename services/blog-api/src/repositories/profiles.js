@@ -1,7 +1,8 @@
 import { db, serializeDoc, serverTimestamp } from '../firestore.js';
+import { config } from '../config.js';
 import { HttpError } from '../errors.js';
 import { writeAuditLog } from './audit.js';
-import { normalizeEmail } from './users.js';
+import { listUserRoleAssignments, normalizeEmail } from './users.js';
 import { isValidSlug, slugify } from '../utils/slug.js';
 
 const profiles = () => db().collection('userProfiles');
@@ -13,7 +14,13 @@ export async function getUserProfile(user) {
   const email = normalizeEmail(user?.email);
   if (!email) throw new HttpError(401, 'Missing user email');
 
-  const doc = await profiles().doc(profileId(email)).get();
+  const ref = profiles().doc(profileId(email));
+  await ref.set({
+    email,
+    accountRoles: sanitizeInternalRoles(user?.roles),
+    identityUpdatedAt: serverTimestamp(),
+  }, { merge: true });
+  const doc = await ref.get();
   return toUserProfile(doc.exists ? serializeDoc(doc) : { email }, user);
 }
 
@@ -34,9 +41,14 @@ export async function updateUserProfile(user, data) {
   const fullName = buildFullName(clean.firstName, clean.lastName);
   const patch = {
     ...clean,
+    reviewAssignmentsEnabled: user?.roles?.includes('admin')
+      ? clean.reviewAssignmentsEnabled
+      : false,
     publicProfileEnabled: clean.publicProfileEnabled,
     publicProfilePreferenceSet: true,
     email,
+    accountRoles: sanitizeInternalRoles(user?.roles),
+    identityUpdatedAt: serverTimestamp(),
     fullName,
     authorSlug: slugify(fullName),
     updatedAt: serverTimestamp(),
@@ -69,6 +81,60 @@ export async function listUserProfiles() {
   items.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
 
   return { items };
+}
+
+export async function listReviewAssignees() {
+  const [profileSnapshot, assignmentResult] = await Promise.all([
+    profiles().get(),
+    listUserRoleAssignments(),
+  ]);
+  const profilesByEmail = new Map(
+    profileSnapshot.docs
+      .map((doc) => serializeDoc(doc))
+      .filter((item) => item?.email && item?.managedAuthor !== true)
+      .map((item) => [normalizeEmail(item.email), item])
+  );
+  const candidates = new Map();
+
+  for (const assignment of assignmentResult.items || []) {
+    const email = normalizeEmail(assignment.email);
+    const assignedRoles = assignment.roles || [];
+    const isAdmin = assignedRoles.includes('admin');
+    const isReviewer = assignedRoles.includes('reviewer');
+    if (!email || (!isAdmin && !isReviewer)) continue;
+    const profile = profilesByEmail.get(email) || {};
+    if (isAdmin && sanitizeProfile(profile).reviewAssignmentsEnabled !== true) continue;
+    candidates.set(email, toReviewAssignee(profile, email, isAdmin ? 'admin' : 'reviewer'));
+  }
+
+  for (const email of config.defaultAdminEmails) {
+    const profile = profilesByEmail.get(normalizeEmail(email));
+    if (!profile || sanitizeProfile(profile).reviewAssignmentsEnabled !== true) continue;
+    candidates.set(normalizeEmail(email), toReviewAssignee(profile, email, 'admin'));
+  }
+
+  for (const [email, profile] of profilesByEmail.entries()) {
+    const accountRoles = sanitizeInternalRoles(profile.accountRoles);
+    const isAdmin = accountRoles.includes('admin');
+    const isReviewer = accountRoles.includes('reviewer');
+    if (!isAdmin && !isReviewer) continue;
+    if (!email.endsWith(`@${config.allowedEmailDomain}`) && !candidates.has(email)) continue;
+    if (isAdmin && sanitizeProfile(profile).reviewAssignmentsEnabled !== true) continue;
+    candidates.set(email, toReviewAssignee(profile, email, isAdmin ? 'admin' : 'reviewer'));
+  }
+
+  return {
+    items: [...candidates.values()].sort((left, right) => (
+      left.name.localeCompare(right.name, 'es', { sensitivity: 'base' })
+    )),
+  };
+}
+
+export async function getReviewAssignee(email = '') {
+  const cleanEmail = normalizeEmail(email);
+  if (!cleanEmail) return null;
+  const result = await listReviewAssignees();
+  return result.items.find((item) => item.email === cleanEmail) || null;
 }
 
 export async function createManagedAuthorProfile(data, actorEmail = '') {
@@ -291,6 +357,7 @@ export function sanitizeProfile(data = {}) {
   const closingPhrase = normalizeText(data.closingPhrase).slice(0, 220);
   const photoUrl = normalizeUrl(data.photoUrl);
   const publicProfileEnabled = normalizeBoolean(data.publicProfileEnabled);
+  const reviewAssignmentsEnabled = normalizeBoolean(data.reviewAssignmentsEnabled);
 
   return {
     firstName,
@@ -300,6 +367,7 @@ export function sanitizeProfile(data = {}) {
     closingPhrase,
     photoUrl,
     publicProfileEnabled,
+    reviewAssignmentsEnabled,
   };
 }
 
@@ -413,6 +481,22 @@ function resolvePublicProfilePreference(item = {}, clean = sanitizeProfile(item)
   if (item?.publicProfilePreferenceSet === true) return clean.publicProfileEnabled;
   if (item?.managedAuthor === true) return true;
   return clean.publicProfileEnabled;
+}
+
+function toReviewAssignee(profile = {}, email = '', role = 'reviewer') {
+  const clean = sanitizeProfile(profile);
+  const fullName = buildFullName(clean.firstName, clean.lastName);
+  return {
+    email: normalizeEmail(email),
+    name: fullName || normalizeEmail(email),
+    photoUrl: clean.photoUrl,
+    role,
+  };
+}
+
+function sanitizeInternalRoles(value = []) {
+  const roles = new Set(Array.isArray(value) ? value : []);
+  return ['admin', 'reviewer', 'blog', 'newsletter'].filter((role) => roles.has(role));
 }
 
 async function authorNameExists(fullName = '') {

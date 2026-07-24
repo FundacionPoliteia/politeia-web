@@ -35,6 +35,8 @@ import {
   transitionPost,
   updatePost,
 } from '../repositories/posts.js';
+import { getReviewAssignee } from '../repositories/profiles.js';
+import { normalizeEmail } from '../repositories/users.js';
 import {
   notifyCommentCreated,
   notifyCommentReplied,
@@ -160,7 +162,21 @@ export function postsRouter({ writeLimiter }) {
 
   router.post('/:id/submit-review', writeLimiter, requireAuth, requireRole('blog'), async (req, res, next) => {
     try {
-      const post = await transitionPost(req.params.id, 'review', req.user, 'post.submitReview');
+      const reviewerEmail = normalizeEmail(req.body?.reviewerEmail);
+      if (reviewerEmail && reviewerEmail === normalizeEmail(req.user?.email)) {
+        throw new HttpError(400, 'You cannot assign your own review');
+      }
+      const reviewAssignee = reviewerEmail ? await getReviewAssignee(reviewerEmail) : null;
+      if (reviewerEmail && !reviewAssignee) {
+        throw new HttpError(400, 'The selected reviewer is not available');
+      }
+      const post = await transitionPost(
+        req.params.id,
+        'review',
+        req.user,
+        'post.submitReview',
+        { reviewAssignee }
+      );
       await safeNotify(() => notifyPostSubmittedForReview(post, req.user));
       res.json({ item: post });
     } catch (err) {

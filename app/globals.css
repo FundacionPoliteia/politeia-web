@@ -486,10 +486,11 @@ a {
   border: 1px solid var(--linea);
   transition: all .25s;
   display: flex;
-  flex-direction: column
+  flex-direction: column;
+  position: relative
 }
 
-.post:hover {
+.post.is-interactive:hover {
   transform: translateY(-4px);
   box-shadow: 0 18px 40px rgba(26, 26, 55, .1)
 }
@@ -581,6 +582,22 @@ a {
 
 .post-title-link {
   color: inherit
+}
+
+.post.is-interactive .post-title-link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1
+}
+
+.post.is-interactive .post-author {
+  position: relative;
+  z-index: 2
+}
+
+.post.is-interactive:focus-within {
+  box-shadow: 0 0 0 3px rgba(19, 122, 159, .18), 0 18px 40px rgba(26, 26, 55, .1)
 }
 
 .post-title-link:hover {
@@ -5407,7 +5424,8 @@ a {
   border-radius: 14px;
   background: var(--hueso);
   margin-top: 16px;
-  overflow: hidden
+  overflow: visible;
+  position: relative
 }
 
 .admin-advanced-options summary,
@@ -5459,6 +5477,17 @@ a {
   display: inline-flex;
   align-items: center;
   gap: 8px
+}
+
+.admin-review-assignment-optin {
+  border-color: rgba(19, 122, 159, .22);
+  background: rgba(19, 122, 159, .05)
+}
+
+.admin-author-ending>div>.admin-field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px
 }
 
 .admin-references-body {
@@ -7035,6 +7064,108 @@ a {
 
 .admin-submit-review-preview-footer>div:first-child {
   min-width: 0
+}
+
+.admin-review-assignment {
+  flex: 1 1 auto;
+  min-width: 0
+}
+
+.admin-review-assignee-list {
+  display: flex;
+  gap: 8px;
+  max-width: 100%;
+  margin-top: 10px;
+  overflow-x: auto;
+  padding: 2px 2px 7px;
+  scrollbar-width: thin
+}
+
+.admin-review-assignee {
+  display: grid;
+  grid-template-columns: auto 36px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 220px;
+  min-height: 58px;
+  border: 1px solid var(--linea);
+  border-radius: 8px;
+  background: var(--hueso);
+  padding: 8px 10px;
+  cursor: pointer
+}
+
+.admin-review-assignee:hover,
+.admin-review-assignee.selected {
+  border-color: rgba(19, 122, 159, .55);
+  background: rgba(19, 122, 159, .08)
+}
+
+.admin-review-assignee input {
+  width: auto;
+  margin: 0
+}
+
+.admin-review-assignee img,
+.admin-review-assignee-team {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--blanco)
+}
+
+.admin-review-assignee-team {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--azul);
+  font-size: 20px
+}
+
+.admin-review-assignee span:last-child {
+  min-width: 0
+}
+
+.admin-review-assignee strong,
+.admin-review-assignee small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap
+}
+
+.admin-review-assignee strong {
+  font-family: var(--sans);
+  font-size: .82rem
+}
+
+.admin-review-assignee small {
+  display: block;
+  color: var(--gris);
+  font-size: .72rem
+}
+
+.admin-review-assignment-note {
+  margin-bottom: 0
+}
+
+.admin-post-assignee {
+  display: block;
+  margin: 8px 0 2px;
+  color: var(--azul);
+  font-size: .72rem;
+  font-weight: 800
+}
+
+.admin-submit-review-preview-footer .admin-review-assignee strong {
+  font-family: var(--sans);
+  font-size: .82rem;
+  line-height: 1.25
+}
+
+.admin-submit-review-preview-footer .admin-review-assignee small {
+  max-width: 100%;
+  margin: 2px 0 0
 }
 
 .admin-submit-review-preview-footer strong {

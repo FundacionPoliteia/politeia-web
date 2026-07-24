@@ -157,7 +157,7 @@ export async function updatePost(id, data, actorUser) {
   return after;
 }
 
-export async function transitionPost(id, status, actorUser, action) {
+export async function transitionPost(id, status, actorUser, action, { reviewAssignee = null } = {}) {
   const ref = posts().doc(id);
   const beforeDoc = await ref.get();
   if (!beforeDoc.exists) throw new HttpError(404, 'Post not found');
@@ -177,6 +177,13 @@ export async function transitionPost(id, status, actorUser, action) {
   if (before.status === 'published-edition' && status === 'review') {
     patch.editionSubmittedAt = serverTimestamp();
     patch.editionSubmittedBy = actorUser.email;
+  }
+  if (status === 'review') {
+    patch.assignedReviewerEmail = reviewAssignee?.email || '';
+    patch.assignedReviewerName = reviewAssignee?.name || '';
+    patch.assignedReviewerPhotoUrl = reviewAssignee?.photoUrl || '';
+    patch.reviewAssignedAt = reviewAssignee ? serverTimestamp() : null;
+    patch.reviewAssignedBy = reviewAssignee ? actorUser.email : '';
   }
   if (status === 'published') {
     patch.publishedAt = resolvePublishedAt(before);

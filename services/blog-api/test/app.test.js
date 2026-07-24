@@ -29,6 +29,7 @@ import {
   getPublicAuthorProfileBySlug,
   getUserProfile,
   listPublicAuthorProfiles,
+  listReviewAssignees,
   sanitizeProfile,
   updateAuthorProfileAsAdmin,
   updateManagedAuthorProfile,
@@ -523,6 +524,7 @@ test('user profiles normalize personal fields separately from roles', () => {
     closingPhrase: 'Una mirada propia.',
     photoUrl: 'https://example.com/foto.png',
     publicProfileEnabled: true,
+    reviewAssignmentsEnabled: false,
   });
   assert.throws(() => sanitizeProfile({ photoUrl: 'http://example.com/foto.png' }), /photoUrl/);
 });
@@ -787,6 +789,65 @@ test('POST /v1/posts stores author note', async () => {
   }
 });
 
+test('review assignment directory always lists reviewers and requires admin opt-in', async () => {
+  const firestore = createMemoryFirestore();
+  setFirestoreForTests(firestore);
+
+  try {
+    await firestore.collection('users').doc('reviewer@politeia.ar').set({
+      email: 'reviewer@politeia.ar',
+      roles: ['reviewer'],
+      active: true,
+    });
+    await firestore.collection('users').doc('admin@politeia.ar').set({
+      email: 'admin@politeia.ar',
+      roles: ['admin'],
+      active: true,
+    });
+    await firestore.collection('userProfiles').doc('reviewer@politeia.ar').set({
+      email: 'reviewer@politeia.ar',
+      firstName: 'Reina',
+      lastName: 'Revisora',
+      reviewAssignmentsEnabled: false,
+    });
+    await firestore.collection('userProfiles').doc('admin@politeia.ar').set({
+      email: 'admin@politeia.ar',
+      firstName: 'Ada',
+      lastName: 'Admin',
+      reviewAssignmentsEnabled: false,
+    });
+    await firestore.collection('userProfiles').doc('workspace-reviewer@politeia.ar').set({
+      email: 'workspace-reviewer@politeia.ar',
+      firstName: 'Workspace',
+      lastName: 'Reviewer',
+      accountRoles: ['reviewer', 'blog'],
+    });
+
+    let result = await listReviewAssignees();
+    assert.deepEqual(result.items.map((item) => item.email).sort(), [
+      'reviewer@politeia.ar',
+      'workspace-reviewer@politeia.ar',
+    ]);
+
+    await updateUserProfile({
+      email: 'admin@politeia.ar',
+      roles: ['admin', 'reviewer', 'blog'],
+    }, {
+      firstName: 'Ada',
+      lastName: 'Admin',
+      reviewAssignmentsEnabled: true,
+    });
+    result = await listReviewAssignees();
+    assert.deepEqual(result.items.map((item) => item.email).sort(), [
+      'admin@politeia.ar',
+      'reviewer@politeia.ar',
+      'workspace-reviewer@politeia.ar',
+    ]);
+  } finally {
+    setFirestoreForTests(null);
+  }
+});
+
 test('reviewer can preserve a historical publication date when publishing a migrated post', async () => {
   const firestore = createMemoryFirestore();
   setFirestoreForTests(firestore);
@@ -1043,6 +1104,90 @@ test('in-app notifications target roles and emails independently from email opt-
     const allRead = await markAllNotificationsRead(author);
     assert.equal(allRead.unreadCount, 0);
   } finally {
+    setFirestoreForTests(null);
+  }
+});
+
+test('assigned review notifications only target the selected reviewer', async () => {
+  const firestore = createMemoryFirestore();
+  setFirestoreForTests(firestore);
+
+  try {
+    const author = { email: 'author@politeia.ar', name: 'Author', roles: ['blog'] };
+    const selected = { email: 'selected@politeia.ar', name: 'Selected', roles: ['reviewer', 'blog'] };
+    const otherReviewer = { email: 'other@politeia.ar', name: 'Other', roles: ['reviewer', 'blog'] };
+    await notifyPostSubmittedForReview({
+      id: 'assigned-post',
+      title: 'Nota asignada',
+      authorEmail: author.email,
+      assignedReviewerEmail: selected.email,
+      assignedReviewerName: selected.name,
+    }, author);
+
+    const selectedInbox = await listInAppNotifications(selected);
+    const otherInbox = await listInAppNotifications(otherReviewer);
+    assert.equal(selectedInbox.items.length, 1);
+    assert.equal(selectedInbox.items[0].type, 'post.submittedReview');
+    assert.equal(otherInbox.items.length, 0);
+  } finally {
+    setFirestoreForTests(null);
+  }
+});
+
+test('submit review stores a valid selected reviewer and rejects unavailable accounts', async () => {
+  const firestore = createMemoryFirestore();
+  setFirestoreForTests(firestore);
+  const previousDevAuth = config.devAuth;
+  config.devAuth = false;
+
+  try {
+    await firestore.collection('users').doc('reviewer@politeia.ar').set({
+      email: 'reviewer@politeia.ar',
+      roles: ['reviewer'],
+      active: true,
+    });
+    await firestore.collection('userProfiles').doc('reviewer@politeia.ar').set({
+      email: 'reviewer@politeia.ar',
+      firstName: 'Reina',
+      lastName: 'Revisora',
+      photoUrl: 'https://example.com/reviewer.webp',
+    });
+    await firestore.collection('posts').doc('post-for-review').set({
+      title: 'Nota para revisar',
+      contentMarkdown: 'Contenido',
+      authorEmail: 'author@politeia.ar',
+      authorName: 'Author',
+      status: 'draft',
+      deletedAt: null,
+    });
+    const session = `${config.sessionCookieName}=${encodeURIComponent(buildSessionCookie({
+      email: 'author@politeia.ar',
+      name: 'Author',
+      roles: ['blog'],
+    }))}`;
+
+    const accepted = await request(createApp())
+      .post('/v1/posts/post-for-review/submit-review')
+      .set('Cookie', session)
+      .send({ reviewerEmail: 'reviewer@politeia.ar' })
+      .expect(200);
+    assert.equal(accepted.body.item.assignedReviewerEmail, 'reviewer@politeia.ar');
+    assert.equal(accepted.body.item.assignedReviewerName, 'Reina Revisora');
+
+    await firestore.collection('posts').doc('second-post').set({
+      title: 'Otra nota',
+      contentMarkdown: 'Contenido',
+      authorEmail: 'author@politeia.ar',
+      status: 'draft',
+      deletedAt: null,
+    });
+    await request(createApp())
+      .post('/v1/posts/second-post/submit-review')
+      .set('Cookie', session)
+      .send({ reviewerEmail: 'unknown@politeia.ar' })
+      .expect(400);
+  } finally {
+    config.devAuth = previousDevAuth;
     setFirestoreForTests(null);
   }
 });

@@ -227,9 +227,21 @@ export const openApiSpec = {
     },
     '/posts/{id}/submit-review': {
       post: {
-        summary: 'Move post to review',
+        summary: 'Move post to review and optionally assign a reviewer',
         security: [{ googleIdToken: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  reviewerEmail: { type: 'string', format: 'email', description: 'Empty sends the post to the full review team' },
+                },
+              },
+            },
+          },
+        },
         responses: { 200: { description: 'Post moved to review' } },
       },
     },

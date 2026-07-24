@@ -7,6 +7,7 @@ import {
   getPublicAuthorProfileBySlug,
   getUserProfile,
   listPublicAuthorProfiles,
+  listReviewAssignees,
   listUserProfiles,
   updateAuthorProfileAsAdmin,
   updateUserProfile,
@@ -48,6 +49,17 @@ export function profileRouter({ writeLimiter }) {
     try {
       const result = await listUserProfiles();
       res.json(result);
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.get('/reviewers', requireAuth, requireRole('blog'), async (req, res, next) => {
+    try {
+      const result = await listReviewAssignees();
+      res.json({
+        items: result.items.filter((item) => item.email !== req.user?.email),
+      });
     } catch (err) {
       next(err);
     }

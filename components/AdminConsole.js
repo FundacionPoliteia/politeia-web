@@ -65,6 +65,8 @@ const EMPTY_FORM = {
   status: '',
   editRequestedAt: '',
   editRequestedBy: '',
+  assignedReviewerEmail: '',
+  assignedReviewerName: '',
   showCoverInPost: true,
 };
 
@@ -145,6 +147,7 @@ const EMPTY_PROFILE = {
   closingPhrase: '',
   photoUrl: '',
   publicProfileEnabled: true,
+  reviewAssignmentsEnabled: false,
   canSharePublicProfile: false,
   authorSlug: '',
   fullName: '',
@@ -217,6 +220,8 @@ export default function AdminConsole() {
   const [user, setUser] = useState(null);
   const [posts, setPosts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [reviewAssignees, setReviewAssignees] = useState([]);
+  const [loadingReviewAssignees, setLoadingReviewAssignees] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [savedForm, setSavedForm] = useState(EMPTY_FORM);
   const [statusFilter, setStatusFilter] = useState('');
@@ -1277,6 +1282,21 @@ export default function AdminConsole() {
     }
   }
 
+  async function loadReviewAssignees() {
+    try {
+      setLoadingReviewAssignees(true);
+      const data = await api('/v1/profile/reviewers');
+      const items = Array.isArray(data.items) ? data.items.map(normalizeReviewAssignee) : [];
+      setReviewAssignees(items);
+      return items;
+    } catch (err) {
+      setMessage(err.message);
+      return [];
+    } finally {
+      setLoadingReviewAssignees(false);
+    }
+  }
+
   async function loadProfileClaimMatch() {
     try {
       const data = await api('/v1/profile/claim-match');
@@ -1469,6 +1489,7 @@ export default function AdminConsole() {
         closingPhrase: profileDraft.closingPhrase,
         photoUrl: profileDraft.photoUrl,
         publicProfileEnabled: profileDraft.publicProfileEnabled,
+        reviewAssignmentsEnabled: isAdmin && profileDraft.reviewAssignmentsEnabled,
       };
       const data = await withActionLoading('profile-save', () => api('/v1/profile', {
         method: 'PATCH',
@@ -1888,6 +1909,7 @@ export default function AdminConsole() {
     const targetPost = posts.find((post) => post.id === targetPostId);
     const actionHasUnsavedChanges = Boolean(hasUnsavedChanges && (!targetPostId || targetPostId === form.id));
     if (actionHasUnsavedChanges || requiresArticlePreview || requiresPublicationConfirm) {
+      if (requiresArticlePreview) loadReviewAssignees();
       setPendingAction({
         path,
         success,
@@ -1896,6 +1918,7 @@ export default function AdminConsole() {
         hasUnsavedChanges: actionHasUnsavedChanges,
         requiresArticlePreview,
         requiresPublicationConfirm,
+        reviewerEmail: requiresArticlePreview ? targetPost?.assignedReviewerEmail || '' : '',
         notifySubscribers: requiresPublicationConfirm
           ? mailingPublicationPolicy.enabled && mailingPublicationPolicy.automaticByDefault
           : false,
@@ -1938,9 +1961,7 @@ export default function AdminConsole() {
       nextAction.path,
       nextAction.success,
       nextAction.loadingKey,
-      nextAction.requiresPublicationConfirm
-        ? { notifySubscribers: nextAction.notifySubscribers }
-        : null
+      pendingActionRequestBody(nextAction)
     );
     if (completed) setPendingAction(null);
   }
@@ -1955,8 +1976,8 @@ export default function AdminConsole() {
       await withActionLoading('post-save', () => persistCurrentPost({ refresh: false }));
       await withActionLoading(nextAction.loadingKey, () => api(nextAction.path, {
         method: 'POST',
-        ...(nextAction.requiresPublicationConfirm
-          ? { body: JSON.stringify({ notifySubscribers: nextAction.notifySubscribers }) }
+        ...(pendingActionRequestBody(nextAction)
+          ? { body: JSON.stringify(pendingActionRequestBody(nextAction)) }
           : {}),
       }));
       setPendingAction(null);
@@ -2793,6 +2814,19 @@ export default function AdminConsole() {
                             <span>Para mostrarlo en el blog, el nombre y apellido deben coincidir con el autor usado en alguna nota existente.</span>
                           </div>
                         )}
+                        {isAdmin && (
+                          <label className="admin-profile-share admin-review-assignment-optin" data-help-id="profile-review-assignment">
+                            <input
+                              checked={profileDraft.reviewAssignmentsEnabled}
+                              onChange={(event) => updateProfileDraft('reviewAssignmentsEnabled', event.target.checked)}
+                              type="checkbox"
+                            />
+                            <span>
+                              <strong className="admin-field-label">Figurar para asignaciones de revisión <HelpTrigger topicId="profile-review-assignment" /></strong>
+                              <small>Permite que autores te elijan al enviar una nota a revisión. Es una preferencia interna y no se muestra en el blog público.</small>
+                            </span>
+                          </label>
+                        )}
                         <div className="admin-manager-actions">
                           <span>{profileDraft.fullName ? `Nombre visible: ${profileDraft.fullName}` : 'Si no cargas nombre, se usa tu cuenta.'}</span>
                           <button className="btn btn-primary" disabled={savingProfile || profilePhotoUploading || isActionLoading('profile-save')} onClick={requestUserProfileSave} type="button">
@@ -3475,6 +3509,7 @@ export default function AdminConsole() {
                                     {STATUS_LABELS[post.status] || post.status || 'Borrador'}
                                   </span>
                                   {post.editRequestedAt && <small>Solicitud de edicion</small>}
+                                  {post.assignedReviewerEmail && <small>Asignado a {post.assignedReviewerName || post.assignedReviewerEmail}</small>}
                                 </td>
                                 <td>
                                   <button className="admin-table-title" onClick={() => selectPostForEdit(post)} type="button">
@@ -3634,6 +3669,11 @@ export default function AdminConsole() {
                         <span className={`admin-status status-${visibleStatusValue(post, canUseReviewFilters)}`}>
                           {visibleStatusLabel(post, canUseReviewFilters)}
                         </span>
+                      )}
+                      {post.assignedReviewerEmail && (
+                        <small className="admin-post-assignee">
+                          Revisión: {post.assignedReviewerName || post.assignedReviewerEmail}
+                        </small>
                       )}
                       <h3>{post.title}</h3>
                       <p>{post.excerpt || 'Sin extracto'}</p>
@@ -4727,12 +4767,49 @@ export default function AdminConsole() {
                     )}
                     <div className={pendingAction.requiresArticlePreview ? 'admin-submit-review-preview-footer' : pendingAction.requiresPublicationConfirm ? 'admin-publication-confirm-footer' : ''}>
                       {pendingAction.requiresArticlePreview && (
-                        <div>
-                          <strong>Confirmar envio a revision</strong>
-                          <p>
+                        <div className="admin-review-assignment">
+                          <div>
+                            <strong>Asignar revisión</strong>
+                            <p>Elegí una persona responsable o dejá la nota disponible para todo el equipo.</p>
+                          </div>
+                          {loadingReviewAssignees ? (
+                            <p className="admin-muted">Cargando personas disponibles...</p>
+                          ) : (
+                            <div className="admin-review-assignee-list" role="radiogroup" aria-label="Persona asignada a la revisión">
+                              <label className={`admin-review-assignee ${!pendingAction.reviewerEmail ? 'selected' : ''}`}>
+                                <input
+                                  checked={!pendingAction.reviewerEmail}
+                                  name="reviewer-assignee"
+                                  onChange={() => setPendingAction((current) => ({ ...current, reviewerEmail: '' }))}
+                                  type="radio"
+                                />
+                                <span className="admin-review-assignee-team material-symbols-outlined" aria-hidden="true">groups</span>
+                                <span><strong>Equipo de revisión</strong><small>Todos los reviewer y admin reciben el aviso.</small></span>
+                              </label>
+                              {reviewAssignees.map((reviewer) => (
+                                <label className={`admin-review-assignee ${pendingAction.reviewerEmail === reviewer.email ? 'selected' : ''}`} key={reviewer.email}>
+                                  <input
+                                    checked={pendingAction.reviewerEmail === reviewer.email}
+                                    name="reviewer-assignee"
+                                    onChange={() => setPendingAction((current) => ({ ...current, reviewerEmail: reviewer.email }))}
+                                    type="radio"
+                                  />
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img alt="" src={reviewer.photoUrl || DEFAULT_PROFILE_PHOTO} />
+                                  <span>
+                                    <strong>{reviewer.name}</strong>
+                                    <small>{reviewer.role === 'admin' ? 'Admin disponible' : 'Reviewer'}</small>
+                                  </span>
+                                </label>
+                              ))}
+                            </div>
+                          )}
+                          <p className="admin-review-assignment-note">
                             {pendingAction.hasUnsavedChanges
-                              ? 'Hay cambios sin guardar. Elegi si queres enviarlos o conservar la ultima version guardada.'
-                              : 'La nota quedara disponible para el equipo de revision.'}
+                              ? 'Hay cambios sin guardar. Elegí si querés enviar la versión guardada o guardar primero.'
+                              : pendingAction.reviewerEmail
+                                ? 'La notificación se enviará directamente a la persona elegida.'
+                                : 'La nota quedará disponible para el equipo de revisión.'}
                           </p>
                         </div>
                       )}
@@ -5483,6 +5560,16 @@ function normalizeForm(value = {}) {
   return next;
 }
 
+function pendingActionRequestBody(action = {}) {
+  if (action.requiresPublicationConfirm) {
+    return { notifySubscribers: action.notifySubscribers === true };
+  }
+  if (action.requiresArticlePreview) {
+    return { reviewerEmail: normalizeInputValue(action.reviewerEmail).trim().toLowerCase() };
+  }
+  return null;
+}
+
 function normalizeUiPreferences(value = {}) {
   const source = value && typeof value === 'object' ? value : {};
   const sourceSections = source.sections && typeof source.sections === 'object' ? source.sections : {};
@@ -5546,6 +5633,7 @@ function normalizeProfile(value = {}) {
     closingPhrase: normalizeInputValue(value.closingPhrase),
     photoUrl: normalizeInputValue(value.photoUrl),
     publicProfileEnabled: normalizeBoolean(value.publicProfileEnabled),
+    reviewAssignmentsEnabled: normalizeBoolean(value.reviewAssignmentsEnabled),
     canSharePublicProfile: normalizeBoolean(value.canSharePublicProfile),
     authorSlug: normalizeInputValue(value.authorSlug),
     fullName,
@@ -5593,6 +5681,8 @@ function postToForm(post = {}) {
     status: post.status,
     editRequestedAt: post.editRequestedAt,
     editRequestedBy: post.editRequestedBy,
+    assignedReviewerEmail: post.assignedReviewerEmail,
+    assignedReviewerName: post.assignedReviewerName,
     showCoverInPost: post.showCoverInPost !== false,
   });
 }
@@ -5617,8 +5707,19 @@ function serializeForm(form) {
     status: form.status || '',
     editRequestedAt: form.editRequestedAt || '',
     editRequestedBy: form.editRequestedBy || '',
+    assignedReviewerEmail: form.assignedReviewerEmail || '',
+    assignedReviewerName: form.assignedReviewerName || '',
     showCoverInPost: form.showCoverInPost !== false,
   });
+}
+
+function normalizeReviewAssignee(value = {}) {
+  return {
+    email: normalizeInputValue(value.email).trim().toLowerCase(),
+    name: normalizeInputValue(value.name).trim() || normalizeInputValue(value.email).trim().toLowerCase(),
+    photoUrl: normalizeInputValue(value.photoUrl),
+    role: value.role === 'admin' ? 'admin' : 'reviewer',
+  };
 }
 
 function dateInputValue(value) {

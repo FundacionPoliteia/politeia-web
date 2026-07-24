@@ -197,24 +197,35 @@ export async function cleanupExpiredNotifications({ force = false, now = Date.no
 }
 
 export async function notifyPostSubmittedForReview(post, actor) {
-  const emailRecipients = await listOptedInRecipients({
-    eventKey: NOTIFICATION_EVENTS.postSubmittedReview,
-    roles: ['admin', 'reviewer'],
-    excludeEmails: [actor?.email],
-  });
+  const assignedReviewerEmail = normalizeEmail(post?.assignedReviewerEmail);
+  const emailRecipients = assignedReviewerEmail
+    ? await listOptedInEmails({
+      eventKey: NOTIFICATION_EVENTS.postSubmittedReview,
+      emails: [assignedReviewerEmail],
+      excludeEmails: [actor?.email],
+    })
+    : await listOptedInRecipients({
+      eventKey: NOTIFICATION_EVENTS.postSubmittedReview,
+      roles: ['admin', 'reviewer'],
+      excludeEmails: [actor?.email],
+    });
   return queueNotification({
     type: 'post.submittedReview',
     eventKey: NOTIFICATION_EVENTS.postSubmittedReview,
     actor,
     post,
     emailRecipients,
-    targetRoles: ['admin', 'reviewer'],
+    targetEmails: assignedReviewerEmail ? [assignedReviewerEmail] : [],
+    targetRoles: assignedReviewerEmail ? [] : ['admin', 'reviewer'],
     excludeEmails: [actor?.email],
     subject: `Nuevo post en revision: ${post.title}`,
     text: [
       `${actor?.name || actor?.email} envio un post a revision.`,
       `Titulo: ${post.title}`,
       `Autor: ${post.authorName || post.authorEmail}`,
+      assignedReviewerEmail
+        ? `Reviewer asignado: ${post.assignedReviewerName || assignedReviewerEmail}`
+        : 'Asignacion: equipo de revision',
       `Abrir panel: ${adminPostUrl(post.id)}`,
     ].join('\n'),
   });
