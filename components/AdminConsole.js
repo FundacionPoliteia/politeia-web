@@ -2360,6 +2360,15 @@ export default function AdminConsole() {
   }, [adminProfileClaimFilter, adminProfileClaims]);
   const messageKind = message ? adminMessageKind(message) : 'info';
 
+  useEffect(() => {
+    if (!message) return undefined;
+    const timeoutMs = messageKind === 'error' ? 9000 : 4500;
+    const timeoutId = window.setTimeout(() => {
+      setMessage((current) => current === message ? '' : current);
+    }, timeoutMs);
+    return () => window.clearTimeout(timeoutId);
+  }, [message, messageKind]);
+
   return (
     <AdminHelpProvider
       activeArea={activePanelTab}
@@ -2370,7 +2379,12 @@ export default function AdminConsole() {
     >
     <main className="admin-page">
       {message && (
-        <div className={`admin-toast ${messageKind}`} role="alert" aria-live="polite">
+        <div
+          aria-atomic="true"
+          aria-live={messageKind === 'error' ? 'assertive' : 'polite'}
+          className={`admin-toast ${messageKind}`}
+          role={messageKind === 'error' ? 'alert' : 'status'}
+        >
           <span aria-hidden="true" className="material-symbols-outlined">
             {messageKind === 'error' ? 'error' : 'check_circle'}
           </span>
