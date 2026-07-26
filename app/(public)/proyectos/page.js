@@ -29,9 +29,9 @@ const PROYECTOS = [
         },
       ],
       participants: [
-        { name: 'Denise Chmois', image: null, role: 'Coordinadora' },
-        { name: 'Rosario Inurrigarro', image: null, role: 'Coordinadora' },
-        { name: 'Lourdes Ramos', image: null, role: 'Coordinadora' },
+        { name: 'Denise Chmois', image: '/equipo/denise.png', role: 'Coordinadora' },
+        { name: 'Rosario Inurrigarro', image: '/equipo/rosario.png', role: 'Coordinadora' },
+        { name: 'Lourdes Ramos', image: '/equipo/lourdes.png', role: 'Coordinadora' },
       ],
     },
   },
@@ -60,8 +60,8 @@ const PROYECTOS = [
         },
       ],
       participants: [
-        { name: 'Paula Pochettino', image: null, role: 'Coordinadora' },
-        { name: 'Camila Turner', image: null, role: 'Coordinadora' },
+        { name: 'Paula Pochettino', image: '/equipo/pochetino.jpg', role: 'Coordinadora' },
+        { name: 'Camila Turner', image: '/equipo/camila.png', role: 'Coordinadora' },
       ],
     },
   },
@@ -91,8 +91,8 @@ const PROYECTOS = [
         },
       ],
       participants: [
-        { name: 'Valentina Díaz', image: null, role: 'Coordinadora' },
-        { name: 'Guadalupe Perez', image: null, role: 'Coordinadora' },
+        { name: 'Valentina Díaz', image: '/equipo/valentina.png', role: 'Coordinadora' },
+        { name: 'Guadalupe Perez', image: '/equipo/guadalupe.png', role: 'Coordinadora' },
       ],
     },
   },
@@ -127,7 +127,7 @@ const PROYECTOS = [
             'Un recorrido por la ampliación de los derechos políticos y la evolución del voto en Argentina.',
         },
       ],
-      participants: [{ name: 'Sofía Walker', image: null, role: 'Coordinadora' }],
+      participants: [{ name: 'Sofía Walker', image: '/equipo/walker.png', role: 'Coordinadora' }],
       /* cta: {
         label: 'Visitar PoliteZ',
         href: 'https://politeiatest.vercel.app/',

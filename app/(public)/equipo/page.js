@@ -4,19 +4,19 @@ export const metadata = { title: 'Equipo — Politeia' };
 
 const direccion = [
   {
-    nombre: 'Juana de Urquiza',
-    role: 'Secretaría General',
-    foto: null,
-  },
-  {
     nombre: 'Francisco Oyuela',
     role: 'Presidente',
-    foto: null,
+    foto: '/equipo/fran.png',
   },
   {
     nombre: 'Sofía Mejide',
     role: 'Co-fundadora',
-    foto: null,
+    foto: '/equipo/sofia.png',
+  },
+  {
+    nombre: 'Juana de Urquiza',
+    role: 'Secretaría General',
+    foto: '/equipo/juana.png',
   },
 ];
 
@@ -24,32 +24,32 @@ const projects = [
   {
     nombre: 'Coyuntura',
     miembros: [
-      { nombre: 'Denise Chmois', foto: null, role: 'Coordinadora' },
-      { nombre: 'Rosario Inurrigarro', foto: null, role: 'Coordinadora' },
-      { nombre: 'Lourdes Ramos', foto: null, role: 'Coordinadora' },
+      { nombre: 'Denise Chmois', foto: '/equipo/denise.png', role: 'Coordinadora' },
+      { nombre: 'Rosario Inurrigarro', foto: '/equipo/rosario.png', role: 'Coordinadora' },
+      { nombre: 'Lourdes Ramos', foto: '/equipo/lourdes.png', role: 'Coordinadora' },
     ],
   },
   {
     nombre: 'Globeia',
     miembros: [
-      { nombre: 'Paula Pochettino', foto: null, role: 'Coordinadora' },
-      { nombre: 'Camila Turner', foto: null, role: 'Coordinadora' },
+      { nombre: 'Paula Pochettino', foto: '/equipo/pochetino.jpg', role: 'Coordinadora' },
+      { nombre: 'Camila Turner', foto: '/equipo/camila.png', role: 'Coordinadora' },
     ],
   },
   {
     nombre: 'Quórum',
     miembros: [
-      { nombre: 'Valentina Díaz', foto: null, role: 'Coordinadora' },
-      { nombre: 'Guadalupe Pérez', foto: null, role: 'Coordinadora' },
+      { nombre: 'Valentina Díaz', foto: '/equipo/valentina.png', role: 'Coordinadora' },
+      { nombre: 'Guadalupe Pérez', foto: '/equipo/guadalupe.png', role: 'Coordinadora' },
     ],
   },
   {
     nombre: 'Desarrollo Institucional',
-    miembros: [{ nombre: 'Belén Arias', foto: null, role: 'Coordinadora' }],
+    miembros: [{ nombre: 'Belén Arias', foto: '/equipo/belen.png', role: 'Coordinadora' }],
   },
   {
     nombre: 'PoliteZ',
-    miembros: [{ nombre: 'Sofía Walker', foto: null, role: 'Coordinadora' }],
+    miembros: [{ nombre: 'Sofía Walker', foto: '/equipo/walker.png', role: 'Coordinadora' }],
   },
 ];
 
