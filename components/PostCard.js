@@ -11,7 +11,7 @@ export default function PostCard({
 }) {
   const title = post?.titulo || 'Título del blog';
   const href = `/blog/${post?.slug || ''}`;
-  const classes = ['post', className].filter(Boolean).join(' ');
+  const classes = ['post', interactive ? 'is-interactive' : '', className].filter(Boolean).join(' ');
 
   return (
     <article className={classes}>
