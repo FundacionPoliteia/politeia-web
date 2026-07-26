@@ -15,7 +15,7 @@ const direccion = [
   },
   {
     nombre: 'Juana de Urquiza',
-    role: 'Secretaría General',
+    role: 'Secretaria General',
     foto: '/equipo/juana.png',
   },
 ];
@@ -73,7 +73,7 @@ const TEAM_STYLES = `
   }
 
   .team-page__hero {
-    padding: clamp(76px, 9vw, 128px) 0 clamp(58px, 7vw, 88px);
+    padding: clamp(76px, 3vw, 128px) 0 clamp(0px, 2vw, 16px);
     background:
       radial-gradient(circle at 86% 18%, rgba(19, 122, 159, .14), transparent 29%),
       linear-gradient(180deg, var(--rosa) 0%, var(--team-background) 100%);
@@ -120,7 +120,7 @@ const TEAM_STYLES = `
   }
 
   .team-page__section {
-    padding: clamp(68px, 8vw, 108px) 0;
+    padding: clamp(32px, 0vw, 56px) 0;
   }
 
   .team-page__leadership-section {
@@ -533,7 +533,6 @@ export default function EquipoPage() {
       >
         <div className="team-page__container">
           <div className="team-page__section-heading team-page__section-heading--centered">
-            <span className="team-page__section-kicker">Organización</span>
             <h2 id="direccion-title">Dirección General</h2>
           </div>
 
