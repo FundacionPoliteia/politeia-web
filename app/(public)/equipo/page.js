@@ -314,17 +314,6 @@ const TEAM_STYLES = `
     line-height: 1.2;
   }
 
-  .team-page__team-count {
-    flex: 0 0 auto;
-    padding: 7px 11px;
-    border-radius: 999px;
-    color: var(--azul);
-    background: var(--team-blue-soft);
-    font-size: .71rem;
-    font-weight: 800;
-    white-space: nowrap;
-  }
-
   .team-page__member-list {
     display: grid;
     grid-template-columns: 1fr;
@@ -581,12 +570,6 @@ export default function EquipoPage() {
               >
                 <header className="team-page__team-header">
                   <h3>{project.nombre}</h3>
-                  <span className="team-page__team-count">
-                    {project.miembros.length}{' '}
-                    {project.miembros.length === 1
-                      ? 'integrante'
-                      : 'integrantes'}
-                  </span>
                 </header>
 
                 <div className="team-page__member-list">
