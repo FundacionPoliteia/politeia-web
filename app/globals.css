@@ -3027,7 +3027,7 @@ a {
   grid-template-columns: minmax(0, .9fr) minmax(360px, 1.1fr);
   align-items: center;
   gap: clamp(48px, 8vw, 120px);
-  min-height: min(820px, calc(100vh - 72px));
+  min-height: min(620px, calc(100vh - 72px));
   padding-top: 50px;
   padding-bottom: 50px
 }
