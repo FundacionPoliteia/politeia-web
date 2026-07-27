@@ -71,7 +71,7 @@ export default function NavLinks({ latestPostAt = '', mobile = false }) {
         <MobileLink href="/proyectos" icon="workspaces" label="Proyectos" />
         <BlogNavLink compact latestPostAt={latestPostAt} />
         <MobileLink href="/equipo" icon="groups" label="Equipo" />
-        <MobileLink href="/agradecimientos" icon="favorite" label="Gracias" />
+        <MobileLink href="/agradecimientos" icon="favorite" label="Agradecimientos" />
         <MobileLink href="/#news" icon="mail" label="Novedades" />
       </div>
     );
