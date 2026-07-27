@@ -441,12 +441,14 @@ const TEAM_STYLES = `
 
   @media (max-width: 430px) {
     .team-page__leader-card {
-      align-items: flex-start;
+      align-items: center;
       flex-direction: column;
+      text-align: center;
     }
 
     .team-page__leader-content {
       margin: 20px 0 0;
+      width: 100%;
     }
 
     .team-page__team-header {

@@ -8,6 +8,120 @@ import PostCard from './PostCard';
 
 const DEFAULT_PROFILE_PHOTO = '/default_profile.png';
 
+function BlogSearchControls({
+  dateOrder,
+  hasFilters,
+  inputId,
+  postsCount,
+  query,
+  setDateOrder,
+  setQuery,
+}) {
+  return (
+    <>
+      <label htmlFor={inputId}>Buscar en el blog</label>
+      <div className="blog-search-box">
+        <span aria-hidden="true" className="material-symbols-outlined">search</span>
+        <input
+          id={inputId}
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Autor, título, categoría, tag o extracto"
+        />
+        {query && (
+          <button aria-label="Limpiar búsqueda" onClick={() => setQuery('')} type="button">
+            <span aria-hidden="true" className="material-symbols-outlined">close</span>
+          </button>
+        )}
+      </div>
+      <div className="blog-date-filter" aria-label="Ordenar notas por fecha" role="group">
+        <span>Orden por fecha</span>
+        <div>
+          {[
+            ['neutral', 'Orden actual'],
+            ['newest', 'Más nuevos'],
+            ['oldest', 'Más viejos'],
+          ].map(([value, label]) => (
+            <button
+              aria-pressed={dateOrder === value}
+              className={dateOrder === value ? 'is-active' : ''}
+              key={value}
+              onClick={() => setDateOrder(value)}
+              type="button"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <p>
+        {postsCount} {postsCount === 1 ? 'nota visible' : 'notas visibles'}
+        {hasFilters ? ' con los filtros actuales.' : '.'}
+      </p>
+    </>
+  );
+}
+
+function BlogSidebarContent({
+  activeCategory,
+  authors,
+  idSuffix = '',
+  onCategory,
+  secciones,
+  showAuthors,
+}) {
+  const authorsTitleId = `blog-sidebar-authors-title${idSuffix}`;
+
+  return (
+    <>
+      <span>Contenido</span>
+      <h2>Categorías</h2>
+      <nav>
+        {secciones.map((seccion) => {
+          const selected = activeCategory === seccion.categoria;
+          return (
+            <button
+              className={selected ? 'selected' : ''}
+              key={seccion.categoria}
+              onClick={() => onCategory(categorySectionId(seccion.categoria), seccion.categoria)}
+              type="button"
+            >
+              <strong>{seccion.categoria}</strong>
+              <small>{seccion.posts.length}</small>
+            </button>
+          );
+        })}
+      </nav>
+      {showAuthors && authors.length > 0 && (
+        <section className="blog-sidebar-authors" aria-labelledby={authorsTitleId}>
+          <div className="blog-sidebar-authors-head">
+            <span>Autores</span>
+            <Link href="/blog/autores">Ver todos</Link>
+          </div>
+          <h3 id={authorsTitleId}>Conocé a quienes escriben</h3>
+          <div className="blog-sidebar-authors-list">
+            {authors.slice(0, 3).map((author) => (
+              <Link
+                href={hrefAutorBlog(author.fullName)}
+                key={author.authorSlug || author.fullName}
+                aria-label={`Ver notas de ${author.fullName}`}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={author.photoUrl || DEFAULT_PROFILE_PHOTO} alt="" />
+                <span>
+                  <strong>{author.fullName}</strong>
+                  <small>{author.postCount} {author.postCount === 1 ? 'nota' : 'notas'}</small>
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+    </>
+  );
+}
+
 export default function BlogIndex({ posts = [], autorFiltro = '', categoriaFiltro = '', newsletterStatus = '', newsletterEmail = '', newsletterToken = '', authorProfile = null, authors = [], preview = false }) {
   const [query, setQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('');
@@ -40,6 +154,7 @@ export default function BlogIndex({ posts = [], autorFiltro = '', categoriaFiltr
 
   function scrollToCategory(sectionId, categoria) {
     setActiveCategory(categoria);
+    document.querySelector('.blog-mobile-filters[open]')?.removeAttribute('open');
     document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
@@ -93,48 +208,53 @@ export default function BlogIndex({ posts = [], autorFiltro = '', categoriaFiltr
 
       <section className="sec blog-index-section">
         <div className="wrap">
-          <div className="blog-search-panel">
-            <label htmlFor="blog-search">Buscar en el blog</label>
-            <div className="blog-search-box">
-              <span aria-hidden="true" className="material-symbols-outlined">search</span>
-              <input
-                id="blog-search"
-                type="search"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Autor, titulo, categoria, tag o extracto"
-              />
-              {query && (
-                <button aria-label="Limpiar busqueda" onClick={() => setQuery('')} type="button">
-                  <span aria-hidden="true" className="material-symbols-outlined">close</span>
-                </button>
-              )}
-            </div>
-            <div className="blog-date-filter" aria-label="Ordenar notas por fecha" role="group">
-              <span>Orden por fecha</span>
-              <div>
-                {[
-                  ['neutral', 'Orden actual'],
-                  ['newest', 'Más nuevos'],
-                  ['oldest', 'Más viejos'],
-                ].map(([value, label]) => (
-                  <button
-                    aria-pressed={dateOrder === value}
-                    className={dateOrder === value ? 'is-active' : ''}
-                    key={value}
-                    onClick={() => setDateOrder(value)}
-                    type="button"
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <p>
-              {postsFiltrados.length} {postsFiltrados.length === 1 ? 'nota visible' : 'notas visibles'}
-              {hasFilters ? ' con los filtros actuales.' : '.'}
-            </p>
+          <div className="blog-search-panel blog-search-panel--desktop">
+            <BlogSearchControls
+              dateOrder={dateOrder}
+              hasFilters={hasFilters}
+              inputId="blog-search"
+              postsCount={postsFiltrados.length}
+              query={query}
+              setDateOrder={setDateOrder}
+              setQuery={setQuery}
+            />
           </div>
+
+          {postsPorAutor.length > 0 && (
+            <details className="blog-mobile-filters">
+              <summary>
+                <span className="material-symbols-outlined" aria-hidden="true">tune</span>
+                <strong>Buscar y filtrar</strong>
+                <small>{postsFiltrados.length} {postsFiltrados.length === 1 ? 'nota' : 'notas'}</small>
+                <span className="material-symbols-outlined blog-mobile-filters__arrow" aria-hidden="true">expand_more</span>
+              </summary>
+              <div className="blog-mobile-filters__content">
+                <div className="blog-search-panel">
+                  <BlogSearchControls
+                    dateOrder={dateOrder}
+                    hasFilters={hasFilters}
+                    inputId="blog-search-mobile"
+                    postsCount={postsFiltrados.length}
+                    query={query}
+                    setDateOrder={setDateOrder}
+                    setQuery={setQuery}
+                  />
+                </div>
+                {postsFiltrados.length > 0 && (
+                  <aside className="blog-toc" aria-label="Categorías y autores del blog">
+                    <BlogSidebarContent
+                      activeCategory={activeCategory}
+                      authors={authors}
+                      idSuffix="-mobile"
+                      onCategory={scrollToCategory}
+                      secciones={secciones}
+                      showAuthors={!filtrandoAutor}
+                    />
+                  </aside>
+                )}
+              </div>
+            </details>
+          )}
 
           {postsPorAutor.length === 0 && (
             <div className="empty">
@@ -174,50 +294,14 @@ export default function BlogIndex({ posts = [], autorFiltro = '', categoriaFiltr
                 })}
               </div>
 
-              <aside className="blog-toc" aria-label="Categorias del blog">
-                <span>Contenido</span>
-                <h2>Categorias</h2>
-                <nav>
-                  {secciones.map((seccion) => {
-                    const selected = activeCategory === seccion.categoria;
-                    return (
-                      <button
-                        className={selected ? 'selected' : ''}
-                        key={seccion.categoria}
-                        onClick={() => scrollToCategory(categorySectionId(seccion.categoria), seccion.categoria)}
-                        type="button"
-                      >
-                        <strong>{seccion.categoria}</strong>
-                        <small>{seccion.posts.length}</small>
-                      </button>
-                    );
-                  })}
-                </nav>
-                {!filtrandoAutor && authors.length > 0 && (
-                  <section className="blog-sidebar-authors" aria-labelledby="blog-sidebar-authors-title">
-                    <div className="blog-sidebar-authors-head">
-                      <span>Autores</span>
-                      <Link href="/blog/autores">Ver todos</Link>
-                    </div>
-                    <h3 id="blog-sidebar-authors-title">Conoce a quienes escriben</h3>
-                    <div className="blog-sidebar-authors-list">
-                      {authors.slice(0, 3).map((author) => (
-                        <Link
-                          href={hrefAutorBlog(author.fullName)}
-                          key={author.authorSlug || author.fullName}
-                          aria-label={`Ver notas de ${author.fullName}`}
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={author.photoUrl || DEFAULT_PROFILE_PHOTO} alt="" />
-                          <span>
-                            <strong>{author.fullName}</strong>
-                            <small>{author.postCount} {author.postCount === 1 ? 'nota' : 'notas'}</small>
-                          </span>
-                        </Link>
-                      ))}
-                    </div>
-                  </section>
-                )}
+              <aside className="blog-toc blog-toc--desktop" aria-label="Categorías del blog">
+                <BlogSidebarContent
+                  activeCategory={activeCategory}
+                  authors={authors}
+                  onCategory={scrollToCategory}
+                  secciones={secciones}
+                  showAuthors={!filtrandoAutor}
+                />
               </aside>
             </div>
           )}
