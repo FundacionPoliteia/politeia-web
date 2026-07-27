@@ -146,18 +146,6 @@ function ProyectModal({ project, onClose }) {
         onMouseDown={(event) => event.stopPropagation()}
         role="dialog"
       >
-        <button
-          ref={closeButtonRef}
-          aria-label="Cerrar"
-          className="proyect-result-close"
-          onClick={onClose}
-          type="button"
-        >
-          <span aria-hidden="true" className="material-symbols-outlined">
-            close
-          </span>
-        </button>
-
         <header className="project-modal-header">
           <span
             aria-hidden="true"
@@ -166,12 +154,24 @@ function ProyectModal({ project, onClose }) {
             {project.icon}
           </span>
 
-          <div>
+          <div className="project-modal-heading-copy">
             {project.eyebrow && (
               <span className="project-modal-eyebrow">{project.eyebrow}</span>
             )}
             <h2 id="project-modal-title">{project.title}</h2>
           </div>
+
+          <button
+            ref={closeButtonRef}
+            aria-label="Cerrar"
+            className="proyect-result-close"
+            onClick={onClose}
+            type="button"
+          >
+            <span aria-hidden="true" className="material-symbols-outlined">
+              close
+            </span>
+          </button>
         </header>
 
         <ProjectModalContent project={project} />

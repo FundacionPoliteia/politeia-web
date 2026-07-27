@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { sanitizeTags } from '../lib/taxonomy';
 
-const ENDINGS = ['tuya.', 'de Fran.', 'de Rosa.', 'de Juana.', "de Lourdes.", "de Sofía.", "de nosotros.", "de Denise.", "de Belen.", 'de todos.', "de Camila.", "de Paula.", "de Valentina.", "de Guadalupe.", 'tuya también.',];
+const ENDINGS = ['tuya.', 'de Fran.', 'de Rosa.', 'de Juana.', "de Lourdes.", "de Sofía.", "de nosotros.", "de Denise.", "de Belen.", 'de todos.', "de Camila.", "de Paula.", "de Valentina.", "de Guadalupe.",];
 const PREFIX = 'es ';
 
 export default function Hero({ destacadas = [] }) {

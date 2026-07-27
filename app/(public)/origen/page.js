@@ -72,30 +72,36 @@ export default function OrigenPage() {
 
           <div className="values">
             <article className="value">
-              <span className="material-symbols-outlined" aria-hidden="true">
-                visibility
-              </span>
-              <h3>Transparencia</h3>
+              <div className="value__heading">
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  visibility
+                </span>
+                <h3>Transparencia</h3>
+              </div>
               <p>
                 Abrimos datos y procesos para que cualquier persona pueda
                 comprenderlos y utilizarlos.
               </p>
             </article>
             <article className="value">
-              <span className="material-symbols-outlined" aria-hidden="true">
-                forum
-              </span>
-              <h3>Participación</h3>
+              <div className="value__heading">
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  forum
+                </span>
+                <h3>Participación</h3>
+              </div>
               <p>
                 Diseñamos espacios y herramientas para una ciudadanía
                 protagonista, no espectadora.
               </p>
             </article>
             <article className="value">
-              <span className="material-symbols-outlined" aria-hidden="true">
-                lightbulb
-              </span>
-              <h3>Innovación</h3>
+              <div className="value__heading">
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  lightbulb
+                </span>
+                <h3>Innovación</h3>
+              </div>
               <p>
                 Aplicamos tecnología y nuevas ideas a los desafíos de la vida
                 pública.

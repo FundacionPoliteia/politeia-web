@@ -27,7 +27,7 @@ export default function Footer() {
             <Link href="/origen">Origen</Link>
             <Link href="/equipo">Equipo</Link>
             <Link href="/proyectos">Proyectos</Link>
-            <Link href="/agradecimientos">Agradecimientos</Link>
+            <Link href="/agradecimientos">Legado</Link>
           </div>
           <div className="foot-col">
             <h5>Seguinos</h5>
