@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import LegacySections from '../../../components/LegacySections';
 
 export const metadata = { title: 'Origen — Politeia' };
 
@@ -127,9 +126,6 @@ export default function OrigenPage() {
         </div>
       </section>
 
-      <div className="origin-mobile-legacy">
-        <LegacySections embedded />
-      </div>
     </main>
   );
 }

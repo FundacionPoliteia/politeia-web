@@ -219,7 +219,7 @@ a {
     left: 10px;
     z-index: 80;
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 1px;
     min-height: 62px;
     padding: 6px;
@@ -3219,10 +3219,6 @@ a {
   background: var(--hueso)
 }
 
-.origin-mobile-legacy {
-  display: none
-}
-
 .thanks-hero {
   overflow: hidden;
   border-bottom: 1px solid rgba(255, 255, 255, .12);
@@ -3387,14 +3383,6 @@ a {
 
   .origin-values .value p {
     margin-top: 22px
-  }
-
-  .origin-mobile-legacy {
-    display: block
-  }
-
-  .origin-mobile-legacy .thanks-hero {
-    border-top: 1px solid rgba(255, 255, 255, .12)
   }
 
   .thanks-hero__inner {
