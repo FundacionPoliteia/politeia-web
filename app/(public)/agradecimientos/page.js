@@ -27,6 +27,7 @@ export default function AgradecimientosPage() {
           </div>
 
           <figure className="thanks-hero__figure">
+            <figcaption>Fernando Antonio Oyuela</figcaption>
             <Image
               src="/fernando-antonio-oyuela.jpeg"
               alt="Fernando Antonio Oyuela junto a un lago y las montañas"
@@ -41,7 +42,7 @@ export default function AgradecimientosPage() {
 
       <section className="sec thanks-message">
         <div className="wrap thanks-message__inner">
-          <span className="thanks-message__name">Fernando Antonio Oyuela</span>
+          <span className="thanks-message__name">Su legado</span>
           <div className="thanks-message__copy">
             <p>
               Fundación Politeia y todos sus proyectos se deben a la constante

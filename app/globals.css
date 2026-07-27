@@ -3064,18 +3064,37 @@ a {
 
 .thanks-hero__figure {
   display: flex;
-  height: min(720px, calc(100vh - 120px));
-  min-height: 560px;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
+  gap: 24px;
   margin: 0
 }
 
+.thanks-hero__figure figcaption {
+  display: flex;
+  max-width: 150px;
+  align-items: center;
+  gap: 12px;
+  color: #8fd2e3;
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .1em;
+  line-height: 1.45;
+  text-transform: uppercase
+}
+
+.thanks-hero__figure figcaption::before {
+  width: 28px;
+  height: 2px;
+  flex: 0 0 28px;
+  background: #8fd2e3;
+  content: ''
+}
+
 .thanks-hero__figure img {
-  width: auto;
-  max-width: 100%;
-  height: 100%;
-  object-fit: contain
+  width: clamp(220px, 21vw, 300px);
+  height: auto;
+  object-fit: cover
 }
 
 .thanks-message {
@@ -3142,7 +3161,7 @@ a {
     gap: 36px;
     min-height: 0;
     padding-top: 64px;
-    padding-bottom: 0
+    padding-bottom: 52px
   }
 
   .thanks-hero__copy h1 {
@@ -3150,15 +3169,24 @@ a {
   }
 
   .thanks-hero__figure {
-    width: calc(100% + 64px);
-    height: auto;
-    min-height: 0;
-    margin-left: -32px
+    width: 100%;
+    justify-content: flex-start;
+    gap: 16px
   }
 
   .thanks-hero__figure img {
-    width: 100%;
+    width: min(58vw, 230px);
     height: auto
+  }
+
+  .thanks-hero__figure figcaption {
+    max-width: 110px;
+    font-size: .65rem
+  }
+
+  .thanks-hero__figure figcaption::before {
+    width: 18px;
+    flex-basis: 18px
   }
 
   .thanks-message__inner {

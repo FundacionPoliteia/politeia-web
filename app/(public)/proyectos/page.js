@@ -1,10 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import {
-  PROJECT_STATUS_CLASSES,
-  PUBLIC_PROJECTS,
-} from '../../../lib/publicProjects';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import ProjectCard from '../../../components/ProjectCard';
+import { PUBLIC_PROJECTS } from '../../../lib/publicProjects';
 
 function getInitials(name) {
   return name
@@ -185,7 +183,30 @@ function ProyectModal({ project, onClose }) {
 export default function ProyectosPage() {
   const [proyectoModal, setProyectoModal] = useState(null);
 
-  const closeModal = () => setProyectoModal(null);
+  useEffect(() => {
+    const projectSlug = new URLSearchParams(window.location.search).get(
+      'proyecto'
+    );
+    const project = PUBLIC_PROJECTS.find((item) => item.slug === projectSlug);
+
+    if (project) setProyectoModal(project.modalData);
+  }, []);
+
+  const openModal = useCallback((project) => {
+    setProyectoModal(project.modalData);
+
+    const url = new URL(window.location.href);
+    url.searchParams.set('proyecto', project.slug);
+    window.history.replaceState({}, '', url);
+  }, []);
+
+  const closeModal = useCallback(() => {
+    setProyectoModal(null);
+
+    const url = new URL(window.location.href);
+    url.searchParams.delete('proyecto');
+    window.history.replaceState({}, '', url);
+  }, []);
 
   return (
     <main>
@@ -204,31 +225,11 @@ export default function ProyectosPage() {
         <div className="wrap">
           <div className="cards project-cards">
             {PUBLIC_PROJECTS.map((proyecto) => (
-              <button
+              <ProjectCard
                 key={proyecto.nombre}
-                aria-haspopup="dialog"
-                className="card card-trigger project-card"
-                onClick={() => setProyectoModal(proyecto.modalData)}
-                type="button"
-              >
-                <span
-                  className={`badge project-badge ${
-                    PROJECT_STATUS_CLASSES[proyecto.estado] || ''
-                  }`}
-                >
-                  {proyecto.estado}
-                </span>
-
-                <h3>{proyecto.nombre}</h3>
-                <p className="proyect-description">{proyecto.desc}</p>
-
-                <span className="go">
-                  Conocer el proyecto
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    arrow_forward
-                  </span>
-                </span>
-              </button>
+                onOpen={openModal}
+                project={proyecto}
+              />
             ))}
           </div>
         </div>

@@ -1,11 +1,9 @@
 ﻿import Link from 'next/link';
 import Hero from '../../components/Hero';
 import NewsletterForm from '../../components/NewsletterForm';
+import ProjectCard from '../../components/ProjectCard';
 import { getPosts, formatearFecha, etiquetasPost, hrefAutorBlog } from '../../lib/blogApi';
-import {
-  PROJECT_STATUS_CLASSES,
-  PUBLIC_PROJECTS,
-} from '../../lib/publicProjects';
+import { PUBLIC_PROJECTS } from '../../lib/publicProjects';
 
 const direccion = [
   {
@@ -104,37 +102,11 @@ export default async function Home() {
 
           <div className="cards project-cards home-projects__grid">
             {PUBLIC_PROJECTS.map((proyecto) => (
-              <Link
-                className="card project-card home-project-card"
-                href="/proyectos"
+              <ProjectCard
+                href={`/proyectos?proyecto=${proyecto.slug}`}
                 key={proyecto.nombre}
-              >
-                <div className="home-project-card__top">
-                  <span
-                    className="home-project-card__icon material-symbols-outlined"
-                    aria-hidden="true"
-                  >
-                    {proyecto.modalData.icon}
-                  </span>
-                  <span
-                    className={`badge project-badge ${
-                      PROJECT_STATUS_CLASSES[proyecto.estado] || ''
-                    }`}
-                  >
-                    {proyecto.estado}
-                  </span>
-                </div>
-
-                <h3>{proyecto.nombre}</h3>
-                <p>{proyecto.desc}</p>
-
-                <span className="go">
-                  Conocer el proyecto
-                  <span className="material-symbols-outlined" aria-hidden="true">
-                    arrow_forward
-                  </span>
-                </span>
-              </Link>
+                project={proyecto}
+              />
             ))}
           </div>
         </div>
