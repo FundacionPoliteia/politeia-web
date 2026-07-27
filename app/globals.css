@@ -9898,14 +9898,16 @@ a {
 }
 
 .project-modal-eyebrow {
+  display: block;
+  max-width: 100%;
+  margin-bottom: 4px;
   color: var(--azul);
   font-size: .7rem;
   font-weight: 800;
+  line-height: 1.35;
   letter-spacing: .11em;
   text-transform: uppercase;
-  position: absolute;
-  left: 37%;
-  top: 20px;
+  overflow-wrap: anywhere;
 }
 
 .project-modal-content {
@@ -10120,9 +10122,9 @@ a {
   }
 
   .project-modal-header {
-    grid-template-columns: 1fr;
-    gap: 12px;
-    padding-right: 44px;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 16px;
+    padding-right: 52px;
   }
 
   .project-modal-sections,
