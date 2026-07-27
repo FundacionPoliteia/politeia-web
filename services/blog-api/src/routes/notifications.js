@@ -31,7 +31,10 @@ export function notificationsRouter({ writeLimiter }) {
 
   router.get('/inbox', requireAuth, async (req, res, next) => {
     try {
-      const result = await listInAppNotifications(req.user, { limit: req.query.limit });
+      const result = await listInAppNotifications(req.user, {
+        limit: req.query.limit,
+        after: req.query.after,
+      });
       res.json(result);
     } catch (err) {
       next(err);

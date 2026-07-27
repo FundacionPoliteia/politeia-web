@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import BlogNavLink from './BlogNavLink';
 
 function normalizePath(path = '/') {
   const cleanPath = path.split(/[?#]/)[0] || '/';
@@ -39,9 +40,42 @@ function ActiveLink({ href, children, exact = false }) {
   );
 }
 
-export default function NavLinks({ blogLink }) {
+function MobileLink({ href, icon, label }) {
+  const pathname = usePathname();
+  const active = href.startsWith('/#')
+    ? false
+    : pathIsActive(pathname, href);
+
+  return (
+    <Link
+      href={href}
+      className={`mobile-public-tab${active ? ' is-active' : ''}`}
+      aria-current={active ? 'page' : undefined}
+    >
+      <span className="material-symbols-outlined" aria-hidden="true">
+        {icon}
+      </span>
+      <span>{label}</span>
+    </Link>
+  );
+}
+
+export default function NavLinks({ latestPostAt = '', mobile = false }) {
   const pathname = usePathname();
   const blogIsActive = pathIsActive(pathname, '/blog');
+
+  if (mobile) {
+    return (
+      <div className="mobile-public-tabs" aria-label="Navegación principal">
+        <MobileLink href="/origen" icon="history_edu" label="Origen" />
+        <MobileLink href="/proyectos" icon="workspaces" label="Proyectos" />
+        <BlogNavLink compact latestPostAt={latestPostAt} />
+        <MobileLink href="/equipo" icon="groups" label="Equipo" />
+        <MobileLink href="/agradecimientos" icon="favorite" label="Gracias" />
+        <MobileLink href="/#news" icon="mail" label="Novedades" />
+      </div>
+    );
+  }
 
   return (
     <>
@@ -53,10 +87,11 @@ export default function NavLinks({ blogLink }) {
           className={`nav-link-shell${blogIsActive ? ' is-active' : ''}`}
           aria-current={blogIsActive ? 'page' : undefined}
         >
-          {blogLink}
+          <BlogNavLink latestPostAt={latestPostAt} />
         </span>
 
         <ActiveLink href="/equipo">Equipo</ActiveLink>
+        <ActiveLink href="/agradecimientos">Agradecimientos</ActiveLink>
 
         <Link href="/#news" className="nav-cta">
           Suscribirse
@@ -88,12 +123,6 @@ export default function NavLinks({ blogLink }) {
           height: 2px;
           border-radius: 999px;
           background: var(--azul);
-        }
-
-        @media (max-width: 860px) {
-          .nav-link-shell {
-            display: none;
-          }
         }
       `}</style>
     </>

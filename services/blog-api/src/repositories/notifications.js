@@ -1,4 +1,4 @@
-import { db, serializeDoc, serverTimestamp } from '../firestore.js';
+import { db, hasFirestoreTestOverride, serializeDoc, serverTimestamp } from '../firestore.js';
 import { config } from '../config.js';
 import { MAIL_CHANNELS, sendMail } from '../mail/provider.js';
 import { renderEditorialMail } from '../mail/templates.js';
@@ -48,21 +48,13 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const INBOX_RECENT_DAYS = 3;
 const INBOX_RETENTION_DAYS = 7;
 const INBOX_RETENTION_MS = INBOX_RETENTION_DAYS * DAY_MS;
-const CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
-let nextCleanupAt = 0;
 
 export async function getNotificationPreferences(user) {
   const email = normalizeEmail(user?.email);
   const ref = email ? preferences().doc(preferenceId(email)) : null;
   const doc = ref ? await ref.get() : null;
   if (doc?.exists) {
-    await ref.set({
-      email,
-      name: user?.name || email,
-      roles: sanitizeRoles(user?.roles || []),
-      identityUpdatedAt: serverTimestamp(),
-    }, { merge: true });
-    return toPreference(serializeDoc(await ref.get()), user);
+    return toPreference(serializeDoc(doc), user);
   }
   return toPreference(null, user);
 }
@@ -104,16 +96,16 @@ export async function updateNotificationPreferences(user, body = {}) {
   return after;
 }
 
-export async function listInAppNotifications(user, { limit = 50 } = {}) {
+export async function listInAppNotifications(user, { limit = 50, after = '' } = {}) {
   const email = normalizeEmail(user?.email);
   if (!email) return inboxResult([], 0);
 
-  await cleanupExpiredNotifications().catch(logNotificationCleanupError);
   const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 300);
   const userRoles = sanitizeRoles(user?.roles || []);
-  const since = Date.now() - INBOX_RETENTION_MS;
-  const [eventsSnapshot, readsSnapshot] = await Promise.all([
-    events().get(),
+  const afterTimestamp = parseNotificationCursor(after);
+  const since = Math.max(Date.now() - INBOX_RETENTION_MS, afterTimestamp || 0);
+  const [eventDocs, readsSnapshot] = await Promise.all([
+    queryRelevantEventDocs({ email, roles: userRoles, since, limit: safeLimit }),
     reads().where('userEmail', '==', email).get(),
   ]);
   const readByEventId = new Map(
@@ -122,7 +114,7 @@ export async function listInAppNotifications(user, { limit = 50 } = {}) {
       .filter((item) => item?.eventId)
       .map((item) => [item.eventId, item.readAt || null])
   );
-  const relevant = eventsSnapshot.docs
+  const relevant = eventDocs
     .map(serializeDoc)
     .filter((event) => isEventRelevantForUser(event, { email, roles: userRoles }))
     .filter((event) => eventTimestamp(event) >= since)
@@ -154,20 +146,45 @@ export async function markNotificationRead(eventId = '', user) {
     readAt: serverTimestamp(),
     expiresAt: notificationExpiration(event),
   }, { merge: true });
-  return toInboxItem(event, serializeDoc(await ref.get()).readAt || null);
+  return toInboxItem(event, new Date().toISOString());
 }
 
 export async function markAllNotificationsRead(user) {
   const inbox = await listInAppNotifications(user, { limit: 300 });
-  await Promise.all(inbox.items
-    .filter((item) => !item.readAt)
-    .map((item) => markNotificationRead(item.id, user)));
-  return listInAppNotifications(user, { limit: 300 });
+  const email = normalizeEmail(user?.email);
+  const unread = inbox.items.filter((item) => !item.readAt);
+  const readAt = new Date().toISOString();
+  const firestore = db();
+
+  if (typeof firestore.batch === 'function') {
+    const batch = firestore.batch();
+    unread.forEach((item) => {
+      batch.set(reads().doc(readId(item.id, email)), {
+        eventId: item.id,
+        userEmail: email,
+        readAt: serverTimestamp(),
+        expiresAt: notificationExpiration(item),
+      }, { merge: true });
+    });
+    if (unread.length) await batch.commit();
+  } else {
+    await Promise.all(unread.map((item) => reads().doc(readId(item.id, email)).set({
+      eventId: item.id,
+      userEmail: email,
+      readAt,
+      expiresAt: notificationExpiration(item),
+    }, { merge: true })));
+  }
+
+  return {
+    ...inbox,
+    unreadCount: 0,
+    items: inbox.items.map((item) => ({ ...item, readAt: item.readAt || readAt })),
+  };
 }
 
 export async function cleanupExpiredNotifications({ force = false, now = Date.now() } = {}) {
-  if (!force && now < nextCleanupAt) return { deletedEvents: 0, deletedReads: 0, skipped: true };
-  nextCleanupAt = now + CLEANUP_INTERVAL_MS;
+  if (!force) return { deletedEvents: 0, deletedReads: 0, skipped: true, ttlManaged: true };
   const cutoff = now - INBOX_RETENTION_MS;
   const [eventsSnapshot, readsSnapshot] = await Promise.all([events().get(), reads().get()]);
   const retainedEventIds = new Set();
@@ -194,6 +211,42 @@ export async function cleanupExpiredNotifications({ force = false, now = Date.no
     deletedReads: orphanReadDocs.length,
     skipped: false,
   };
+}
+
+async function queryRelevantEventDocs({ email, roles, since, limit }) {
+  if (hasFirestoreTestOverride()) {
+    const snapshot = await events().get();
+    return snapshot.docs;
+  }
+
+  const sinceDate = new Date(since);
+  const queryLimit = Math.min(Math.max(limit * 2, 20), 300);
+  const queries = [
+    events()
+      .where('targetEmails', 'array-contains', email)
+      .where('createdAt', '>', sinceDate)
+      .orderBy('createdAt', 'desc')
+      .limit(queryLimit)
+      .get(),
+  ];
+  if (roles.length) {
+    queries.push(events()
+      .where('targetRoles', 'array-contains-any', roles)
+      .where('createdAt', '>', sinceDate)
+      .orderBy('createdAt', 'desc')
+      .limit(queryLimit)
+      .get());
+  }
+  const snapshots = await Promise.all(queries);
+  const docsById = new Map();
+  snapshots.forEach((snapshot) => snapshot.docs.forEach((doc) => docsById.set(doc.id, doc)));
+  return [...docsById.values()];
+}
+
+function parseNotificationCursor(value) {
+  if (!value) return 0;
+  const timestamp = Date.parse(String(value));
+  return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
 export async function notifyPostSubmittedForReview(post, actor) {
@@ -574,7 +627,6 @@ async function queueNotification({
     processedAt: serverTimestamp(),
     expiresAt: new Date(Date.now() + INBOX_RETENTION_MS),
   };
-  await cleanupExpiredNotifications().catch(logNotificationCleanupError);
   await eventRef.set(event);
 
   const createdDeliveries = [];
@@ -722,15 +774,6 @@ function inboxResult(items, unreadCount) {
     recentDays: INBOX_RECENT_DAYS,
     retentionDays: INBOX_RETENTION_DAYS,
   };
-}
-
-function logNotificationCleanupError(err) {
-  nextCleanupAt = 0;
-  console.error(JSON.stringify({
-    severity: 'ERROR',
-    message: 'notification retention cleanup failed',
-    error: err?.message || String(err),
-  }));
 }
 
 function dedupeRecipients(recipients = []) {

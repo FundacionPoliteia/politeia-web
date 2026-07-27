@@ -577,17 +577,23 @@ Revisar en orden:
 
 ## 16. Logs administrativos y prueba de Resend
 
-El panel interno registra metadatos sanitizados de cada request en `apiRequestLogs`. No guarda bodies, cookies, headers de autorizacion ni valores de query. Los tokens de confirmacion de newsletter no se persisten.
+Cloud Logging es la fuente de verdad para las solicitudes de la API. El backend emite logs estructurados sanitizados: no guarda bodies, cookies, headers de autorizacion ni valores de query. El panel consulta como maximo 50 registros por pagina y solo cuando un administrador abre o actualiza la vista.
 
-### Activar el registro en Cloud Run
+### Activar logs estructurados y desactivar persistencia por request
 
-En produccion queda activo por defecto. Se recomienda dejarlo explicito:
+En produccion se recomienda dejar ambos comportamientos explicitos:
 
 ```bash
-gcloud.cmd run services update politeia-blog-api --region us-central1 --update-env-vars API_REQUEST_LOGS_ENABLED=true,API_REQUEST_LOGS_RETENTION_DAYS=14
+gcloud.cmd run services update politeia-blog-api --region us-central1 --update-env-vars API_REQUEST_CONSOLE_LOGS_ENABLED=true,API_REQUEST_FIRESTORE_LOGS_ENABLED=false,CLOUD_RUN_SERVICE_NAME=politeia-blog-api
 ```
 
-Despues de desplegar el backend, configurar Firestore TTL para eliminar registros vencidos:
+La cuenta de servicio necesita permiso de lectura sobre Cloud Logging:
+
+```bash
+gcloud.cmd projects add-iam-policy-binding quick-function-500420-v6 --member=serviceAccount:politeia-blog-api@quick-function-500420-v6.iam.gserviceaccount.com --role=roles/logging.viewer
+```
+
+Los registros antiguos que ya existan en `apiRequestLogs` se eliminan mediante TTL. Las notificaciones y sus recibos también usan TTL:
 
 ```bash
 gcloud.cmd firestore fields ttls update expiresAt --collection-group=apiRequestLogs --enable-ttl --project=quick-function-500420-v6
@@ -595,7 +601,24 @@ gcloud.cmd firestore fields ttls update expiresAt --collection-group=notificatio
 gcloud.cmd firestore fields ttls update expiresAt --collection-group=notificationReads --enable-ttl --project=quick-function-500420-v6
 ```
 
-La habilitacion del TTL puede demorar. Firestore elimina los documentos vencidos de manera asincronica, normalmente dentro de las 24 horas posteriores al vencimiento. El backend tambien limpia notificaciones con mas de 7 dias al consultar o crear actividad, por lo que el TTL funciona como una segunda garantia.
+La habilitacion del TTL puede demorar. Firestore elimina los documentos vencidos de manera asincronica, normalmente dentro de las 24 horas posteriores al vencimiento. Las lecturas normales ya no escanean colecciones para hacer limpieza manual.
+
+### Indices y backfill para consultas eficientes
+
+El repositorio incluye `firestore.indexes.json`. Desplegarlo antes de activar la nueva revision:
+
+```bash
+firebase deploy --only firestore:indexes --project quick-function-500420-v6
+```
+
+Luego simular y aplicar las claves indexables de perfiles y autores:
+
+```bash
+npm run blog-api:backfill:identity-keys
+npm run blog-api:backfill:identity-keys -- --apply
+```
+
+El primer comando no escribe. El segundo actualiza solo documentos que todavía no tienen la clave normalizada.
 
 ### Configurar el webhook de Resend
 

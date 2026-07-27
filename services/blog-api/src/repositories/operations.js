@@ -1,14 +1,15 @@
 import { config } from '../config.js';
-import { db, serializeDoc } from '../firestore.js';
+import { db, hasFirestoreTestOverride, serializeDoc, Timestamp } from '../firestore.js';
 import { HttpError } from '../errors.js';
 import { MAIL_CHANNELS } from '../mail/provider.js';
 import { createMailDelivery } from './mail.js';
+import { GoogleAuth } from 'google-auth-library';
 
 const requestLogs = () => db().collection('apiRequestLogs');
 const deliveries = () => db().collection('emailDeliveries');
 
 export async function recordApiRequest(entry = {}) {
-  if (!config.apiRequestLogsEnabled) return null;
+  if (!config.apiRequestFirestoreLogsEnabled && !config.apiRequestLogsEnabled) return null;
   const createdAt = new Date();
   const expiresAt = new Date(createdAt.getTime() + config.apiRequestLogsRetentionDays * 24 * 60 * 60 * 1000);
   const item = {
@@ -32,8 +33,31 @@ export async function recordApiRequest(entry = {}) {
   return { id: ref.id, ...item };
 }
 
-export async function listApiRequestLogs({ limit = 250 } = {}) {
-  const cleanLimit = Math.min(Math.max(Number(limit) || 250, 1), 500);
+export async function listApiRequestLogs({
+  limit = 50,
+  pageToken = '',
+  from = '',
+  to = '',
+  method = '',
+  status = '',
+  path = '',
+  requestId = '',
+  text = '',
+} = {}) {
+  const cleanLimit = Math.min(Math.max(Number(limit) || 50, 1), 50);
+  if (!hasFirestoreTestOverride()) {
+    return listCloudApiRequestLogs({
+      limit: cleanLimit,
+      pageToken,
+      from,
+      to,
+      method,
+      status,
+      path,
+      requestId,
+      text,
+    });
+  }
   const snapshot = await requestLogs().orderBy('createdAt', 'desc').limit(cleanLimit).get();
   return {
     items: snapshot.docs
@@ -41,12 +65,18 @@ export async function listApiRequestLogs({ limit = 250 } = {}) {
       .filter((item) => item.projectKey === config.mailProjectKey),
     limit: cleanLimit,
     retentionDays: config.apiRequestLogsRetentionDays,
+    nextPageToken: '',
   };
 }
 
-export async function listMailOperationLogs({ limit = 200 } = {}) {
-  const cleanLimit = Math.min(Math.max(Number(limit) || 200, 1), 500);
-  const snapshot = await deliveries().orderBy('createdAt', 'desc').limit(cleanLimit).get();
+export async function listMailOperationLogs({ limit = 50, cursor = '' } = {}) {
+  const cleanLimit = Math.min(Math.max(Number(limit) || 50, 1), 50);
+  let query = deliveries().orderBy('createdAt', 'desc').limit(cleanLimit + 1);
+  if (cursor && !hasFirestoreTestOverride()) {
+    const cursorDate = new Date(cursor);
+    if (!Number.isNaN(cursorDate.getTime())) query = query.startAfter(Timestamp.fromDate(cursorDate));
+  }
+  const snapshot = await query.get();
   const items = snapshot.docs
     .map(serializeDoc)
     .filter((item) => item.projectKey === config.mailProjectKey)
@@ -68,7 +98,94 @@ export async function listMailOperationLogs({ limit = 200 } = {}) {
       providerStatus: item.providerStatus || '',
       providerStatusAt: item.providerStatusAt || null,
     }));
-  return { items, limit: cleanLimit };
+  const page = items.slice(0, cleanLimit);
+  return {
+    items: page,
+    limit: cleanLimit,
+    nextCursor: items.length > cleanLimit ? page[page.length - 1]?.createdAt || '' : '',
+  };
+}
+
+async function listCloudApiRequestLogs(filters = {}) {
+  if (!config.gcpProjectId) throw new HttpError(503, 'GCP_PROJECT_ID is not configured');
+  const auth = new GoogleAuth({
+    scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+  });
+  const client = await auth.getClient();
+  const response = await client.request({
+    url: 'https://logging.googleapis.com/v2/entries:list',
+    method: 'POST',
+    data: {
+      resourceNames: [`projects/${config.gcpProjectId}`],
+      filter: buildCloudLogFilter(filters),
+      orderBy: 'timestamp desc',
+      pageSize: filters.limit,
+      pageToken: cleanText(filters.pageToken, 1000) || undefined,
+    },
+  });
+  const entries = response.data?.entries || [];
+  return {
+    items: entries.map(toCloudRequestLog).filter(Boolean),
+    limit: filters.limit,
+    retentionDays: null,
+    source: 'cloud-logging',
+    nextPageToken: response.data.nextPageToken || '',
+  };
+}
+
+function buildCloudLogFilter(filters = {}) {
+  const clauses = [
+    'resource.type="cloud_run_revision"',
+    `resource.labels.service_name="${escapeCloudFilter(config.cloudRunServiceName)}"`,
+    'jsonPayload.message="api request completed"',
+  ];
+  const fromDate = parseLogDate(filters.from, new Date(Date.now() - 24 * 60 * 60 * 1000));
+  const toDate = parseLogDate(filters.to, null);
+  clauses.push(`timestamp>="${fromDate.toISOString()}"`);
+  if (toDate) clauses.push(`timestamp<="${toDate.toISOString()}"`);
+  if (filters.method) clauses.push(`jsonPayload.method="${escapeCloudFilter(cleanMethod(filters.method))}"`);
+  if (filters.path) clauses.push(`jsonPayload.path:"${escapeCloudFilter(cleanText(filters.path, 180))}"`);
+  if (filters.requestId) clauses.push(`jsonPayload.requestId="${escapeCloudFilter(cleanText(filters.requestId, 120))}"`);
+  if (filters.text) clauses.push(`SEARCH("${escapeCloudFilter(cleanText(filters.text, 180))}")`);
+  appendCloudStatusFilter(clauses, filters.status);
+  return clauses.join(' AND ');
+}
+
+function appendCloudStatusFilter(clauses, status = '') {
+  if (status === 'success') clauses.push('jsonPayload.status>=200', 'jsonPayload.status<300');
+  else if (status === 'redirect') clauses.push('jsonPayload.status>=300', 'jsonPayload.status<400');
+  else if (status === 'client-error') clauses.push('jsonPayload.status>=400', 'jsonPayload.status<500');
+  else if (status === 'server-error') clauses.push('jsonPayload.status>=500');
+  else if (/^\d{3}$/.test(String(status))) clauses.push(`jsonPayload.status=${Number(status)}`);
+}
+
+function toCloudRequestLog(entry = {}) {
+  const payload = entry.jsonPayload || {};
+  if (!payload.requestId && !payload.path) return null;
+  return {
+    id: entry.insertId || payload.requestId || '',
+    requestId: payload.requestId || '',
+    method: payload.method || '',
+    path: cleanPath(payload.path || '/'),
+    area: requestArea(payload.path || '/'),
+    queryKeys: [],
+    status: Number(payload.status || 0),
+    durationMs: Number(payload.durationMs || 0),
+    responseBytes: Number(payload.responseBytes || 0),
+    actorEmail: cleanEmail(payload.actorEmail),
+    originHost: cleanText(payload.originHost, 255),
+    errorMessage: redactSecrets(cleanText(payload.errorMessage, 500)),
+    createdAt: entry.timestamp || entry.receiveTimestamp || null,
+  };
+}
+
+function parseLogDate(value, fallback) {
+  const date = value ? new Date(value) : fallback;
+  return date && !Number.isNaN(date.getTime()) ? date : fallback;
+}
+
+function escapeCloudFilter(value = '') {
+  return String(value).replaceAll('\\', '\\\\').replaceAll('"', '\\"');
 }
 
 export async function sendAdminResendTest(user, requestId) {

@@ -6,10 +6,11 @@ import { useEffect, useMemo, useState } from 'react';
 
 const STORAGE_KEY = 'politeia.blog.lastSeenAt';
 
-export default function BlogNavLink({ latestPostAt = '' }) {
+export default function BlogNavLink({ latestPostAt = '', compact = false }) {
   const pathname = usePathname();
   const [showDot, setShowDot] = useState(false);
   const latestPostMs = useMemo(() => toTime(latestPostAt), [latestPostAt]);
+  const active = pathname === '/blog' || pathname?.startsWith('/blog/');
 
   useEffect(() => {
     if (!latestPostMs) {
@@ -30,8 +31,21 @@ export default function BlogNavLink({ latestPostAt = '' }) {
   }, [latestPostMs, pathname]);
 
   return (
-    <Link href="/blog" className="nav-blog-link">
-      Blog
+    <Link
+      href="/blog"
+      className={
+        compact
+          ? `mobile-public-tab mobile-public-tab--blog${active ? ' is-active' : ''}`
+          : 'nav-blog-link'
+      }
+      aria-current={active ? 'page' : undefined}
+    >
+      {compact && (
+        <span className="material-symbols-outlined" aria-hidden="true">
+          article
+        </span>
+      )}
+      <span>Blog</span>
       {showDot && <span aria-label="Hay una nota nueva" className="nav-new-dot" />}
     </Link>
   );

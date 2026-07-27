@@ -23,7 +23,9 @@ const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0';
 const ALLOWED_EMAIL_DOMAIN = 'politeia.ar';
 const ASSIGNED_EMAIL_DOMAIN = 'gmail.com';
 const SHOW_EMAIL_SETTINGS_UI = process.env.NEXT_PUBLIC_EMAIL_SETTINGS_ENABLED !== 'false';
-const NOTIFICATION_REFRESH_MS = 60 * 1000;
+const NOTIFICATION_REFRESH_COOLDOWN_MS = 60 * 1000;
+const SESSION_REFRESH_COOLDOWN_MS = 5 * 60 * 1000;
+const UI_PREFERENCES_SYNC_DELAY_MS = 5 * 1000;
 const DEFAULT_NOTIFICATION_POLICY = { recentDays: 3, retentionDays: 7 };
 const UI_PREFERENCES_STORAGE_PREFIX = 'politeia:admin-ui:';
 const DEFAULT_UI_PREFERENCES = {
@@ -219,6 +221,7 @@ export default function AdminConsole() {
   const [checkingSession, setCheckingSession] = useState(true);
   const [user, setUser] = useState(null);
   const [posts, setPosts] = useState([]);
+  const [postsNextCursor, setPostsNextCursor] = useState('');
   const [categories, setCategories] = useState([]);
   const [reviewAssignees, setReviewAssignees] = useState([]);
   const [loadingReviewAssignees, setLoadingReviewAssignees] = useState(false);
@@ -313,6 +316,10 @@ export default function AdminConsole() {
   const profilePermissionsRef = useRef(null);
   const coverValidationRef = useRef(0);
   const uiPreferencesSaveTimerRef = useRef(null);
+  const lastSessionCheckAtRef = useRef(0);
+  const lastNotificationRefreshAtRef = useRef(0);
+  const latestNotificationCreatedAtRef = useRef('');
+  const inFlightGetRequestsRef = useRef(new Map());
 
   const roles = user?.roles || [];
   const isAdmin = roles.includes('admin');
@@ -455,36 +462,37 @@ export default function AdminConsole() {
   useEffect(() => {
     if (!user?.email) return undefined;
 
-    const intervalId = window.setInterval(() => {
-      loadMe({ silent: true });
-    }, NOTIFICATION_REFRESH_MS);
     const refreshSessionWhenVisible = () => {
-      if (document.visibilityState === 'visible') loadMe({ silent: true });
+      if (document.visibilityState !== 'visible') return;
+      loadMe({ silent: true });
+      if (canAccessPanel) {
+        loadInAppNotifications({ silent: true, incremental: true });
+      }
     };
 
     document.addEventListener('visibilitychange', refreshSessionWhenVisible);
     return () => {
-      window.clearInterval(intervalId);
       document.removeEventListener('visibilitychange', refreshSessionWhenVisible);
     };
-  }, [user?.email]);
+  }, [canAccessPanel, user?.email]);
 
   useEffect(() => {
-    if (canAccessEditorialPanel) {
+    if (canAccessEditorialPanel && activePanelTab === 'blogs') {
       loadPosts();
       loadCategories();
-    } else {
+    } else if (!canAccessEditorialPanel) {
       setPosts([]);
+      setPostsNextCursor('');
       setCategories([]);
     }
-  }, [canAccessEditorialPanel, activeStatusFilter]);
+  }, [activePanelTab, canAccessEditorialPanel, activeStatusFilter]);
 
   useEffect(() => {
-    if (canManageUsers) loadAdminUsers();
-  }, [canManageUsers]);
+    if (canManageUsers && activePanelTab === 'access') loadAdminUsers();
+  }, [activePanelTab, canManageUsers]);
 
   useEffect(() => {
-    if (canPublishPosts) loadMailingPublicationPolicy();
+    if (canPublishPosts && ['blogs', 'mailing'].includes(activePanelTab)) loadMailingPublicationPolicy();
   }, [activePanelTab, canPublishPosts]);
 
   useEffect(() => {
@@ -499,21 +507,9 @@ export default function AdminConsole() {
 
   useEffect(() => {
     if (canAccessPanel) {
-      loadNotificationPreferences();
       setUserProfileLoaded(false);
       loadUserProfile();
-      loadInAppNotifications({ silent: true });
-      const intervalId = window.setInterval(() => {
-        loadInAppNotifications({ silent: true });
-      }, NOTIFICATION_REFRESH_MS);
-      const refreshWhenVisible = () => {
-        if (document.visibilityState === 'visible') loadInAppNotifications({ silent: true });
-      };
-      document.addEventListener('visibilitychange', refreshWhenVisible);
-      return () => {
-        window.clearInterval(intervalId);
-        document.removeEventListener('visibilitychange', refreshWhenVisible);
-      };
+      loadInAppNotifications({ silent: true, force: true });
     } else {
       setNotificationPreferences(null);
       setUserProfile(EMPTY_PROFILE);
@@ -526,6 +522,12 @@ export default function AdminConsole() {
       setNotificationPolicy(DEFAULT_NOTIFICATION_POLICY);
     }
   }, [canAccessPanel, user?.email]);
+
+  useEffect(() => {
+    if (SHOW_EMAIL_SETTINGS_UI && canAccessPanel && activePanelTab === 'profile') {
+      loadNotificationPreferences();
+    }
+  }, [activePanelTab, canAccessPanel, user?.email]);
 
   useEffect(() => {
     let cancelled = false;
@@ -622,7 +624,7 @@ export default function AdminConsole() {
       }).catch(() => {
         // The local copy is retained and the next interaction retries the remote sync.
       });
-    }, 600);
+    }, UI_PREFERENCES_SYNC_DELAY_MS);
 
     return () => window.clearTimeout(uiPreferencesSaveTimerRef.current);
   }, [activePanelTab, adminManagerOpen, adminProfileClaimsOpen, adminProfileEditorOpen, adminUsersOpen, advancedOptionsOpen, allowedPanelTabs, canAccessPanel, defaultPanelTab, helpPreferences, mobilePostsOpen, notificationPreferencesOpen, previewCardOpen, uiPreferencesHydrated, user?.email]);
@@ -636,36 +638,6 @@ export default function AdminConsole() {
       },
     };
     setHelpPreferences(nextHelpPreferences);
-
-    const email = String(user?.email || '').trim().toLowerCase();
-    if (!email || !uiPreferencesHydrated || !canAccessPanel) return;
-    const preferences = normalizeUiPreferences({
-      lastPanelTab: allowedPanelTabs.includes(activePanelTab) ? activePanelTab : defaultPanelTab,
-      sections: {
-        adminUsersOpen,
-        adminManagerOpen,
-        notificationPreferencesOpen,
-        adminProfileClaimsOpen,
-        adminProfileEditorOpen,
-        previewCardOpen,
-        advancedOptionsOpen,
-        mobilePostsOpen,
-      },
-      help: nextHelpPreferences,
-    });
-
-    window.localStorage.setItem(`${UI_PREFERENCES_STORAGE_PREFIX}${email}`, JSON.stringify(preferences));
-    window.clearTimeout(uiPreferencesSaveTimerRef.current);
-    fetch(`${API_BASE}/v1/ui-preferences`, {
-      method: 'PATCH',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(preferences),
-    }).then((response) => {
-      if (!response.ok) throw new Error(`Error ${response.status}`);
-    }).catch(() => {
-      // The monotonic local merge keeps the completion until remote sync succeeds.
-    });
   }
 
   useEffect(() => {
@@ -840,22 +812,37 @@ export default function AdminConsole() {
 
   async function api(path, options = {}) {
     if (!API_BASE) throw new Error('Falta NEXT_PUBLIC_BLOG_API_BASE_URL');
-    const res = await fetch(`${API_BASE}${path}`, {
-      ...options,
-      credentials: 'include',
-      headers: {
-        ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
-        ...(options.headers || {}),
-      },
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      if (res.status === 401 || res.status === 403) {
-        void loadMe({ silent: true });
-      }
-      throw new Error(data?.error?.message || `Error ${res.status}`);
+    const method = String(options.method || 'GET').toUpperCase();
+    const requestKey = method === 'GET' ? `${method}:${path}` : '';
+    if (requestKey && inFlightGetRequestsRef.current.has(requestKey)) {
+      return inFlightGetRequestsRef.current.get(requestKey);
     }
-    return data;
+
+    const request = (async () => {
+      const res = await fetch(`${API_BASE}${path}`, {
+        ...options,
+        credentials: 'include',
+        headers: {
+          ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
+          ...(options.headers || {}),
+        },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          void loadMe({ silent: true, force: true });
+        }
+        throw new Error(data?.error?.message || `Error ${res.status}`);
+      }
+      return data;
+    })();
+
+    if (requestKey) inFlightGetRequestsRef.current.set(requestKey, request);
+    try {
+      return await request;
+    } finally {
+      if (requestKey) inFlightGetRequestsRef.current.delete(requestKey);
+    }
   }
 
   function setActionLoading(key, value) {
@@ -883,14 +870,22 @@ export default function AdminConsole() {
     }
   }
 
-  async function loadMe({ silent = false } = {}) {
+  async function loadMe({ silent = false, force = false } = {}) {
     if (!API_BASE) {
       setCheckingSession(false);
       return;
     }
+    if (
+      !force
+      && userRef.current
+      && Date.now() - lastSessionCheckAtRef.current < SESSION_REFRESH_COOLDOWN_MS
+    ) {
+      return userRef.current;
+    }
 
     try {
       if (!silent) setMessage('');
+      lastSessionCheckAtRef.current = Date.now();
       const res = await fetch(`${API_BASE}/v1/me`, {
         credentials: 'include',
       });
@@ -900,6 +895,7 @@ export default function AdminConsole() {
         throw new Error(`Solo pueden ingresar cuentas habilitadas.`);
       }
       setUser(data.user);
+      return data.user;
     } catch (err) {
       setUser(null);
       setUiPreferencesHydrated(false);
@@ -940,6 +936,10 @@ export default function AdminConsole() {
       });
     } finally {
       googlePromptAttemptedRef.current = false;
+      lastSessionCheckAtRef.current = 0;
+      lastNotificationRefreshAtRef.current = 0;
+      latestNotificationCreatedAtRef.current = '';
+      inFlightGetRequestsRef.current.clear();
       setUser(null);
       setPosts([]);
       setCategories([]);
@@ -1000,13 +1000,16 @@ export default function AdminConsole() {
     }
   }
 
-  async function loadPosts() {
+  async function loadPosts({ append = false } = {}) {
     try {
       setBusy(true);
-      const query = activeStatusFilter ? `?status=${activeStatusFilter}` : '';
-      const data = await api(`/v1/posts/manage${query}`);
+      const params = new URLSearchParams({ limit: '30' });
+      if (activeStatusFilter) params.set('status', activeStatusFilter);
+      if (append && postsNextCursor) params.set('cursor', postsNextCursor);
+      const data = await api(`/v1/posts/manage?${params.toString()}`);
       const items = data.items || [];
-      setPosts(items);
+      setPosts((current) => append ? mergePosts(current, items) : items);
+      setPostsNextCursor(data.nextCursor || '');
       return items;
     } catch (err) {
       setMessage(err.message);
@@ -1072,15 +1075,32 @@ export default function AdminConsole() {
     }
   }
 
-  async function loadInAppNotifications({ silent = false } = {}) {
+  async function loadInAppNotifications({ silent = false, incremental = false, force = false } = {}) {
+    if (
+      !force
+      && Date.now() - lastNotificationRefreshAtRef.current < NOTIFICATION_REFRESH_COOLDOWN_MS
+    ) {
+      return inAppNotifications;
+    }
     try {
       if (!silent) setLoadingNotifications(true);
-      const data = await api('/v1/notifications/inbox?limit=100');
-      setInAppNotifications((data.items || []).map(normalizeInAppNotification));
-      setUnreadNotificationCount(Number(data.unreadCount) || 0);
+      lastNotificationRefreshAtRef.current = Date.now();
+      const after = incremental ? latestNotificationCreatedAtRef.current : '';
+      const query = new URLSearchParams({ limit: '100' });
+      if (after) query.set('after', after);
+      const data = await api(`/v1/notifications/inbox?${query.toString()}`);
+      const incoming = (data.items || []).map(normalizeInAppNotification);
+      setInAppNotifications((current) => {
+        const next = incremental ? mergeNotifications(current, incoming) : incoming;
+        latestNotificationCreatedAtRef.current = newestNotificationTimestamp(next);
+        setUnreadNotificationCount(next.filter((item) => !item.readAt).length);
+        return next;
+      });
       setNotificationPolicy(normalizeNotificationPolicy(data));
+      return incoming;
     } catch (err) {
       if (!silent) setMessage(err.message);
+      return [];
     } finally {
       if (!silent) setLoadingNotifications(false);
     }
@@ -1339,7 +1359,6 @@ export default function AdminConsole() {
       }));
       setProfileClaimConfirmOpen(false);
       await loadProfileClaimMatch();
-      await loadInAppNotifications({ silent: true });
       setMessage('Solicitud de vinculacion enviada. Te avisaremos cuando un administrador la revise.');
     } catch (err) {
       setMessage(err.message);
@@ -1373,7 +1392,7 @@ export default function AdminConsole() {
       }));
       setAdminProfileClaimDialog(null);
       setAdminProfileClaimReason('');
-      await Promise.all([loadAdminProfileClaims(), loadAdminProfiles(), loadInAppNotifications({ silent: true })]);
+      await Promise.all([loadAdminProfileClaims(), loadAdminProfiles()]);
       setMessage(dialog.action === 'approve'
         ? 'Perfil vinculado, rol concedido y notas transferidas.'
         : dialog.action === 'block'
@@ -1565,7 +1584,7 @@ export default function AdminConsole() {
     }
   }
 
-  async function persistCurrentPost({ refresh = true } = {}) {
+  async function persistCurrentPost() {
     if (!canEditPosts || (!form.id && !canCreatePosts)) {
       throw new Error('Tu rol no permite crear nuevos posts.');
     }
@@ -1593,9 +1612,8 @@ export default function AdminConsole() {
     setForm(nextForm);
     setSavedForm(nextForm);
     setUseManualAuthorNote(Boolean(nextForm.authorNote));
-    if (refresh) {
-      await Promise.all([loadPosts(), loadCategories()]);
-    }
+    upsertPost(data.item);
+    if (data.item?.category) upsertCategory({ name: data.item.category });
     return data.item;
   }
 
@@ -1695,10 +1713,9 @@ export default function AdminConsole() {
         setSavedForm((current) => normalizeForm({ ...current, contentMarkdown: data.post.contentMarkdown }));
       }
       setReviewComments((current) => [...current, normalizeReviewComment(data.item)]);
+      if (data.post) upsertPost(data.post);
       focusReviewComment(data.item.id);
       setReviewCommentFilter('open');
-      await loadPosts();
-      await loadInAppNotifications({ silent: true });
       setMessage('Comentario de revision agregado.');
       return data.item;
     } catch (err) {
@@ -1753,9 +1770,8 @@ export default function AdminConsole() {
       }
       const nextComment = normalizeReviewComment(data.item);
       setReviewComments((current) => current.map((comment) => comment.id === commentId ? nextComment : comment));
+      if (data.post) upsertPost(data.post);
       setReviewCommentDialog((current) => (current?.comment?.id === commentId ? null : current));
-      await loadPosts();
-      await loadInAppNotifications({ silent: true });
       setMessage(status === 'resolved' ? 'Comentario resuelto.' : 'Comentario reabierto.');
     } catch (err) {
       setMessage(err.message);
@@ -1789,7 +1805,7 @@ export default function AdminConsole() {
         comment: nextComment,
         replyBody: '',
       });
-      await loadInAppNotifications({ silent: true });
+      if (data.post) upsertPost(data.post);
       setMessage('Respuesta enviada.');
     } catch (err) {
       setMessage(err.message);
@@ -1832,7 +1848,7 @@ export default function AdminConsole() {
     try {
       setBusy(true);
       setMessage('');
-      await withActionLoading(`comment-delete:${commentId}`, () => api(`/v1/posts/${form.id}/comments/${commentId}`, {
+      const data = await withActionLoading(`comment-delete:${commentId}`, () => api(`/v1/posts/${form.id}/comments/${commentId}`, {
         method: 'DELETE',
         body: JSON.stringify({ contentMarkdown: nextMarkdown }),
       }));
@@ -1843,7 +1859,7 @@ export default function AdminConsole() {
         setActiveReviewCommentId('');
         setActiveReviewCommentNonce((current) => current + 1);
       }
-      await loadPosts();
+      if (data.post) upsertPost(data.post);
       setMessage('Comentario eliminado.');
     } catch (err) {
       setMessage(err.message);
@@ -1890,9 +1906,8 @@ export default function AdminConsole() {
         setSavedForm(nextForm);
         setUseManualAuthorNote(Boolean(nextForm.authorNote));
       }
+      if (data.item) upsertPost(data.item);
       setMessage(success);
-      await loadPosts();
-      await loadInAppNotifications({ silent: true });
       return true;
     } catch (err) {
       setMessage(err.message);
@@ -1944,9 +1959,8 @@ export default function AdminConsole() {
         setUseManualAuthorNote(Boolean(nextForm.authorNote));
       }
       setMessage('Solicitud de edición enviada.');
+      if (data.item) upsertPost(data.item);
       setEditRequestConfirmOpen(false);
-      await loadPosts();
-      await loadInAppNotifications({ silent: true });
     } catch (err) {
       setMessage(err.message);
     } finally {
@@ -1973,17 +1987,23 @@ export default function AdminConsole() {
     try {
       setBusy(true);
       setMessage('');
-      await withActionLoading('post-save', () => persistCurrentPost({ refresh: false }));
-      await withActionLoading(nextAction.loadingKey, () => api(nextAction.path, {
+      await withActionLoading('post-save', () => persistCurrentPost());
+      const data = await withActionLoading(nextAction.loadingKey, () => api(nextAction.path, {
         method: 'POST',
         ...(pendingActionRequestBody(nextAction)
           ? { body: JSON.stringify(pendingActionRequestBody(nextAction)) }
           : {}),
       }));
+      if (data.item) {
+        upsertPost(data.item);
+        if (data.item.id === form.id) {
+          const nextForm = postToForm(data.item);
+          setForm(nextForm);
+          setSavedForm(nextForm);
+        }
+      }
       setPendingAction(null);
       setMessage(nextAction.success);
-      await Promise.all([loadPosts(), loadCategories()]);
-      await loadInAppNotifications({ silent: true });
     } catch (err) {
       setMessage(err.message);
     } finally {
@@ -1999,6 +2019,32 @@ export default function AdminConsole() {
     setTagDraft('');
     setCategorySearchTerm('');
     setCoverImageError('');
+  }
+
+  function upsertPost(post) {
+    if (!post?.id) return;
+    setPosts((current) => {
+      const next = current.some((item) => item.id === post.id)
+        ? current.map((item) => item.id === post.id ? { ...item, ...post } : item)
+        : [post, ...current];
+      return next.sort((left, right) => String(right.updatedAt || '').localeCompare(String(left.updatedAt || '')));
+    });
+  }
+
+  function removePostFromState(postId) {
+    setPosts((current) => current.filter((post) => post.id !== postId));
+    setSelectedAdminPostIds((current) => current.filter((id) => id !== postId));
+  }
+
+  function upsertCategory(category) {
+    const name = sanitizeCategory(category?.name || category);
+    if (!name) return;
+    setCategories((current) => {
+      const key = taxonomyKey(name);
+      if (current.some((item) => taxonomyKey(item.name) === key)) return current;
+      return [...current, { ...category, name }]
+        .sort((left, right) => left.name.localeCompare(right.name, 'es'));
+    });
   }
 
   function toggleAdminPostSelection(id) {
@@ -2050,10 +2096,16 @@ export default function AdminConsole() {
     try {
       setBusy(true);
       setMessage('');
-      await withActionLoading(`batch:${kind}`, async () => {
+      const results = await withActionLoading(`batch:${kind}`, async () => {
+        const items = [];
         for (const post of targetPosts) {
-          await config.run(post);
+          items.push({ post, data: await config.run(post) });
         }
+        return items;
+      });
+      results.forEach(({ post, data }) => {
+        if (kind === 'delete') removePostFromState(post.id);
+        else if (data?.item) upsertPost(data.item);
       });
       if (kind === 'delete' && targetPosts.some((post) => post.id === form.id)) {
         setForm(EMPTY_FORM);
@@ -2065,8 +2117,6 @@ export default function AdminConsole() {
       }
       setSelectedAdminPostIds([]);
       setMessage(config.success);
-      await loadPosts();
-      await loadInAppNotifications({ silent: true });
     } catch (err) {
       setMessage(err.message);
     } finally {
@@ -2081,6 +2131,7 @@ export default function AdminConsole() {
       setMessage('');
       await withActionLoading(`post-delete:${id}`, () => api(`/v1/posts/${id}`, { method: 'DELETE' }));
       setMessage('Post eliminado.');
+      removePostFromState(id);
       if (form.id === id) {
         setForm(EMPTY_FORM);
         setSavedForm(EMPTY_FORM);
@@ -2089,7 +2140,6 @@ export default function AdminConsole() {
         setCategorySearchTerm('');
         setCoverImageError('');
       }
-      await loadPosts();
     } catch (err) {
       setMessage(err.message);
     } finally {
@@ -2112,10 +2162,10 @@ export default function AdminConsole() {
         body: JSON.stringify({ name }),
       }));
       updateForm('category', data.item?.name || name);
+      upsertCategory(data.item || { name });
       setCategoryDropdownOpen(false);
       setCategorySearchTerm('');
       setMessage('Categoria agregada a la lista.');
-      await loadCategories();
     } catch (err) {
       setMessage(err.message);
     } finally {
@@ -2131,7 +2181,7 @@ export default function AdminConsole() {
       await withActionLoading(`category-delete:${target.id}`, () => api(`/v1/categories/${encodeURIComponent(target.id)}`, { method: 'DELETE' }));
       setMessage('Categoria eliminada de la lista.');
       setCategoryDeleteTarget(null);
-      await loadCategories();
+      setCategories((current) => current.filter((category) => category.id !== target.id));
     } catch (err) {
       setMessage(err.message);
     } finally {
@@ -2467,7 +2517,7 @@ export default function AdminConsole() {
               </button>
             </div>
             <div className="admin-inbox-actions">
-              <button className="btn btn-ghost" disabled={loadingNotifications} onClick={() => loadInAppNotifications()} type="button">
+              <button className="btn btn-ghost" disabled={loadingNotifications} onClick={() => loadInAppNotifications({ force: true, incremental: true })} type="button">
                 Actualizar
               </button>
               <button className="btn btn-ghost" disabled={loadingNotifications || unreadNotificationCount === 0} onClick={markAllNotificationsRead} type="button">
@@ -2673,7 +2723,7 @@ export default function AdminConsole() {
                       className={`admin-notification-button ${notificationsOpen ? 'active' : ''} ${unreadNotificationCount ? 'has-unread' : ''}`}
                       onClick={() => {
                         setNotificationsOpen((open) => !open);
-                        if (!notificationsOpen) loadInAppNotifications({ silent: true });
+                        if (!notificationsOpen) loadInAppNotifications({ silent: true, incremental: true });
                       }}
                       type="button"
                     >
@@ -3679,6 +3729,16 @@ export default function AdminConsole() {
                       <p>{post.excerpt || 'Sin extracto'}</p>
                     </article>
                   ))}
+                  {postsNextCursor && (
+                    <button
+                      className="btn btn-outline admin-list-load-more"
+                      disabled={busy}
+                      onClick={() => loadPosts({ append: true })}
+                      type="button"
+                    >
+                      {busy ? 'Cargando...' : 'Cargar más'}
+                    </button>
+                  )}
                   </div>
                 </aside>
 
@@ -4784,7 +4844,7 @@ export default function AdminConsole() {
                                   type="radio"
                                 />
                                 <span className="admin-review-assignee-team material-symbols-outlined" aria-hidden="true">groups</span>
-                                <span><strong>Equipo de revisión</strong><small>Todos los reviewer y admin reciben el aviso.</small></span>
+                                <span><strong>Equipo de revisión</strong><small>Todos los auditores reciben el aviso.</small></span>
                               </label>
                               {reviewAssignees.map((reviewer) => (
                                 <label className={`admin-review-assignee ${pendingAction.reviewerEmail === reviewer.email ? 'selected' : ''}`} key={reviewer.email}>
@@ -5329,6 +5389,38 @@ function normalizeProfileClaim(value = {}) {
     reviewedAt: value.reviewedAt || '',
     reviewedBy: normalizeInputValue(value.reviewedBy),
   };
+}
+
+function mergeNotifications(current = [], incoming = []) {
+  const itemsById = new Map(current.map((item) => [item.id, item]));
+  incoming.forEach((item) => itemsById.set(item.id, {
+    ...(itemsById.get(item.id) || {}),
+    ...item,
+  }));
+  return [...itemsById.values()]
+    .sort((a, b) => notificationTimestamp(b) - notificationTimestamp(a))
+    .slice(0, 100);
+}
+
+function mergePosts(current = [], incoming = []) {
+  const byId = new Map(current.map((post) => [post.id, post]));
+  incoming.forEach((post) => {
+    if (post?.id) byId.set(post.id, post);
+  });
+  return Array.from(byId.values());
+}
+
+function newestNotificationTimestamp(items = []) {
+  const newest = items.reduce((current, item) => {
+    const timestamp = notificationTimestamp(item);
+    return timestamp > current ? timestamp : current;
+  }, 0);
+  return newest ? new Date(newest).toISOString() : '';
+}
+
+function notificationTimestamp(item = {}) {
+  const timestamp = Date.parse(item.createdAt || '');
+  return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
 function normalizeNotificationPolicy(value = {}) {

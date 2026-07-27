@@ -200,6 +200,7 @@ export const openApiSpec = {
         parameters: [
           { name: 'status', in: 'query', schema: { type: 'string' } },
           { name: 'limit', in: 'query', schema: { type: 'integer', default: 30 } },
+          { name: 'cursor', in: 'query', schema: { type: 'string', format: 'date-time' } },
         ],
         responses: { 200: { description: 'Manageable posts' } },
       },
@@ -281,7 +282,10 @@ export const openApiSpec = {
       get: {
         summary: 'List in-app editorial notifications for current user',
         security: [{ googleIdToken: [] }],
-        parameters: [{ name: 'limit', in: 'query', schema: { type: 'integer', default: 50 } }],
+        parameters: [
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 50, maximum: 300 } },
+          { name: 'after', in: 'query', description: 'Only return newer notifications', schema: { type: 'string', format: 'date-time' } },
+        ],
         responses: { 200: { description: 'In-app notification inbox' } },
       },
     },
@@ -304,7 +308,17 @@ export const openApiSpec = {
       get: {
         summary: 'List sanitized API request logs (admin only)',
         security: [{ sessionCookie: [] }],
-        parameters: [{ name: 'limit', in: 'query', schema: { type: 'integer', default: 250, maximum: 500 } }],
+        parameters: [
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 50, maximum: 50 } },
+          { name: 'pageToken', in: 'query', schema: { type: 'string' } },
+          { name: 'from', in: 'query', schema: { type: 'string', format: 'date-time' } },
+          { name: 'to', in: 'query', schema: { type: 'string', format: 'date-time' } },
+          { name: 'method', in: 'query', schema: { type: 'string' } },
+          { name: 'status', in: 'query', schema: { type: 'string' } },
+          { name: 'path', in: 'query', schema: { type: 'string' } },
+          { name: 'requestId', in: 'query', schema: { type: 'string' } },
+          { name: 'text', in: 'query', schema: { type: 'string' } },
+        ],
         responses: { 200: { description: 'Recent API request logs' }, 403: { description: 'Admin role required' } },
       },
     },
@@ -312,7 +326,10 @@ export const openApiSpec = {
       get: {
         summary: 'List sanitized mail delivery logs (admin only)',
         security: [{ sessionCookie: [] }],
-        parameters: [{ name: 'limit', in: 'query', schema: { type: 'integer', default: 200, maximum: 500 } }],
+        parameters: [
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 50, maximum: 50 } },
+          { name: 'cursor', in: 'query', schema: { type: 'string', format: 'date-time' } },
+        ],
         responses: { 200: { description: 'Recent mail delivery logs' }, 403: { description: 'Admin role required' } },
       },
     },

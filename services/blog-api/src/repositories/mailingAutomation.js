@@ -13,6 +13,8 @@ const bucketsCollection = () => db().collection('mailingWeeklyBuckets');
 const campaignsCollection = () => db().collection('newsletterCampaigns');
 const postsCollection = () => db().collection('posts');
 const subscriptionsCollection = () => db().collection('newsletterSubscriptions');
+const MAILING_SETTINGS_CACHE_MS = 60 * 1000;
+let mailingSettingsCache = { expiresAt: 0, value: null };
 
 export const DEFAULT_MAILING_SETTINGS = Object.freeze({
   enabled: false,
@@ -52,8 +54,13 @@ export async function getMailingAdminOverview() {
 }
 
 export async function getMailingSettings() {
+  if (mailingSettingsCache.value && mailingSettingsCache.expiresAt > Date.now()) {
+    return mailingSettingsCache.value;
+  }
   const doc = await settingsCollection().doc(config.mailProjectKey).get();
-  return normalizeSettings(doc.exists ? serializeDoc(doc) : {});
+  const value = normalizeSettings(doc.exists ? serializeDoc(doc) : {});
+  mailingSettingsCache = { expiresAt: Date.now() + MAILING_SETTINGS_CACHE_MS, value };
+  return value;
 }
 
 export async function updateMailingSettings(body = {}, actorEmail = '') {
@@ -68,7 +75,8 @@ export async function updateMailingSettings(body = {}, actorEmail = '') {
     updatedBy: normalizeEmail(actorEmail),
     updatedAt: serverTimestamp(),
   }, { merge: true });
-  return getMailingSettings();
+  mailingSettingsCache = { expiresAt: Date.now() + MAILING_SETTINGS_CACHE_MS, value: next };
+  return next;
 }
 
 export async function queuePublishedPostMail(post, actor, { notifySubscribers = true } = {}) {
@@ -218,6 +226,7 @@ export async function dispatchMailing({ force = false, now = new Date() } = {}) 
       dispatchLeaseUntil: null,
       updatedAt: serverTimestamp(),
     }, { merge: true });
+    mailingSettingsCache = { expiresAt: 0, value: null };
   }
 }
 

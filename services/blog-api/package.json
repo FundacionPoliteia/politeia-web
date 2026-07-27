@@ -9,7 +9,8 @@
     "test": "node --test",
     "check": "node --check src/index.js",
     "mail:check": "node src/mailCheck.js",
-    "mail:test": "node src/mailTest.js"
+    "mail:test": "node src/mailTest.js",
+    "backfill:identity-keys": "node scripts/backfill-identity-keys.js"
   },
   "dependencies": {
     "@google-cloud/firestore": "^8.6.0",

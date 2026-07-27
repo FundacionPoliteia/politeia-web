@@ -1,4 +1,4 @@
-import { db, serializeDoc, serverTimestamp } from '../firestore.js';
+import { db, hasFirestoreTestOverride, serializeDoc, serverTimestamp } from '../firestore.js';
 import { config } from '../config.js';
 import { HttpError } from '../errors.js';
 import { writeAuditLog } from './audit.js';
@@ -9,17 +9,16 @@ const profiles = () => db().collection('userProfiles');
 const posts = () => db().collection('posts');
 const profileClaims = () => db().collection('profileClaims');
 const PUBLIC_AUTHOR_STATUSES = ['published', 'published-edition'];
+const DIRECTORY_CACHE_MS = 60 * 1000;
+const PUBLIC_PROFILE_CACHE_MS = 5 * 60 * 1000;
+let reviewAssigneeCache = { expiresAt: 0, value: null };
+let publicProfilesCache = { expiresAt: 0, value: null };
 
 export async function getUserProfile(user) {
   const email = normalizeEmail(user?.email);
   if (!email) throw new HttpError(401, 'Missing user email');
 
   const ref = profiles().doc(profileId(email));
-  await ref.set({
-    email,
-    accountRoles: sanitizeInternalRoles(user?.roles),
-    identityUpdatedAt: serverTimestamp(),
-  }, { merge: true });
   const doc = await ref.get();
   return toUserProfile(doc.exists ? serializeDoc(doc) : { email }, user);
 }
@@ -50,6 +49,7 @@ export async function updateUserProfile(user, data) {
     accountRoles: sanitizeInternalRoles(user?.roles),
     identityUpdatedAt: serverTimestamp(),
     fullName,
+    identityNameKey: identityNameKey(fullName),
     authorSlug: slugify(fullName),
     updatedAt: serverTimestamp(),
     updatedBy: email,
@@ -61,6 +61,7 @@ export async function updateUserProfile(user, data) {
 
   await ref.set(patch, { merge: true });
   const after = await toUserProfile(serializeDoc(await ref.get()), user);
+  invalidateProfileCaches();
   await writeAuditLog({
     actorEmail: email,
     action: before ? 'profile.update' : 'profile.create',
@@ -74,16 +75,34 @@ export async function updateUserProfile(user, data) {
 }
 
 export async function listUserProfiles() {
-  const snapshot = await profiles().get();
+  const [snapshot, postSnapshot] = await Promise.all([
+    profiles().get(),
+    hasFirestoreTestOverride()
+      ? posts().get()
+      : posts().select('authorName', 'deletedAt').get(),
+  ]);
+  const authorNameKeys = new Set(postSnapshot.docs
+    .map(serializeDoc)
+    .filter((post) => post && !post.deletedAt)
+    .map((post) => authorKey(post.authorName))
+    .filter(Boolean));
+  const profileItems = snapshot.docs.map((doc) => serializeDoc(doc));
+  const managedNameKeys = new Set(profileItems
+    .filter((item) => item?.managedAuthor === true)
+    .map((item) => item.identityNameKey || identityNameKey(item.fullName || buildFullName(item.firstName, item.lastName)))
+    .filter(Boolean));
   const items = await Promise.all(snapshot.docs
     .map((doc) => serializeDoc(doc))
-    .map((item) => toUserProfile(item, { email: item?.email })));
+    .map((item) => toUserProfile(item, { email: item?.email }, { authorNameKeys, managedNameKeys })));
   items.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
 
   return { items };
 }
 
 export async function listReviewAssignees() {
+  if (reviewAssigneeCache.value && reviewAssigneeCache.expiresAt > Date.now()) {
+    return reviewAssigneeCache.value;
+  }
   const [profileSnapshot, assignmentResult] = await Promise.all([
     profiles().get(),
     listUserRoleAssignments(),
@@ -123,11 +142,13 @@ export async function listReviewAssignees() {
     candidates.set(email, toReviewAssignee(profile, email, isAdmin ? 'admin' : 'reviewer'));
   }
 
-  return {
+  const result = {
     items: [...candidates.values()].sort((left, right) => (
       left.name.localeCompare(right.name, 'es', { sensitivity: 'base' })
     )),
   };
+  reviewAssigneeCache = { expiresAt: Date.now() + DIRECTORY_CACHE_MS, value: result };
+  return result;
 }
 
 export async function getReviewAssignee(email = '') {
@@ -159,6 +180,7 @@ export async function createManagedAuthorProfile(data, actorEmail = '') {
     publicProfileEnabled: clean.publicProfileEnabled,
     publicProfilePreferenceSet: true,
     fullName,
+    identityNameKey: identityNameKey(fullName),
     authorSlug,
     createdAt: serverTimestamp(),
     createdBy: actorEmail,
@@ -168,6 +190,7 @@ export async function createManagedAuthorProfile(data, actorEmail = '') {
 
   await ref.set(patch, { merge: false });
   const after = await toUserProfile(serializeDoc(await ref.get()), { email: '' });
+  invalidateProfileCaches();
   await writeAuditLog({
     actorEmail,
     action: 'profile.managedAuthor.create',
@@ -227,6 +250,7 @@ export async function updateAuthorProfileAsAdmin(id = '', data, actorEmail = '')
     publicProfileEnabled: clean.publicProfileEnabled,
     publicProfilePreferenceSet: true,
     fullName,
+    identityNameKey: identityNameKey(fullName),
     authorSlug,
     updatedAt: serverTimestamp(),
     updatedBy: actorEmail,
@@ -234,6 +258,7 @@ export async function updateAuthorProfileAsAdmin(id = '', data, actorEmail = '')
 
   await ref.set(patch, { merge: true });
   const after = await toUserProfile(serializeDoc(await ref.get()), { email: before.email });
+  invalidateProfileCaches();
   await writeAuditLog({
     actorEmail,
     action: isManagedAuthor ? 'profile.managedAuthor.update' : 'profile.admin.update',
@@ -265,6 +290,7 @@ export async function deleteManagedAuthorProfile(id = '', actorEmail = '') {
   }
 
   await ref.delete();
+  invalidateProfileCaches();
   await writeAuditLog({
     actorEmail,
     action: 'profile.managedAuthor.delete',
@@ -307,9 +333,14 @@ export async function getPublicAuthorProfileBySlug(slug = '') {
 
 export async function listPublicAuthorProfiles({ limit = 24 } = {}) {
   const safeLimit = Math.min(Math.max(Number(limit) || 24, 1), 100);
+  if (publicProfilesCache.value && publicProfilesCache.expiresAt > Date.now()) {
+    return { items: publicProfilesCache.value.slice(0, safeLimit) };
+  }
   const [profileSnapshot, postSnapshot] = await Promise.all([
     profiles().get(),
-    posts().orderBy('publishedAt', 'desc').limit(300).get(),
+    hasFirestoreTestOverride()
+      ? posts().orderBy('publishedAt', 'desc').limit(300).get()
+      : posts().where('status', 'in', PUBLIC_AUTHOR_STATUSES).orderBy('publishedAt', 'desc').limit(150).get(),
   ]);
   const authorStats = buildAuthorStats(postSnapshot.docs.map((doc) => serializeDoc(doc)));
   const items = profileSnapshot.docs
@@ -323,9 +354,10 @@ export async function listPublicAuthorProfiles({ limit = 24 } = {}) {
       if (dateCompare) return dateCompare;
       return a.fullName.localeCompare(b.fullName);
     })
-    .slice(0, safeLimit);
+    .slice(0, 100);
 
-  return { items };
+  publicProfilesCache = { expiresAt: Date.now() + PUBLIC_PROFILE_CACHE_MS, value: items };
+  return { items: items.slice(0, safeLimit) };
 }
 
 export async function resolveUserDisplayName(user) {
@@ -375,10 +407,20 @@ export function buildFullName(firstName = '', lastName = '') {
   return [normalizeText(firstName), normalizeText(lastName)].filter(Boolean).join(' ');
 }
 
-async function toUserProfile(item, user) {
+async function toUserProfile(item, user, context = null) {
   const clean = sanitizeProfile(item || {});
   const fullName = buildFullName(clean.firstName, clean.lastName);
-  const canSharePublicProfile = await authorNameExists(fullName) && !(item?.managedAuthor !== true && await managedProfileExistsForName(fullName));
+  const nameKey = authorKey(fullName);
+  const managedKey = identityNameKey(fullName);
+  const authorExists = context
+    ? context.authorNameKeys.has(nameKey)
+    : await authorNameExists(fullName);
+  const managedExists = item?.managedAuthor !== true && (
+    context
+      ? context.managedNameKeys.has(managedKey)
+      : await managedProfileExistsForName(fullName)
+  );
+  const canSharePublicProfile = authorExists && !managedExists;
   const publicProfileEnabled = resolvePublicProfilePreference(item, clean);
   return {
     id: item?.id || profileId(user?.email),
@@ -525,11 +567,25 @@ export function identityNameKey(fullName = '') {
 async function managedProfileExistsForName(fullName = '') {
   const key = identityNameKey(fullName);
   if (!key) return false;
-  const snapshot = await profiles().get();
-  return snapshot.docs.some((doc) => {
-    const item = serializeDoc(doc);
-    return item?.managedAuthor === true && identityNameKey(item.fullName || buildFullName(item.firstName, item.lastName)) === key;
-  });
+  if (hasFirestoreTestOverride()) {
+    const snapshot = await profiles().get();
+    return snapshot.docs.some((doc) => {
+      const item = serializeDoc(doc);
+      return item?.managedAuthor === true
+        && identityNameKey(item.identityNameKey || item.fullName || buildFullName(item.firstName, item.lastName)) === key;
+    });
+  }
+  const snapshot = await profiles()
+    .where('managedAuthor', '==', true)
+    .where('identityNameKey', '==', key)
+    .limit(1)
+    .get();
+  return !snapshot.empty;
+}
+
+export function invalidateProfileCaches() {
+  reviewAssigneeCache = { expiresAt: 0, value: null };
+  publicProfilesCache = { expiresAt: 0, value: null };
 }
 
 async function hasPendingClaimForEmail(email = '') {

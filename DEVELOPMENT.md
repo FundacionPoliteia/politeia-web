@@ -11,6 +11,7 @@ npm run dev
 npm run blog-api:dev
 npm run blog-api:test
 npm run blog-api:check
+npm run blog-api:backfill:identity-keys
 npm run blog-api:cloud:auth
 npm run blog-api:cloud:project
 npm run blog-api:cloud:quota-project
@@ -20,6 +21,7 @@ npm run blog-api:cloud:quota-project
 - `npm run blog-api:dev`: levanta el backend local en modo watch, usando `services/blog-api/.env`.
 - `npm run blog-api:test`: corre los tests del backend.
 - `npm run blog-api:check`: valida sintaxis del entrypoint del backend.
+- `npm run blog-api:backfill:identity-keys`: muestra cuántos perfiles y posts necesitan claves indexables, sin escribir cambios. Agrega `-- --apply` únicamente contra el proyecto correcto y con una copia de seguridad verificada.
 - `npm run blog-api:cloud:auth`: abre el login de Application Default Credentials para usar Firestore/Cloud Storage reales desde local.
 - `npm run blog-api:cloud:project`: configura `quick-function-500420-v6` como proyecto activo de gcloud.
 - `npm run blog-api:cloud:quota-project`: asocia tus credenciales ADC al proyecto de facturacion/cuotas usado por las APIs de Google.

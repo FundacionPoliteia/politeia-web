@@ -61,10 +61,11 @@ export const config = {
     .map((role) => role.trim())
     .filter(Boolean),
   roleCacheTtlMs: Number(process.env.ROLE_CACHE_TTL_MS || 5 * 60 * 1000),
-  apiRequestLogsEnabled: process.env.API_REQUEST_LOGS_ENABLED
-    ? process.env.API_REQUEST_LOGS_ENABLED === 'true'
-    : process.env.NODE_ENV === 'production',
+  apiRequestConsoleLogsEnabled: process.env.API_REQUEST_CONSOLE_LOGS_ENABLED !== 'false',
+  apiRequestFirestoreLogsEnabled: process.env.API_REQUEST_FIRESTORE_LOGS_ENABLED === 'true',
+  apiRequestLogsEnabled: process.env.API_REQUEST_LOGS_ENABLED === 'true',
   apiRequestLogsRetentionDays: Math.min(Math.max(Number(process.env.API_REQUEST_LOGS_RETENTION_DAYS || 14), 1), 90),
+  cloudRunServiceName: process.env.CLOUD_RUN_SERVICE_NAME || 'politeia-blog-api',
   mailingDispatchToken: process.env.MAILING_DISPATCH_TOKEN || '',
 };
 

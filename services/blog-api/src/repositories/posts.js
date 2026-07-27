@@ -1,9 +1,10 @@
-import { db, serializeDoc, serverTimestamp, Timestamp } from '../firestore.js';
+import { db, hasFirestoreTestOverride, serializeDoc, serverTimestamp, Timestamp } from '../firestore.js';
 import { HttpError } from '../errors.js';
 import { writeAuditLog } from './audit.js';
 import { createCategory } from './categories.js';
 import { buildGeneratedSlug } from '../utils/slug.js';
 import { buildExcerpt, normalizeExcerptMode } from '../utils/content.js';
+import { identityNameKey } from './profiles.js';
 
 const posts = () => db().collection('posts');
 const PUBLIC_FIELDS = [
@@ -29,9 +30,12 @@ const PUBLIC_STATUSES = ['published', 'published-edition'];
 
 export async function listPublishedPosts({ limit = 20, cursor = '' }) {
   const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
-  let query = posts()
-    .orderBy('publishedAt', 'desc')
-    .limit((safeLimit + 1) * 4);
+  let query = hasFirestoreTestOverride()
+    ? posts().orderBy('publishedAt', 'desc').limit((safeLimit + 1) * 2)
+    : posts()
+      .where('status', 'in', PUBLIC_STATUSES)
+      .orderBy('publishedAt', 'desc')
+      .limit(safeLimit + 10);
 
   if (cursor) query = query.startAfter(Timestamp.fromDate(new Date(cursor)));
 
@@ -48,14 +52,19 @@ export async function listPublishedPosts({ limit = 20, cursor = '' }) {
   return { items: docs, nextCursor };
 }
 
-export async function listManagePosts({ limit = 30, status = '', user }) {
+export async function listManagePosts({ limit = 30, status = '', cursor = '', user }) {
   const safeLimit = Math.min(Math.max(Number(limit) || 30, 1), 100);
   const managesAllPosts = canManageAllPosts(user);
-  const snapshot = await posts()
+  let query = buildManagePostsQuery({ managesAllPosts, status, user })
     .orderBy('updatedAt', 'desc')
-    .limit(safeLimit * 4)
-    .get();
-  let items = snapshot.docs.map(serializeDoc).filter((post) => !post.deletedAt);
+    .limit(hasFirestoreTestOverride() ? safeLimit * 4 : safeLimit + 1);
+  if (cursor) query = query.startAfter(Timestamp.fromDate(new Date(cursor)));
+  const snapshot = await query.get();
+  const fetchedItems = snapshot.docs.map(serializeDoc);
+  const consumedItems = hasFirestoreTestOverride()
+    ? fetchedItems
+    : fetchedItems.slice(0, safeLimit);
+  let items = consumedItems.filter((post) => !post.deletedAt);
 
   if (!managesAllPosts) {
     items = items.filter((post) => normalizeEmail(post.authorEmail) === normalizeEmail(user?.email));
@@ -69,7 +78,40 @@ export async function listManagePosts({ limit = 30, status = '', user }) {
     items = items.map(toBlogAuthorView);
   }
 
-  return { items: items.slice(0, safeLimit), nextCursor: null };
+  const page = items.slice(0, safeLimit);
+  const nextCursor = snapshot.docs.length > safeLimit
+    ? consumedItems[consumedItems.length - 1]?.updatedAt || null
+    : null;
+  return { items: page, nextCursor };
+}
+
+function buildManagePostsQuery({ managesAllPosts, status, user }) {
+  if (hasFirestoreTestOverride()) return posts();
+
+  let query = posts();
+  if (!managesAllPosts) {
+    query = query.where('authorEmail', '==', normalizeEmail(user?.email));
+    return query;
+  }
+
+  const statuses = manageQueryStatuses(status, managesAllPosts);
+  if (statuses.length === 1) return query.where('status', '==', statuses[0]);
+  if (statuses.length > 1) return query.where('status', 'in', statuses);
+  return query;
+}
+
+function manageQueryStatuses(status, managesAllPosts) {
+  if (!status) return [];
+  if (status === 'review') return ['review', 'published-edition'];
+  if (status === 'published') {
+    return managesAllPosts
+      ? ['published', 'published-edition']
+      : ['published', 'published-edition', 'archived'];
+  }
+  if (!managesAllPosts && status === 'archived') {
+    return ['published', 'published-edition', 'archived'];
+  }
+  return [status];
 }
 
 export async function getPublishedPostBySlug(slug) {
@@ -104,6 +146,7 @@ export async function createPost(data, actorEmail) {
   if (data.category) await createCategory(data.category, actorEmail);
   await ref.set({
     ...data,
+    authorIdentityNameKey: identityNameKey(data.authorName),
     status: 'draft',
     deletedAt: null,
     createdAt: serverTimestamp(),
@@ -133,6 +176,9 @@ export async function updatePost(id, data, actorUser) {
   if (data.category) await createCategory(data.category, actorUser.email);
 
   const nextData = { ...data };
+  if (nextData.authorName !== undefined) {
+    nextData.authorIdentityNameKey = identityNameKey(nextData.authorName);
+  }
   const excerptMode = normalizeExcerptMode(nextData.excerptMode ?? before.excerptMode, {
     hasExcerpt: Boolean(before.excerpt),
   });

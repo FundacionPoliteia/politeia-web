@@ -2,7 +2,11 @@ import { config } from '../config.js';
 import { recordApiRequest } from '../repositories/operations.js';
 
 export function apiRequestLogger(req, res, next) {
-  if (!config.apiRequestLogsEnabled) return next();
+  if (
+    !config.apiRequestConsoleLogsEnabled
+    && !config.apiRequestFirestoreLogsEnabled
+    && !config.apiRequestLogsEnabled
+  ) return next();
   const startedAt = process.hrtime.bigint();
   let completed = false;
 
@@ -25,18 +29,22 @@ export function apiRequestLogger(req, res, next) {
       aborted,
     };
 
-    console.info(JSON.stringify({
-      severity: status >= 500 ? 'ERROR' : status >= 400 ? 'WARNING' : 'INFO',
-      message: 'api request completed',
-      requestId: entry.requestId,
-      method: entry.method,
-      path: String(entry.path || '').split('?')[0],
-      status,
-      durationMs: Math.round(durationMs),
-      actorEmail: entry.actorEmail,
-    }));
+    if (config.apiRequestConsoleLogsEnabled) {
+      console.info(JSON.stringify({
+        severity: status >= 500 ? 'ERROR' : status >= 400 ? 'WARNING' : 'INFO',
+        message: 'api request completed',
+        requestId: entry.requestId,
+        method: entry.method,
+        path: String(entry.path || '').split('?')[0],
+        status,
+        durationMs: Math.round(durationMs),
+        actorEmail: entry.actorEmail,
+        originHost: safeOriginHost(entry.origin),
+        errorMessage: entry.errorMessage,
+      }));
+    }
 
-    recordApiRequest(entry).catch((err) => {
+    if (config.apiRequestFirestoreLogsEnabled || config.apiRequestLogsEnabled) recordApiRequest(entry).catch((err) => {
       console.error(JSON.stringify({
         severity: 'ERROR',
         message: 'api request log persistence failed',
@@ -51,4 +59,12 @@ export function apiRequestLogger(req, res, next) {
     if (!res.writableFinished) complete(true);
   });
   next();
+}
+
+function safeOriginHost(value = '') {
+  try {
+    return new URL(value).host;
+  } catch {
+    return '';
+  }
 }

@@ -16,26 +16,22 @@ export default function AdminOperationsPanel({ apiBase, currentEmail }) {
   const [view, setView] = useState('requests');
   const [requestLogs, setRequestLogs] = useState([]);
   const [mailLogs, setMailLogs] = useState([]);
-  const [retentionDays, setRetentionDays] = useState(14);
   const [query, setQuery] = useState('');
   const [method, setMethod] = useState('');
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [nextPage, setNextPage] = useState({ requests: '', mail: '' });
   const [testConfirmOpen, setTestConfirmOpen] = useState(false);
   const [testBusy, setTestBusy] = useState(false);
   const [testMessage, setTestMessage] = useState('');
 
   useEffect(() => {
-    loadLogs({ silent: false });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (!autoRefresh) return undefined;
-    const intervalId = window.setInterval(() => loadLogs({ silent: true }), 30000);
-    return () => window.clearInterval(intervalId);
-  }, [autoRefresh]); // eslint-disable-line react-hooks/exhaustive-deps
+    setRequestLogs([]);
+    setMailLogs([]);
+    setNextPage((current) => ({ ...current, [view]: '' }));
+    loadLogs({ targetView: view, reset: true });
+  }, [view]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!testConfirmOpen) return undefined;
@@ -61,17 +57,26 @@ export default function AdminOperationsPanel({ apiBase, currentEmail }) {
     ]);
   }), [mailLogs, query, status]);
 
-  async function loadLogs({ silent = false } = {}) {
+  async function loadLogs({ targetView = view, reset = true, silent = false } = {}) {
     if (!silent) setLoading(true);
     setError('');
     try {
-      const [requests, mail] = await Promise.all([
-        operationsApi('/v1/admin/logs/requests?limit=500'),
-        operationsApi('/v1/admin/logs/mail?limit=500'),
-      ]);
-      setRequestLogs(requests.items || []);
-      setMailLogs(mail.items || []);
-      setRetentionDays(requests.retentionDays || 14);
+      if (targetView === 'requests') {
+        const params = new URLSearchParams({ limit: '50' });
+        if (!reset && nextPage.requests) params.set('pageToken', nextPage.requests);
+        if (query) params.set('text', query);
+        if (method) params.set('method', method);
+        if (status) params.set('status', status);
+        const requests = await operationsApi(`/v1/admin/logs/requests?${params.toString()}`);
+        setRequestLogs((current) => reset ? requests.items || [] : [...current, ...(requests.items || [])]);
+        setNextPage((current) => ({ ...current, requests: requests.nextPageToken || '' }));
+      } else {
+        const params = new URLSearchParams({ limit: '50' });
+        if (!reset && nextPage.mail) params.set('cursor', nextPage.mail);
+        const mail = await operationsApi(`/v1/admin/logs/mail?${params.toString()}`);
+        setMailLogs((current) => reset ? mail.items || [] : [...current, ...(mail.items || [])]);
+        setNextPage((current) => ({ ...current, mail: mail.nextCursor || '' }));
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -86,8 +91,11 @@ export default function AdminOperationsPanel({ apiBase, currentEmail }) {
       const data = await operationsApi('/v1/admin/logs/resend-test', { method: 'POST' });
       setTestMessage(`Prueba aceptada por ${data.item?.provider || 'el proveedor'} con estado ${data.item?.status || 'enviado'}.`);
       setTestConfirmOpen(false);
-      setView('mail');
-      await loadLogs({ silent: true });
+      if (view === 'mail') {
+        await loadLogs({ targetView: 'mail', reset: true, silent: true });
+      } else {
+        setView('mail');
+      }
     } catch (err) {
       setTestMessage(err.message);
       setTestConfirmOpen(false);
@@ -97,7 +105,7 @@ export default function AdminOperationsPanel({ apiBase, currentEmail }) {
   }
 
   function changeView(nextView) {
-    setView(nextView);
+    if (nextView !== view) setView(nextView);
     setMethod('');
     setStatus('');
   }
@@ -127,11 +135,7 @@ export default function AdminOperationsPanel({ apiBase, currentEmail }) {
           <p>Revisa llamadas a la API y el ciclo de entrega de correos sin exponer credenciales ni contenido privado.</p>
         </div>
         <div className="admin-operations-head-actions">
-          <label className="admin-operations-auto-refresh">
-            <input checked={autoRefresh} onChange={(event) => setAutoRefresh(event.target.checked)} type="checkbox" />
-            Actualizar cada 30 s
-          </label>
-          <button className="btn btn-ghost" disabled={loading} onClick={() => loadLogs({ silent: false })} type="button">
+          <button className="btn btn-ghost" disabled={loading} onClick={() => loadLogs({ targetView: view, reset: true })} type="button">
             <span aria-hidden="true" className="material-symbols-outlined">refresh</span>
             Actualizar
           </button>
@@ -180,7 +184,7 @@ export default function AdminOperationsPanel({ apiBase, currentEmail }) {
 
         <div className="admin-operations-summary">
           <span>{visibleItems.length} registros visibles</span>
-          <small>{view === 'requests' ? `Retencion configurada: ${retentionDays} dias. Se muestran hasta 500 requests recientes.` : 'Se muestran hasta 500 entregas recientes.'}</small>
+          <small>{view === 'requests' ? 'Cloud Logging conserva el historial completo. Se cargan 50 solicitudes por pagina.' : 'Se cargan 50 entregas por pagina.'}</small>
         </div>
 
         {loading ? (
@@ -191,6 +195,13 @@ export default function AdminOperationsPanel({ apiBase, currentEmail }) {
           <RequestLogTable items={visibleRequestLogs} />
         ) : (
           <MailLogTable items={visibleMailLogs} />
+        )}
+        {!loading && nextPage[view] && (
+          <div className="admin-operations-load-more">
+            <button className="btn btn-ghost" onClick={() => loadLogs({ targetView: view, reset: false })} type="button">
+              Cargar 50 anteriores
+            </button>
+          </div>
         )}
       </div>
 

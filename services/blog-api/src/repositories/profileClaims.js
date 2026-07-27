@@ -1,8 +1,13 @@
-import { db, serializeDoc, serverTimestamp } from '../firestore.js';
+import { db, hasFirestoreTestOverride, serializeDoc, serverTimestamp } from '../firestore.js';
 import { HttpError } from '../errors.js';
 import { clearRoleCache } from '../auth.js';
 import { writeAuditLog } from './audit.js';
-import { buildFullName, identityNameKey, sanitizeProfile } from './profiles.js';
+import {
+  buildFullName,
+  identityNameKey,
+  invalidateProfileCaches,
+  sanitizeProfile,
+} from './profiles.js';
 import { grantBlogRoleForProfileClaim, normalizeEmail } from './users.js';
 import {
   notifyProfileClaimApproved,
@@ -225,6 +230,7 @@ export async function approveProfileClaim(id, adminUser) {
   }));
 
   clearRoleCache(claim.requesterEmail);
+  invalidateProfileCaches();
   const approved = await getClaim(claim.id);
   await auditClaim(actorEmail, 'profileClaim.approve', approved, claim, approved);
   await safeNotify(() => notifyProfileClaimApproved(approved, adminUser));
@@ -266,10 +272,7 @@ export async function releaseProfileClaim(id, adminUser) {
 }
 
 async function transferPostOwnership({ claim, managedProfile, actorEmail }) {
-  const snapshot = await posts().get();
-  const matching = snapshot.docs
-    .map(serializeDoc)
-    .filter((post) => post && !post.deletedAt && identityNameKey(post.authorName) === claim.identityKey);
+  const matching = await findPostsByIdentityKey(claim.identityKey);
   const claimedAt = serverTimestamp();
   for (let index = 0; index < matching.length; index += 50) {
     const chunk = matching.slice(index, index + 50);
@@ -290,7 +293,13 @@ async function transferPostOwnership({ claim, managedProfile, actorEmail }) {
 async function findManagedProfileByName(fullName = '') {
   const key = identityNameKey(fullName);
   if (!key) return null;
-  const snapshot = await profiles().get();
+  const snapshot = hasFirestoreTestOverride()
+    ? await profiles().get()
+    : await profiles()
+      .where('managedAuthor', '==', true)
+      .where('identityNameKey', '==', key)
+      .limit(1)
+      .get();
   const matches = snapshot.docs
     .map(serializeDoc)
     .filter((item) => item?.managedAuthor === true && identityNameKey(profileFullName(item)) === key);
@@ -320,11 +329,17 @@ async function listClaimsForEmail(email = '') {
 
 async function countMatchingPosts(fullName = '') {
   const key = identityNameKey(fullName);
-  const snapshot = await posts().get();
+  return (await findPostsByIdentityKey(key)).length;
+}
+
+async function findPostsByIdentityKey(key = '') {
+  if (!key) return [];
+  const snapshot = hasFirestoreTestOverride()
+    ? await posts().get()
+    : await posts().where('authorIdentityNameKey', '==', key).get();
   return snapshot.docs
     .map(serializeDoc)
-    .filter((post) => post && !post.deletedAt && identityNameKey(post.authorName) === key)
-    .length;
+    .filter((post) => post && !post.deletedAt && identityNameKey(post.authorName) === key);
 }
 
 async function toCandidate(profile) {

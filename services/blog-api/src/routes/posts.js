@@ -60,6 +60,7 @@ export function postsRouter({ writeLimiter }) {
         limit: req.query.limit,
         cursor: req.query.cursor,
       });
+      res.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=86400');
       res.json(result);
     } catch (err) {
       next(err);
@@ -71,6 +72,7 @@ export function postsRouter({ writeLimiter }) {
       const result = await listManagePosts({
         limit: req.query.limit,
         status: req.query.status || '',
+        cursor: req.query.cursor || '',
         user: req.user,
       });
       res.json(result);
@@ -125,6 +127,7 @@ export function postsRouter({ writeLimiter }) {
     try {
       const post = await getPublishedPostBySlug(req.params.slug);
       if (!post) throw new HttpError(404, 'Post not found');
+      res.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=86400');
       res.json({ item: post });
     } catch (err) {
       next(err);

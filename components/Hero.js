@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { sanitizeTags } from '../lib/taxonomy';
 
-const ENDINGS = ['tuya', 'de Fran', 'de Rosa', 'de Juana', 'de todos', 'tuya también', 'de vos'];
+const ENDINGS = ['tuya.', 'de Fran.', 'de Rosa.', 'de Juana.', "de Lourdes.", "de Sofía.", "de nosotros.", "de Denise.", "de Belen.", 'de todos.', "de Camila.", "de Paula.", "de Valentina.", "de Guadalupe.", 'tuya también.',];
 const PREFIX = 'es ';
 
 export default function Hero({ destacadas = [] }) {
@@ -67,7 +67,8 @@ export default function Hero({ destacadas = [] }) {
               <span className="caret"></span>
             </span>
           </h1>
-          <p>Politeia abre los datos, las leyes y las elecciones para participar con información accesible al ciudadano.</p>
+          <p>Politeia llega por diferentes vías a una sociedad que está interesada en la política pero no encuentra cómo vincularse con ella. Damos lugar a cientos de jóvenes que buscan desarrollarse profesionalmente sin ningún tipo de afiliación política.</p>
+
           <div className="btn-row">
             <Link href="/proyectos" className="btn btn-primary">Explorá Politeia →</Link>
             <Link href="/blog" className="btn btn-ghost">Leer el Blog</Link>

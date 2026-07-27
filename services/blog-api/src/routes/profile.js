@@ -29,6 +29,7 @@ export function profileRouter({ writeLimiter }) {
   router.get('/public', async (req, res, next) => {
     try {
       const result = await listPublicAuthorProfiles({ limit: req.query.limit });
+      res.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=86400');
       res.json(result);
     } catch (err) {
       next(err);
@@ -39,6 +40,7 @@ export function profileRouter({ writeLimiter }) {
     try {
       const item = await getPublicAuthorProfileBySlug(req.params.slug);
       if (!item) throw new HttpError(404, 'Author profile not found');
+      res.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=86400');
       res.json({ item });
     } catch (err) {
       next(err);

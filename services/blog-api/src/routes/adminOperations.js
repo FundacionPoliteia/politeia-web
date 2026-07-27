@@ -12,7 +12,17 @@ export function adminOperationsRouter({ writeLimiter }) {
 
   router.get('/logs/requests', async (req, res, next) => {
     try {
-      res.json(await listApiRequestLogs({ limit: req.query.limit }));
+      res.json(await listApiRequestLogs({
+        limit: req.query.limit,
+        pageToken: req.query.pageToken,
+        from: req.query.from,
+        to: req.query.to,
+        method: req.query.method,
+        status: req.query.status,
+        path: req.query.path,
+        requestId: req.query.requestId,
+        text: req.query.text,
+      }));
     } catch (err) {
       next(err);
     }
@@ -20,7 +30,10 @@ export function adminOperationsRouter({ writeLimiter }) {
 
   router.get('/logs/mail', async (req, res, next) => {
     try {
-      res.json(await listMailOperationLogs({ limit: req.query.limit }));
+      res.json(await listMailOperationLogs({
+        limit: req.query.limit,
+        cursor: req.query.cursor,
+      }));
     } catch (err) {
       next(err);
     }

@@ -4,15 +4,22 @@ import { writeAuditLog } from './audit.js';
 import { sanitizeCategory, taxonomyId, taxonomyKey } from '../utils/taxonomy.js';
 
 const categories = () => db().collection('categories');
+const CATEGORY_CACHE_MS = 60 * 1000;
+let categoryCache = { expiresAt: 0, value: null };
 
 export async function listCategories() {
+  if (categoryCache.value && categoryCache.expiresAt > Date.now()) {
+    return categoryCache.value;
+  }
   const snapshot = await categories().orderBy('name', 'asc').get();
   const items = snapshot.docs
     .map(serializeDoc)
     .filter((category) => category && !category.deletedAt)
     .sort((a, b) => a.name.localeCompare(b.name, 'es'));
 
-  return { items };
+  const result = { items };
+  categoryCache = { expiresAt: Date.now() + CATEGORY_CACHE_MS, value: result };
+  return result;
 }
 
 export async function createCategory(name, actorEmail) {
@@ -36,6 +43,7 @@ export async function createCategory(name, actorEmail) {
 
   await ref.set(patch, { merge: true });
   const after = serializeDoc(await ref.get());
+  categoryCache = { expiresAt: 0, value: null };
 
   await writeAuditLog({
     actorEmail,
@@ -63,6 +71,7 @@ export async function deleteCategory(id, actorEmail) {
   });
 
   const after = serializeDoc(await ref.get());
+  categoryCache = { expiresAt: 0, value: null };
   await writeAuditLog({
     actorEmail,
     action: 'category.delete',
