@@ -11,6 +11,7 @@ const DEFAULT_PROFILE_PHOTO = '/default_profile.png';
 export default function BlogIndex({ posts = [], autorFiltro = '', categoriaFiltro = '', newsletterStatus = '', newsletterEmail = '', newsletterToken = '', authorProfile = null, authors = [], preview = false }) {
   const [query, setQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('');
+  const [dateOrder, setDateOrder] = useState('neutral');
   const filtrandoAutor = Boolean(autorFiltro && authorProfile);
   const filtrandoCategoria = Boolean(categoriaFiltro);
   const authorName = authorProfile?.fullName || '';
@@ -32,8 +33,8 @@ export default function BlogIndex({ posts = [], autorFiltro = '', categoriaFiltr
     [postsPorAutor, query]
   );
   const secciones = useMemo(
-    () => agruparPorCategoria(postsFiltrados),
-    [postsFiltrados]
+    () => agruparPorCategoria(postsFiltrados, dateOrder),
+    [postsFiltrados, dateOrder]
   );
   const hasFilters = filtrandoAutor || filtrandoCategoria || Boolean(query.trim());
 
@@ -108,6 +109,26 @@ export default function BlogIndex({ posts = [], autorFiltro = '', categoriaFiltr
                   <span aria-hidden="true" className="material-symbols-outlined">close</span>
                 </button>
               )}
+            </div>
+            <div className="blog-date-filter" aria-label="Ordenar notas por fecha" role="group">
+              <span>Orden por fecha</span>
+              <div>
+                {[
+                  ['neutral', 'Orden actual'],
+                  ['newest', 'Más nuevos'],
+                  ['oldest', 'Más viejos'],
+                ].map(([value, label]) => (
+                  <button
+                    aria-pressed={dateOrder === value}
+                    className={dateOrder === value ? 'is-active' : ''}
+                    key={value}
+                    onClick={() => setDateOrder(value)}
+                    type="button"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
             <p>
               {postsFiltrados.length} {postsFiltrados.length === 1 ? 'nota visible' : 'notas visibles'}
@@ -245,7 +266,7 @@ function searchablePostText(post) {
   ].filter(Boolean).join(' '));
 }
 
-function agruparPorCategoria(posts) {
+function agruparPorCategoria(posts, dateOrder = 'neutral') {
   const grupos = new Map();
 
   posts.forEach((post) => {
@@ -254,17 +275,27 @@ function agruparPorCategoria(posts) {
     grupos.get(categoria).push(post);
   });
 
+  const direction = dateOrder === 'oldest' ? 1 : -1;
+
   return Array.from(grupos, ([categoria, items]) => {
-    const sortedPosts = [...items].sort((a, b) => postTimestamp(b) - postTimestamp(a));
+    const sortedPosts = [...items].sort((a, b) => (
+      direction * (postTimestamp(a) - postTimestamp(b))
+    ));
     return {
       categoria,
       posts: sortedPosts,
-      latestTimestamp: postTimestamp(sortedPosts[0]),
+      referenceTimestamp: postTimestamp(sortedPosts[0]),
     };
   })
-    .sort((a, b) => b.latestTimestamp - a.latestTimestamp
-      || a.categoria.localeCompare(b.categoria, 'es'))
-    .map(({ latestTimestamp, ...group }) => group);
+    .sort((a, b) => {
+      if (dateOrder === 'neutral') {
+        return b.referenceTimestamp - a.referenceTimestamp
+          || a.categoria.localeCompare(b.categoria, 'es');
+      }
+      return direction * (a.referenceTimestamp - b.referenceTimestamp)
+        || a.categoria.localeCompare(b.categoria, 'es');
+    })
+    .map(({ referenceTimestamp, ...group }) => group);
 }
 
 function postTimestamp(post = {}) {

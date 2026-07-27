@@ -150,8 +150,8 @@ export default function NewsletterForm({ initialStatus = '', initialEmail = '', 
       )}
 
       {subscribeModalOpen && (
-        <NewsletterModal eyebrow="Preferencias" title="Que queres recibir" onClose={closeAllModals}>
-          <p>Ambas opciones estan activadas. Podes cambiarlas antes de solicitar la confirmacion.</p>
+        <NewsletterModal eyebrow="Preferencias" title="Qué querés recibir" onClose={closeAllModals}>
+          <p>Selecciona de la siguiente lista:</p>
           <TopicChoices topics={topics} setTopics={setTopics} />
           {!topics.newsletter && !topics.newPosts && <p className="newsletter-preferences-warning">Elegi al menos una opcion para continuar.</p>}
           <div className="newsletter-preferences-actions">

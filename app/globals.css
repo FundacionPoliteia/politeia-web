@@ -210,7 +210,7 @@ a {
     left: 10px;
     z-index: 80;
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 1px;
     min-height: 62px;
     padding: 6px;
@@ -868,6 +868,60 @@ a {
 .blog-search-box button:hover {
   background: rgba(19, 122, 159, .12);
   color: var(--azul)
+}
+
+.blog-date-filter {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin-top: 16px
+}
+
+.blog-date-filter > span {
+  color: var(--gris);
+  font-size: .78rem;
+  font-weight: 700
+}
+
+.blog-date-filter > div {
+  display: inline-grid;
+  grid-template-columns: repeat(3, minmax(0, auto));
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--linea);
+  border-radius: 8px;
+  background: rgba(26, 26, 55, .035)
+}
+
+.blog-date-filter button {
+  min-height: 36px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--gris);
+  cursor: pointer;
+  font-family: var(--texto);
+  font-size: .78rem;
+  font-weight: 700;
+  padding: 7px 12px;
+  transition: background .18s ease, color .18s ease, box-shadow .18s ease
+}
+
+.blog-date-filter button:hover {
+  color: var(--tinta);
+  background: rgba(255, 255, 255, .72)
+}
+
+.blog-date-filter button.is-active {
+  background: var(--blanco);
+  color: var(--azul);
+  box-shadow: 0 2px 8px rgba(26, 26, 55, .1)
+}
+
+.blog-date-filter button:focus-visible {
+  outline: 2px solid var(--azul);
+  outline-offset: 2px
 }
 
 .blog-index-layout {
@@ -3169,13 +3223,15 @@ a {
   }
 
   .thanks-hero__figure {
+    display: grid;
     width: 100%;
-    justify-content: flex-start;
-    gap: 16px
+    grid-template-columns: minmax(82px, 104px) minmax(0, 210px);
+    justify-content: center;
+    gap: 14px
   }
 
   .thanks-hero__figure img {
-    width: min(58vw, 230px);
+    width: 100%;
     height: auto
   }
 
@@ -9920,12 +9976,19 @@ a {
 
 @media(max-width:760px) {
   .project-modal {
-    max-height: none;
+    width: 100%;
+    max-height: calc(100dvh - 24px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
     padding: 34px 24px 30px;
+    scrollbar-gutter: auto
   }
 
   .project-modal-overlay {
     align-items: end;
+    overflow: hidden;
     padding: 12px;
   }
 
@@ -9940,6 +10003,23 @@ a {
     grid-template-columns: 1fr;
   }
 
+}
+
+@media(max-width:560px) {
+  .blog-date-filter {
+    display: grid;
+    align-items: stretch
+  }
+
+  .blog-date-filter > div {
+    width: 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr))
+  }
+
+  .blog-date-filter button {
+    min-width: 0;
+    padding-inline: 7px
+  }
 }
 
 @media(max-width:560px) {
