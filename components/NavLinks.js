@@ -67,11 +67,11 @@ export default function NavLinks({ latestPostAt = '', mobile = false }) {
   if (mobile) {
     return (
       <div className="mobile-public-tabs" aria-label="Navegación principal">
+        <MobileLink href="/" icon="home" label="Inicio" />
         <MobileLink href="/origen" icon="history_edu" label="Origen" />
         <MobileLink href="/proyectos" icon="workspaces" label="Proyectos" />
         <BlogNavLink compact latestPostAt={latestPostAt} />
         <MobileLink href="/equipo" icon="groups" label="Equipo" />
-        <MobileLink href="/agradecimientos" icon="favorite" label="Legado" />
       </div>
     );
   }

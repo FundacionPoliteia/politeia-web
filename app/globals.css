@@ -229,11 +229,25 @@ a {
     box-shadow: 0 16px 40px rgba(26, 26, 55, .2);
     -webkit-backdrop-filter: blur(16px);
     backdrop-filter: blur(16px);
+    isolation: isolate;
     transform: translateZ(0)
+  }
+
+  .mobile-public-tabs::after {
+    position: absolute;
+    top: 100%;
+    right: -10px;
+    left: -10px;
+    z-index: 0;
+    height: max(10px, env(safe-area-inset-bottom, 0px));
+    background: transparent;
+    content: "";
+    pointer-events: auto
   }
 
   .mobile-public-tab {
     position: relative;
+    z-index: 1;
     display: grid;
     min-width: 0;
     min-height: 48px;
@@ -1985,6 +1999,34 @@ a {
 }
 
 @media(max-width:860px) {
+  .hero {
+    padding: 36px 0 98px
+  }
+
+  .hero-grid {
+    gap: 0
+  }
+
+  .hero .eyebrow {
+    margin-bottom: 18px
+  }
+
+  .hero h1 {
+    margin-bottom: 22px
+  }
+
+  .hero p {
+    margin-bottom: 28px
+  }
+
+  .hero .btn-row {
+    gap: 12px
+  }
+
+  .hero .btn-row .btn {
+    justify-content: center
+  }
+
   .hero-grid {
     grid-template-columns: 1fr
   }
@@ -3177,6 +3219,10 @@ a {
   background: var(--hueso)
 }
 
+.origin-mobile-legacy {
+  display: none
+}
+
 .thanks-hero {
   overflow: hidden;
   border-bottom: 1px solid rgba(255, 255, 255, .12);
@@ -3341,6 +3387,14 @@ a {
 
   .origin-values .value p {
     margin-top: 22px
+  }
+
+  .origin-mobile-legacy {
+    display: block
+  }
+
+  .origin-mobile-legacy .thanks-hero {
+    border-top: 1px solid rgba(255, 255, 255, .12)
   }
 
   .thanks-hero__inner {
