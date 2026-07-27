@@ -413,8 +413,8 @@ export default function MailingAdminPanel({ apiBase, currentEmail }) {
       </section>
 
       {preview && (
-        <div className="admin-modal-backdrop admin-newsletter-preview-backdrop" onMouseDown={() => setPreview(null)} role="presentation">
-          <div aria-modal="true" className="admin-modal admin-newsletter-preview-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog">
+        <div className="admin-modal-backdrop admin-newsletter-preview-backdrop admin-mailing-preview-backdrop" onMouseDown={() => setPreview(null)} role="presentation">
+          <div aria-modal="true" className="admin-modal admin-newsletter-preview-modal admin-mailing-preview-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog">
             <header className="admin-newsletter-preview-head"><div><span>Vista previa</span><h2>{preview.subject}</h2><p>{preview.previewText}</p></div><button aria-label="Cerrar" className="admin-icon-button" onClick={() => setPreview(null)} type="button"><span className="material-symbols-outlined">close</span></button></header>
             <div className="admin-newsletter-preview-stage"><iframe srcDoc={preview.html} title="Vista previa del mailing" /></div>
             <div className="admin-modal-actions admin-newsletter-preview-actions"><button className="btn btn-primary" onClick={() => setPreview(null)} type="button">Cerrar</button></div>

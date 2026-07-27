@@ -10,7 +10,10 @@ export default function Footer() {
       <div className="wrap">
         <div className="foot-grid">
           <div>
-            <div className="logo"><span className="dot"></span>Politeia</div>
+            <Link aria-label="Ir al inicio de Politeia" className="logo" href="/">
+              <span className="dot"></span>
+              Politeia
+            </Link>
             <p>Jóvenes que buscamos fortalecer el nexo que une al ciudadano con la política, de forma innovadora y profesional.</p>
           </div>
           <div className="foot-col">
