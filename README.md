@@ -2,7 +2,7 @@
 
 Sitio institucional y plataforma de contenidos de Fundacion Politeia, construido con Next.js. La aplicacion presenta la identidad de la fundacion, sus proyectos, su equipo y un blog conectado a una API propia preparada para Google Cloud Run.
 
-Politeia busca acercar la ciudadania a la politica mediante informacion clara, datos abiertos, herramientas digitales y contenidos de analisis. Este sitio funciona como puerta de entrada al ecosistema: muestra el proyecto Promesas, anticipa Quorum, publica notas del Observatorio y organiza la informacion institucional de la fundacion.
+Politeia busca acercar la ciudadania a la politica mediante informacion clara, datos abiertos, herramientas digitales y contenidos de analisis. Este sitio funciona como puerta de entrada al ecosistema: muestra el proyecto Promesas, anticipa Quórum, publica notas del Observatorio y organiza la informacion institucional de la fundacion.
 
 ## Que incluye
 
@@ -74,7 +74,7 @@ CHEAT-SHEET.md           Referencia rapida de comandos y patrones de Next.js
 
 - `/`: home principal de Politeia.
 - `/origen`: historia, proposito y valores de la fundacion.
-- `/proyectos`: listado de iniciativas como Promesas, Quorum, Observatorio de Innovacion y Revista IDEAR.
+- `/proyectos`: listado de iniciativas como Promesas, Quórum, Observatorio de Innovacion y Revista IDEAR.
 - `/equipo`: miembros y areas del equipo.
 - `/blog`: listado de notas publicadas desde la API propia.
 - `/blog/[slug]`: pagina individual de una nota.
