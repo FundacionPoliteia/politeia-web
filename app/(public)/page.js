@@ -1,6 +1,7 @@
 ﻿import Link from 'next/link';
 import Hero from '../../components/Hero';
 import NewsletterForm from '../../components/NewsletterForm';
+import ProceduralNewsletterBackdrop from '../../components/ProceduralNewsletterBackdrop';
 import ProjectCard from '../../components/ProjectCard';
 import { getPosts, formatearFecha, etiquetasPost, hrefAutorBlog } from '../../lib/blogApi';
 import { PUBLIC_PROJECTS } from '../../lib/publicProjects';
@@ -382,6 +383,7 @@ export default async function Home() {
       <section className="sec news" id="news">
         <div className="wrap">
           <div className="news-box">
+            <ProceduralNewsletterBackdrop />
             <h2>Recibí lo que importa, sin ruido.</h2>
             <p>Cada tanto, un mail con nuestras notas, novedades y lecturas sobre política y participación. Sin spam.</p>
             <NewsletterForm />

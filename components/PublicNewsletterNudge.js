@@ -5,7 +5,6 @@ import { usePathname } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
 const SESSION_KEY = 'politeia:newsletter-nudge-dismissed';
-const MOBILE_QUERY = '(max-width: 860px)';
 
 export default function PublicNewsletterNudge() {
   const pathname = usePathname();
@@ -13,7 +12,6 @@ export default function PublicNewsletterNudge() {
 
   useEffect(() => {
     setVisible(false);
-    if (!window.matchMedia(MOBILE_QUERY).matches) return undefined;
     if (window.sessionStorage.getItem(SESSION_KEY) === 'true') return undefined;
     if (window.location.hash === '#news') return undefined;
 

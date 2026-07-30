@@ -19,6 +19,11 @@ export default function ApplicationsAdminPanel({ apiBase }) {
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  const [cvPreview, setCvPreview] = useState(null);
+
+  useEffect(() => () => {
+    if (cvPreview?.url) URL.revokeObjectURL(cvPreview.url);
+  }, [cvPreview]);
 
   useEffect(() => {
     load({ reset: true });
@@ -135,6 +140,44 @@ export default function ApplicationsAdminPanel({ apiBase }) {
     }
   }
 
+  async function fetchCv({ preview = false } = {}) {
+    if (!selected) return;
+    setBusy(`${preview ? 'preview' : 'download'}:${selected.id}`);
+    setError('');
+    try {
+      const response = await fetch(`${apiBase}/v1/applications/manage/${selected.id}/cv`, {
+        credentials: 'include',
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data?.error?.message || 'No pudimos abrir el CV');
+      }
+      const blob = await response.blob();
+      const fileName = selected.cv?.originalName || `cv-${selected.fullName || selected.id}`;
+      const url = URL.createObjectURL(blob);
+      if (preview && blob.type === 'application/pdf') {
+        setCvPreview({ url, fileName });
+        return;
+      }
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (cvError) {
+      setError(cvError.message);
+    } finally {
+      setBusy('');
+    }
+  }
+
+  function closeDetail() {
+    setCvPreview(null);
+    setSelected(null);
+  }
+
   return (
     <section className="admin-manager applications-admin">
       <div className="admin-manager-head">
@@ -175,12 +218,32 @@ export default function ApplicationsAdminPanel({ apiBase }) {
 
       <div className="applications-list">
         {visibleItems.map((item) => (
-          <button className="application-row" key={item.id} onClick={() => openApplication(item.id)} type="button">
-            <span>
+          <button
+            aria-busy={busy === `detail:${item.id}`}
+            className="application-row"
+            disabled={busy === `detail:${item.id}`}
+            key={item.id}
+            onClick={() => openApplication(item.id)}
+            type="button"
+          >
+            <span className="application-row-person">
               <strong>{item.fullName}</strong>
-              <small>{item.area} · {formatDate(item.createdAt)}</small>
+              <small>{item.email}</small>
             </span>
-            <span className={`application-status status-${item.status}`}>{statusLabel(item.status)}</span>
+            <span className="application-row-summary">
+              <strong>{item.area}</strong>
+              <small>{truncate(item.message, 90) || 'Sin presentación'}</small>
+            </span>
+            <span className="application-row-file">
+              <strong>{formatDate(item.createdAt)}</strong>
+              <small>{item.cv?.originalName || 'CV adjunto'}</small>
+            </span>
+            <span className="application-row-state">
+              <span className={`application-status status-${item.status}`}>{statusLabel(item.status)}</span>
+              <span aria-hidden="true" className="material-symbols-outlined">
+                {busy === `detail:${item.id}` ? 'progress_activity' : 'chevron_right'}
+              </span>
+            </span>
           </button>
         ))}
       </div>
@@ -192,23 +255,54 @@ export default function ApplicationsAdminPanel({ apiBase }) {
       )}
 
       {selected && (
-        <div className="admin-modal-backdrop" onMouseDown={() => !busy && setSelected(null)} role="presentation">
+        <div className="admin-modal-backdrop" onMouseDown={() => !busy && closeDetail()} role="presentation">
           <section aria-modal="true" className="admin-modal application-detail-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog">
-            <button aria-label="Cerrar" className="application-close" onClick={() => setSelected(null)} type="button">
+            <button aria-label="Cerrar" className="application-close" onClick={closeDetail} type="button">
               <span aria-hidden="true" className="material-symbols-outlined">close</span>
             </button>
-            <span className="application-detail-eyebrow">Postulacion</span>
+            <span className="application-detail-eyebrow">Postulación</span>
             <h2>{selected.fullName}</h2>
             <dl className="application-detail-data">
-              <div><dt>Email</dt><dd><a href={`mailto:${selected.email}`}>{selected.email}</a></dd></div>
-              <div><dt>Area</dt><dd>{selected.area}</dd></div>
-              {selected.phone && <div><dt>Telefono</dt><dd>{selected.phone}</dd></div>}
-              {selected.linkedinUrl && <div><dt>LinkedIn</dt><dd><a href={selected.linkedinUrl} rel="noopener noreferrer" target="_blank">Abrir perfil</a></dd></div>}
+              <div>
+                <dt>Email</dt>
+                <dd><ContactLink href={`mailto:${selected.email}`} icon="mail">{selected.email}</ContactLink></dd>
+              </div>
+              <div><dt>Área</dt><dd>{selected.area}</dd></div>
+              {selected.phone && (
+                <div>
+                  <dt>Teléfono</dt>
+                  <dd><ContactLink href={`tel:${selected.phone}`} icon="call">{selected.phone}</ContactLink></dd>
+                </div>
+              )}
+              {selected.linkedinUrl && (
+                <div>
+                  <dt>LinkedIn</dt>
+                  <dd><ContactLink external href={selected.linkedinUrl} icon="open_in_new">Ver perfil</ContactLink></dd>
+                </div>
+              )}
             </dl>
             <div className="application-message">
-              <strong>Presentacion</strong>
+              <strong>Presentación</strong>
               <p>{selected.message}</p>
             </div>
+            <div className="application-cv-summary">
+              <span aria-hidden="true" className="material-symbols-outlined">description</span>
+              <span>
+                <strong>{selected.cv?.originalName || 'Currículum adjunto'}</strong>
+                <small>{formatFileMeta(selected.cv)}</small>
+              </span>
+            </div>
+            {cvPreview && (
+              <section className="application-cv-preview">
+                <div>
+                  <strong>Vista previa del CV</strong>
+                  <button aria-label="Cerrar vista previa" onClick={() => setCvPreview(null)} type="button">
+                    <span aria-hidden="true" className="material-symbols-outlined">close</span>
+                  </button>
+                </div>
+                <iframe src={cvPreview.url} title={`CV de ${selected.fullName}`} />
+              </section>
+            )}
             <label>
               Estado
               <select disabled={Boolean(busy)} onChange={(event) => updateSelected({ status: event.target.value })} value={selected.status}>
@@ -228,10 +322,16 @@ export default function ApplicationsAdminPanel({ apiBase }) {
               />
             </label>
             <div className="admin-modal-actions application-actions">
-              <a className="btn btn-primary" href={`${apiBase}/v1/applications/manage/${selected.id}/cv`} rel="noopener">
+              {selected.cv?.contentType === 'application/pdf' && (
+                <button className="btn btn-ghost" disabled={Boolean(busy)} onClick={() => fetchCv({ preview: true })} type="button">
+                  <span aria-hidden="true" className="material-symbols-outlined">visibility</span>
+                  {busy.startsWith('preview:') ? 'Abriendo...' : 'Ver CV'}
+                </button>
+              )}
+              <button className="btn btn-primary" disabled={Boolean(busy)} onClick={() => fetchCv()} type="button">
                 <span aria-hidden="true" className="material-symbols-outlined">download</span>
-                Descargar CV
-              </a>
+                {busy.startsWith('download:') ? 'Descargando...' : 'Descargar CV'}
+              </button>
               {selected.notificationStatus === 'failed' && (
                 <button className="btn btn-ghost" disabled={Boolean(busy)} onClick={retryNotification} type="button">
                   {busy.startsWith('notify:') ? 'Reintentando...' : 'Reintentar aviso'}
@@ -255,4 +355,29 @@ function formatDate(value) {
 
 function statusLabel(value) {
   return STATUSES.find((option) => option.value === value)?.label || value;
+}
+
+function ContactLink({ children, external = false, href, icon }) {
+  return (
+    <a
+      className="application-contact-link"
+      href={href}
+      {...(external ? { rel: 'noopener noreferrer', target: '_blank' } : {})}
+    >
+      <span aria-hidden="true" className="material-symbols-outlined">{icon}</span>
+      {children}
+    </a>
+  );
+}
+
+function truncate(value, maxLength) {
+  const text = String(value || '').trim();
+  return text.length > maxLength ? `${text.slice(0, maxLength).trimEnd()}...` : text;
+}
+
+function formatFileMeta(cv) {
+  if (!cv) return 'Archivo privado';
+  const type = cv.contentType === 'application/pdf' ? 'PDF' : 'DOCX';
+  const size = cv.size ? `${(cv.size / (1024 * 1024)).toFixed(1)} MB` : '';
+  return [type, size].filter(Boolean).join(' · ');
 }
