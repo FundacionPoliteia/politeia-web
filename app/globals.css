@@ -10407,7 +10407,7 @@ a {
   }
 
   .public-newsletter-nudge-icon {
-    display: grid;
+    display: grid !important;
     place-items: center;
     width: 38px;
     height: 38px;
