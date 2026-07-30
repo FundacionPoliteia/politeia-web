@@ -12,11 +12,6 @@ const direccion = [
     foto: '/equipo/fran.png',
   },
   {
-    nombre: 'Sofía Mejide',
-    role: 'Co-fundadora',
-    foto: '/equipo/sofia.png',
-  },
-  {
     nombre: 'Juana de Urquiza',
     role: 'Secretaria General',
     foto: '/equipo/juana.png',
