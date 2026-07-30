@@ -28,7 +28,11 @@ export default function Footer() {
             <Link href="/equipo">Equipo</Link>
             <Link href="/proyectos">Proyectos</Link>
             <Link href="/agradecimientos">Legado</Link>
-            <Link href="/sumate">Sumate</Link>
+            <Link className="footer-sumate" href="/sumate">
+              <span aria-hidden="true" className="footer-sumate-dot" />
+              <span>Sumate</span>
+              <span aria-hidden="true" className="material-symbols-outlined">arrow_forward</span>
+            </Link>
           </div>
           <div className="foot-col">
             <h5>Seguinos</h5>

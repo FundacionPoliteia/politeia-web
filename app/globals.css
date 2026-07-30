@@ -549,6 +549,68 @@ a {
   color: var(--azul)
 }
 
+.foot-col a.footer-sumate {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  min-height: 38px;
+  margin-top: 3px;
+  padding: 7px 12px;
+  overflow: hidden;
+  border: 1px solid rgba(20, 135, 171, .22);
+  border-radius: 6px;
+  background: rgba(20, 135, 171, .055);
+  color: var(--tinta);
+  font-weight: 700;
+  isolation: isolate;
+  transition: color .2s ease, border-color .2s ease, background .2s ease, transform .2s ease;
+}
+
+.footer-sumate::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: -1;
+  width: 3px;
+  background: var(--azul);
+  content: "";
+  transition: width .24s ease;
+}
+
+.footer-sumate-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--azul);
+  box-shadow: 0 0 0 4px rgba(20, 135, 171, .1);
+}
+
+.footer-sumate .material-symbols-outlined {
+  font-size: 17px;
+  transition: transform .2s ease;
+}
+
+.foot-col a.footer-sumate:hover,
+.foot-col a.footer-sumate:focus-visible {
+  border-color: rgba(20, 135, 171, .42);
+  background: rgba(20, 135, 171, .1);
+  color: var(--tinta);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.footer-sumate:hover::before,
+.footer-sumate:focus-visible::before {
+  width: 6px;
+}
+
+.footer-sumate:hover .material-symbols-outlined,
+.footer-sumate:focus-visible .material-symbols-outlined {
+  transform: translateX(3px);
+}
+
 .foot-bottom {
   border-top: 1px solid var(--linea);
   padding-top: 28px;
@@ -558,6 +620,14 @@ a {
   color: var(--gris);
   flex-wrap: wrap;
   gap: 10px
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .foot-col a.footer-sumate,
+  .footer-sumate::before,
+  .footer-sumate .material-symbols-outlined {
+    transition: none;
+  }
 }
 
 @media(max-width:860px) {
@@ -10203,6 +10273,104 @@ a {
   font-size: 18px;
 }
 
+.project-newsletter-nudge {
+  display: none;
+}
+
+@media(max-width:860px) {
+  .project-newsletter-nudge {
+    position: fixed;
+    right: 16px;
+    bottom: calc(102px + env(safe-area-inset-bottom, 0px));
+    left: 16px;
+    z-index: 78;
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 11px;
+    width: min(440px, calc(100vw - 32px));
+    min-height: 84px;
+    margin: 0 auto;
+    padding: 13px 42px 13px 13px;
+    border: 1px solid rgba(20, 135, 171, .3);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, .97);
+    box-shadow: 0 16px 42px rgba(26, 26, 55, .18);
+    backdrop-filter: blur(12px);
+    animation: project-nudge-in .24s ease-out;
+  }
+
+  .project-newsletter-nudge-icon {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: #e6f4f8;
+    color: var(--azul);
+    font-size: 20px;
+  }
+
+  .project-newsletter-nudge strong {
+    display: block;
+    color: var(--tinta);
+    font-family: var(--display);
+    font-size: .98rem;
+    line-height: 1.2;
+  }
+
+  .project-newsletter-nudge p {
+    margin: 3px 0 0;
+    color: var(--gris);
+    font-size: .72rem;
+    line-height: 1.35;
+  }
+
+  .project-newsletter-nudge-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--azul);
+    font-size: .75rem;
+    font-weight: 800;
+    white-space: nowrap;
+  }
+
+  .project-newsletter-nudge-link .material-symbols-outlined {
+    font-size: 16px;
+  }
+
+  .project-newsletter-nudge-close {
+    position: absolute;
+    top: 7px;
+    right: 7px;
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--gris);
+    cursor: pointer;
+  }
+
+  .project-newsletter-nudge-close .material-symbols-outlined {
+    font-size: 18px;
+  }
+}
+
+@keyframes project-nudge-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @media(max-width:1180px) {
   .project-cards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -10270,6 +10438,22 @@ a {
 }
 
 @media(max-width:560px) {
+  .project-newsletter-nudge {
+    grid-template-columns: 34px minmax(0, 1fr);
+    padding-right: 38px;
+  }
+
+  .project-newsletter-nudge-icon {
+    width: 34px;
+    height: 34px;
+  }
+
+  .project-newsletter-nudge-link {
+    grid-column: 2;
+    justify-self: start;
+    margin-top: 2px;
+  }
+
   .project-cards {
     grid-template-columns: 1fr;
   }
@@ -10281,6 +10465,12 @@ a {
   .project-modal-cta {
     width: 100%;
     justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .project-newsletter-nudge {
+    animation: none;
   }
 }
 
