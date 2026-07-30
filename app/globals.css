@@ -10713,6 +10713,10 @@ a {
   gap: clamp(40px, 7vw, 100px);
 }
 
+.join-form-layout > * {
+  min-width: 0;
+}
+
 .join-form-layout h2 {
   margin: 12px 0;
   font-family: var(--display);
@@ -10722,6 +10726,8 @@ a {
 .application-form {
   display: grid;
   gap: 22px;
+  width: 100%;
+  min-width: 0;
   padding: clamp(24px, 4vw, 44px);
   border: 1px solid var(--linea);
   background: white;
@@ -10789,6 +10795,13 @@ a {
   pointer-events: none;
 }
 
+.application-form .cf-turnstile {
+  width: 100%;
+  max-width: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .application-form-error,
 .admin-inline-error {
   padding: 12px 14px;
@@ -10817,8 +10830,49 @@ a {
   margin: 24px 0;
 }
 
+.applications-toolbar .admin-filter-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.applications-toolbar .admin-filter-tags button {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--linea);
+  border-radius: 999px;
+  background: var(--blanco);
+  color: var(--gris);
+  font: inherit;
+  font-size: .78rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: border-color .18s ease, background .18s ease, color .18s ease;
+}
+
+.applications-toolbar .admin-filter-tags button:hover,
+.applications-toolbar .admin-filter-tags button:focus-visible,
+.applications-toolbar .admin-filter-tags button.active {
+  border-color: rgba(20, 135, 171, .35);
+  background: #e8f5f8;
+  color: var(--azul);
+}
+
 .applications-toolbar input {
   width: min(420px, 100%);
+  min-height: 42px;
+  padding: 0 14px;
+  border: 1px solid var(--linea);
+  border-radius: 8px;
+  background: var(--hueso);
+  color: var(--tinta);
+  font: inherit;
+  outline: none;
+}
+
+.applications-toolbar input:focus {
+  border-color: var(--azul);
+  box-shadow: 0 0 0 3px rgba(20, 135, 171, .12);
 }
 
 .applications-list {
@@ -10832,7 +10886,8 @@ a {
   justify-content: space-between;
   gap: 20px;
   width: 100%;
-  padding: 18px 4px;
+  min-height: 76px;
+  padding: 16px 14px;
   border: 0;
   border-bottom: 1px solid var(--linea);
   background: transparent;
@@ -10844,6 +10899,7 @@ a {
 .application-row:hover,
 .application-row:focus-visible {
   background: rgba(20,135,171,.06);
+  outline: none;
 }
 
 .application-row span:first-child {
@@ -10956,10 +11012,29 @@ a {
 }
 
 @media (max-width: 760px) {
+  .join-form-section {
+    padding-top: 48px;
+  }
+
+  .join-form-section .wrap {
+    width: 100%;
+    padding-right: 18px;
+    padding-left: 18px;
+  }
+
   .join-form-layout,
   .application-form-grid,
   .application-detail-data {
     grid-template-columns: 1fr;
+  }
+
+  .join-form-layout {
+    gap: 28px;
+  }
+
+  .application-form {
+    gap: 18px;
+    padding: 20px 16px;
   }
 
   .applications-toolbar {
@@ -10967,7 +11042,21 @@ a {
     flex-direction: column;
   }
 
+  .applications-toolbar .admin-filter-tags {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .applications-toolbar .admin-filter-tags button {
+    width: 100%;
+  }
+
   .application-row {
-    align-items: flex-start;
+    align-items: center;
+    padding: 14px 10px;
+  }
+
+  .application-row small {
+    line-height: 1.35;
   }
 }

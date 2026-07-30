@@ -6,29 +6,58 @@ const API_BASE = process.env.NEXT_PUBLIC_BLOG_API_BASE_URL || '';
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '';
 
 export default function TeamApplicationForm() {
+  const formRef = useRef(null);
   const widgetRef = useRef(null);
+  const tokenRef = useRef('');
   const [turnstileToken, setTurnstileToken] = useState('');
+  const [turnstileReady, setTurnstileReady] = useState(false);
+  const [verifying, setVerifying] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [sent, setSent] = useState(false);
 
   useEffect(() => {
     if (!TURNSTILE_SITE_KEY) return undefined;
-    window.onPoliteiaTurnstileSuccess = (token) => setTurnstileToken(token);
-    window.onPoliteiaTurnstileExpired = () => setTurnstileToken('');
+    window.onPoliteiaTurnstileSuccess = (token) => {
+      tokenRef.current = token;
+      setTurnstileToken(token);
+      setVerifying(false);
+      window.setTimeout(() => formRef.current?.requestSubmit(), 0);
+    };
+    window.onPoliteiaTurnstileExpired = () => {
+      tokenRef.current = '';
+      setTurnstileToken('');
+    };
+    window.onPoliteiaTurnstileError = () => {
+      tokenRef.current = '';
+      setTurnstileToken('');
+      setVerifying(false);
+      setError('No pudimos completar la verificacion de seguridad. Intenta nuevamente.');
+    };
     return () => {
       delete window.onPoliteiaTurnstileSuccess;
       delete window.onPoliteiaTurnstileExpired;
+      delete window.onPoliteiaTurnstileError;
     };
   }, []);
 
   async function submit(event) {
     event.preventDefault();
+    if (TURNSTILE_SITE_KEY && !tokenRef.current) {
+      setError('');
+      if (!turnstileReady || !window.turnstile) {
+        setError('La verificacion de seguridad todavia esta cargando. Intenta nuevamente en un momento.');
+        return;
+      }
+      setVerifying(true);
+      window.turnstile.execute(widgetRef.current);
+      return;
+    }
     setBusy(true);
     setError('');
     try {
       const formData = new FormData(event.currentTarget);
-      formData.set('turnstileToken', turnstileToken);
+      formData.set('turnstileToken', tokenRef.current || turnstileToken);
       const storageKey = 'politeia:application-idempotency';
       let idempotencyKey = window.sessionStorage.getItem(storageKey);
       if (!idempotencyKey) {
@@ -48,6 +77,7 @@ export default function TeamApplicationForm() {
     } catch (submitError) {
       setError(submitError.message);
       window.turnstile?.reset(widgetRef.current);
+      tokenRef.current = '';
       setTurnstileToken('');
     } finally {
       setBusy(false);
@@ -67,9 +97,14 @@ export default function TeamApplicationForm() {
   return (
     <>
       {TURNSTILE_SITE_KEY && (
-        <script async defer src="https://challenges.cloudflare.com/turnstile/v0/api.js" />
+        <script
+          async
+          defer
+          onLoad={() => setTurnstileReady(true)}
+          src="https://challenges.cloudflare.com/turnstile/v0/api.js"
+        />
       )}
-      <form className="application-form" encType="multipart/form-data" onSubmit={submit}>
+      <form className="application-form" encType="multipart/form-data" onSubmit={submit} ref={formRef}>
         <div className="application-form-grid">
           <label>
             Nombre y apellido
@@ -117,15 +152,19 @@ export default function TeamApplicationForm() {
         {TURNSTILE_SITE_KEY && (
           <div
             className="cf-turnstile"
+            data-appearance="interaction-only"
             data-callback="onPoliteiaTurnstileSuccess"
+            data-error-callback="onPoliteiaTurnstileError"
+            data-execution="execute"
             data-expired-callback="onPoliteiaTurnstileExpired"
             data-sitekey={TURNSTILE_SITE_KEY}
+            data-size="flexible"
             ref={widgetRef}
           />
         )}
         {error && <div className="application-form-error" role="alert">{error}</div>}
-        <button className="btn btn-primary" disabled={busy || (TURNSTILE_SITE_KEY && !turnstileToken)} type="submit">
-          {busy ? 'Enviando postulacion...' : 'Enviar postulacion'}
+        <button className="btn btn-primary" disabled={busy || verifying} type="submit">
+          {busy ? 'Enviando postulacion...' : verifying ? 'Verificando...' : 'Enviar postulacion'}
         </button>
       </form>
     </>
