@@ -2394,6 +2394,18 @@ a {
   background: rgba(107, 108, 120, var(--field-opacity))
 }
 
+@media(max-width:860px) {
+  .motion-card .soft-parallax--project .soft-parallax__field,
+  .motion-card .soft-parallax--tool .soft-parallax__field {
+    opacity: .78
+  }
+
+  .motion-card:active .soft-parallax--project .soft-parallax__field,
+  .motion-card:active .soft-parallax--tool .soft-parallax__field {
+    opacity: .94
+  }
+}
+
 @keyframes soft-field-drift {
   from {
     transform: translate3d(
