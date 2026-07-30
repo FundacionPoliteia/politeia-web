@@ -2324,8 +2324,15 @@ a {
 }
 
 .motion-card > :not(.soft-parallax) {
-  position: relative;
   z-index: 2
+}
+
+.tool-motion-card > .badge {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: auto;
+  margin: 0
 }
 
 .soft-parallax {
@@ -4196,8 +4203,13 @@ a {
 }
 
 .admin-toast>.material-symbols-outlined {
-  margin-top: 1px;
-  color: var(--azul)
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  color: var(--azul);
+  font-size: 20px;
+  line-height: 1
 }
 
 .admin-toast.error>.material-symbols-outlined {
@@ -4230,7 +4242,8 @@ a {
 }
 
 .admin-toast button .material-symbols-outlined {
-  font-size: 18px
+  font-size: 18px;
+  line-height: 1
 }
 
 .admin-manager {
@@ -10389,6 +10402,7 @@ a {
     background: #e6f4f8;
     color: var(--azul);
     font-size: 20px;
+    line-height: 1;
   }
 
   .public-newsletter-nudge strong {
@@ -10417,7 +10431,12 @@ a {
   }
 
   .public-newsletter-nudge-link .material-symbols-outlined {
+    display: grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
     font-size: 16px;
+    line-height: 1;
   }
 
   .public-newsletter-nudge-close {
@@ -10437,6 +10456,7 @@ a {
 
   .public-newsletter-nudge-close .material-symbols-outlined {
     font-size: 18px;
+    line-height: 1;
   }
 
 @media(max-width:860px) {
