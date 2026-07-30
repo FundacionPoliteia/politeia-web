@@ -77,6 +77,7 @@ import {
   updateMailingSettings,
 } from '../src/repositories/mailingAutomation.js';
 import { createMailThumbnail, inspectUploadedImage } from '../src/repositories/media.js';
+import { inspectCv } from '../src/repositories/applications.js';
 import {
   buildExcerpt,
   normalizeExcerptMode,
@@ -191,6 +192,19 @@ test('uploaded image inspection accepts modern web formats and rejects unsafe co
   await assert.rejects(
     () => inspectUploadedImage({ buffer: Buffer.from('not-an-image'), mimetype: 'image/png' }),
     /invalid or corrupted/
+  );
+});
+
+test('CV inspection accepts real PDF and DOCX signatures and rejects arbitrary files', async () => {
+  const pdf = Buffer.from('%PDF-1.7\n% test document');
+  assert.deepEqual(await inspectCv({ buffer: pdf, size: pdf.length }), {
+    contentType: 'application/pdf',
+    extension: 'pdf',
+  });
+
+  await assert.rejects(
+    () => inspectCv({ buffer: Buffer.from('plain text'), size: 10 }),
+    /PDF o DOCX valido/
   );
 });
 

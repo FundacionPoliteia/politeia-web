@@ -16,6 +16,7 @@
     "blog-api:backfill:identity-keys": "npm --prefix services/blog-api run backfill:identity-keys --",
     "blog-api:cloud:build": "gcloud builds submit services/blog-api --tag us-central1-docker.pkg.dev/quick-function-500420-v6/politeia/blog-api:latest",
     "blog-api:cloud:deploy": "gcloud run deploy politeia-blog-api --image us-central1-docker.pkg.dev/quick-function-500420-v6/politeia/blog-api:latest --region us-central1 --allow-unauthenticated",
+    "blog-api:cloud:build-deploy": "npm run blog-api:cloud:build && npm run blog-api:cloud:deploy",
     "blog-api:cloud:redeploy": "npm run blog-api:cloud:deploy",
     "blog-api:cloud:restart": "npm run blog-api:cloud:deploy",
     "blog-api:cloud:logs": "gcloud run services logs read politeia-blog-api --region us-central1 --limit=100",

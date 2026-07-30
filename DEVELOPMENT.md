@@ -278,6 +278,30 @@ Con `MAIL_PROVIDER=console` solo se imprime el correo. Para una prueba real, cam
 
 El formulario de `/blog` crea una suscripcion pendiente con Newsletter y Nuevos blogs activos por defecto. El usuario debe abrir el link de confirmacion antes de quedar activo y luego puede administrar ambos temas desde el enlace de preferencias. En el panel, cada cuenta configura sus avisos internos desde `Mi perfil`; el administrador crea newsletters desde `Newsletter` y controla los avisos de publicaciones desde `Mailing`.
 
+## Postulaciones al equipo
+
+La pagina publica `/sumate` envia el formulario multipart a `POST /v1/applications`. Para desarrollo:
+
+```env
+NEXT_PUBLIC_TURNSTILE_SITE_KEY=
+APPLICATIONS_BUCKET=politeia-team-applications-local
+APPLICATION_RECIPIENTS=dev@politeia.ar
+APPLICATION_RETENTION_DAYS=365
+TURNSTILE_SECRET_KEY=
+```
+
+Sin claves Turnstile, el backend permite la prueba solamente fuera de produccion. El bucket debe ser privado. Los administradores revisan la bandeja en `admin.localhost:3000/admin`; el flujo editorial vive en `admin.localhost:3000/blog`.
+
+### Construir y desplegar Cloud Run
+
+Para construir la imagen del backend y desplegarla en una sola secuencia:
+
+```powershell
+npm.cmd run blog-api:cloud:build-deploy
+```
+
+El despliegue se ejecuta unicamente si Cloud Build termina correctamente.
+
 Para probar el ciclo automatico local sin esperar 12 horas, usar el boton de despacho manual de la tab `Mailing` o llamar el endpoint administrativo. El intervalo de produccion se mantiene en 12 horas por defecto y puede cambiarse desde la misma configuracion.
 
 No pegues keys reales en tickets, chats o capturas. Si una `RESEND_API_KEY` queda expuesta, revocarla en Resend y crear una nueva antes de seguir probando.

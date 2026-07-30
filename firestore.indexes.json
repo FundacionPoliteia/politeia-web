@@ -47,6 +47,14 @@
         { "fieldPath": "managedAuthor", "order": "ASCENDING" },
         { "fieldPath": "identityNameKey", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "teamApplications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": []

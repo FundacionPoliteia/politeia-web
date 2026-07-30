@@ -2,14 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { marked } from 'marked';
 import RichTextEditor from './RichTextEditor';
 import AuthorCard from './AuthorCard';
 import AuthorEnd from './AuthorEnd';
 import BlogIndex from './BlogIndex';
-import NewsletterAdminPanel from './NewsletterAdminPanel';
-import AdminOperationsPanel from './AdminOperationsPanel';
-import MailingAdminPanel from './MailingAdminPanel';
 import PostCard from './PostCard';
 import PostReferences from './PostReferences';
 import { AdminHelpNavButton, AdminHelpProvider, FieldHelper, HelpTrigger } from './AdminHelp';
@@ -17,6 +15,10 @@ import { parseTagsText, sanitizeCategory, sanitizeTags, taxonomyKey } from '../l
 import { IMAGE_UPLOAD_ACCEPT, IMAGE_UPLOAD_HELP, validateImageUploadFile } from '../lib/media';
 
 const API_BASE = process.env.NEXT_PUBLIC_BLOG_API_BASE_URL || '';
+const NewsletterAdminPanel = dynamic(() => import('./NewsletterAdminPanel'));
+const AdminOperationsPanel = dynamic(() => import('./AdminOperationsPanel'));
+const MailingAdminPanel = dynamic(() => import('./MailingAdminPanel'));
+const ApplicationsAdminPanel = dynamic(() => import('./ApplicationsAdminPanel'));
 const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
 const PUBLIC_SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || 'https://www.politeia.ar').replace(/\/$/, '');
 const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || '1.0.0';
@@ -217,7 +219,7 @@ function NotificationDayGroups({ groups = [], onOpen }) {
   ));
 }
 
-export default function AdminConsole() {
+export default function AdminConsole({ surface = 'editorial' }) {
   const [checkingSession, setCheckingSession] = useState(true);
   const [user, setUser] = useState(null);
   const [posts, setPosts] = useState([]);
@@ -322,14 +324,18 @@ export default function AdminConsole() {
   const inFlightGetRequestsRef = useRef(new Map());
 
   const roles = user?.roles || [];
+  const isEditorialSurface = surface === 'editorial';
+  const isAdministrativeSurface = surface === 'administrative';
   const isAdmin = roles.includes('admin');
   const isPrimaryDomainUser = isPrimaryDomainEmail(user?.email);
   const isReviewer = roles.includes('reviewer');
   const isNewsletterManager = roles.includes('newsletter');
   const isBlogAuthor = roles.includes('blog') || isReviewer || isAdmin;
-  const canAccessEditorialPanel = isBlogAuthor;
+  const canAccessEditorialPanel = isEditorialSurface && isBlogAuthor;
   const canAccessProfilePanel = Boolean(user) && (canAccessEditorialPanel || isNewsletterManager || isPrimaryDomainUser);
-  const canAccessPanel = canAccessEditorialPanel || isNewsletterManager || canAccessProfilePanel;
+  const canAccessPanel = isAdministrativeSurface
+    ? Boolean(user) && (isAdmin || isNewsletterManager || isPrimaryDomainUser)
+    : Boolean(user) && (isBlogAuthor || isPrimaryDomainUser);
   const canCreatePosts = isBlogAuthor;
   const canEditPosts = canAccessEditorialPanel;
   const canChooseSlug = isAdmin || isReviewer;
@@ -338,12 +344,19 @@ export default function AdminConsole() {
   const canPublishPosts = isAdmin || isReviewer;
   const canDeletePosts = isAdmin;
   const canUseReviewFilters = isAdmin || isReviewer;
-  const canManageUsers = isAdmin && isPrimaryDomainUser;
-  const canReviewProfiles = isAdmin;
+  const canManageUsers = isAdministrativeSurface && isAdmin && isPrimaryDomainUser;
+  const canReviewProfiles = isAdministrativeSurface && isAdmin;
   const canAccessRolesMailPanel = canManageUsers;
-  const canAccessNewsletterPanel = isNewsletterManager;
-  const canAccessMailingPanel = isAdmin;
-  const defaultPanelTab = canAccessEditorialPanel ? 'blogs' : canAccessNewsletterPanel ? 'newsletter' : 'profile';
+  const canAccessNewsletterPanel = isAdministrativeSurface && isNewsletterManager;
+  const canAccessMailingPanel = isEditorialSurface && isAdmin;
+  const canAccessApplicationsPanel = isAdministrativeSurface && isAdmin;
+  const defaultPanelTab = canAccessEditorialPanel
+    ? 'blogs'
+    : canAccessNewsletterPanel
+      ? 'newsletter'
+      : canAccessApplicationsPanel
+        ? 'applications'
+        : 'profile';
   const userProfileNeedsSetup = profileNeedsSetup(userProfile);
   const allowedPanelTabs = useMemo(() => [
     ...(canAccessEditorialPanel ? ['blogs'] : []),
@@ -351,8 +364,9 @@ export default function AdminConsole() {
     ...(canAccessMailingPanel ? ['mailing'] : []),
     ...(canAccessRolesMailPanel ? ['access'] : []),
     ...(canReviewProfiles ? ['profiles'] : []),
+    ...(canAccessApplicationsPanel ? ['applications'] : []),
     ...(canAccessProfilePanel ? ['profile'] : []),
-  ], [canAccessEditorialPanel, canAccessMailingPanel, canAccessNewsletterPanel, canAccessProfilePanel, canAccessRolesMailPanel, canReviewProfiles]);
+  ], [canAccessApplicationsPanel, canAccessEditorialPanel, canAccessMailingPanel, canAccessNewsletterPanel, canAccessProfilePanel, canAccessRolesMailPanel, canReviewProfiles]);
   const accountAuthorName = user?.name || user?.email || '';
   const profileAuthorName = profileDraft.fullName || userProfile.fullName || accountAuthorName;
   const profileClosingPhrase = profileDraft.closingPhrase || userProfile.closingPhrase || '';
@@ -436,6 +450,23 @@ export default function AdminConsole() {
   useEffect(() => {
     if (user) clearGoogleSignIn();
   }, [user]);
+
+  useEffect(() => {
+    if (!user || typeof window === 'undefined') return;
+    const requestedTab = new URLSearchParams(window.location.search).get('tab');
+    if (requestedTab && allowedPanelTabs.includes(requestedTab)) setActivePanelTab(requestedTab);
+  }, [allowedPanelTabs, user]);
+
+  useEffect(() => {
+    if (!user || typeof window === 'undefined') return;
+    if (isAdministrativeSurface && !isAdmin && !isNewsletterManager) {
+      window.location.replace('/blog');
+      return;
+    }
+    if (isEditorialSurface && !isBlogAuthor && isNewsletterManager) {
+      window.location.replace('/admin');
+    }
+  }, [isAdmin, isAdministrativeSurface, isBlogAuthor, isEditorialSurface, isNewsletterManager, user]);
 
   useEffect(() => {
     if (notificationHighlight.target !== 'profile-permissions' || activePanelTab !== 'profile') return undefined;
@@ -693,7 +724,10 @@ export default function AdminConsole() {
     if (!canReviewProfiles && activePanelTab === 'profiles') {
       setActivePanelTab(defaultPanelTab);
     }
-  }, [activePanelTab, canAccessEditorialPanel, canAccessMailingPanel, canAccessNewsletterPanel, canAccessProfilePanel, canAccessRolesMailPanel, canReviewProfiles, defaultPanelTab]);
+    if (!canAccessApplicationsPanel && activePanelTab === 'applications') {
+      setActivePanelTab(defaultPanelTab);
+    }
+  }, [activePanelTab, canAccessApplicationsPanel, canAccessEditorialPanel, canAccessMailingPanel, canAccessNewsletterPanel, canAccessProfilePanel, canAccessRolesMailPanel, canReviewProfiles, defaultPanelTab]);
 
   useEffect(() => {
     const hasOpenModal = previewOpen
@@ -1139,6 +1173,20 @@ export default function AdminConsole() {
       setMessage('');
       await markNotificationRead(notification);
       setNotificationsOpen(false);
+      if (notification.type === 'application.created' || notification.applicationId) {
+        if (isAdministrativeSurface && isAdmin) {
+          setActivePanelTab('applications');
+          setMessage('Abrimos la bandeja de postulaciones.');
+        } else {
+          setNotificationActionDialog({
+            title: 'Nueva postulacion',
+            message: 'La postulacion esta disponible en el area administrativa.',
+            actionLabel: 'Abrir postulaciones',
+            href: '/admin?tab=applications',
+          });
+        }
+        return;
+      }
       if (notification.type === 'user.roles.changed') {
         setActivePanelTab('profile');
         await Promise.all([loadMe({ silent: true }), loadUserProfile()]);
@@ -2701,8 +2749,28 @@ export default function AdminConsole() {
                       Perfiles
                     </button>
                   )}
+                  {canAccessApplicationsPanel && (
+                    <button
+                      aria-pressed={activePanelTab === 'applications'}
+                      className={activePanelTab === 'applications' ? 'selected' : ''}
+                      onClick={() => setActivePanelTab('applications')}
+                      type="button"
+                    >
+                      Postulaciones
+                    </button>
+                  )}
                 </nav>
                 <div className="admin-tabs-secondary">
+                  {isAdmin && isEditorialSurface && (
+                    <Link className="admin-surface-link" href="/admin">
+                      Administracion
+                    </Link>
+                  )}
+                  {isAdmin && isAdministrativeSurface && (
+                    <Link className="admin-surface-link" href="/blog">
+                      Gestor editorial
+                    </Link>
+                  )}
                   <AdminHelpNavButton />
                   {canAccessProfilePanel && (
                     <button
@@ -2963,7 +3031,7 @@ export default function AdminConsole() {
                       )}
                     </section>
                   )}
-                  {isAdmin && (
+                  {isAdmin && isAdministrativeSurface && (
                     <AdminOperationsPanel apiBase={API_BASE} currentEmail={user.email} />
                   )}
                 </>
@@ -3301,6 +3369,10 @@ export default function AdminConsole() {
                     </table>
                   </div>
                 </section>
+              )}
+
+              {activePanelTab === 'applications' && canAccessApplicationsPanel && (
+                <ApplicationsAdminPanel apiBase={API_BASE} />
               )}
 
               {activePanelTab === 'newsletter' && canAccessNewsletterPanel && (
@@ -5352,6 +5424,7 @@ function normalizeInAppNotification(value = {}) {
     managedProfileId: normalizeInputValue(value.managedProfileId),
     profileName: normalizeInputValue(value.profileName),
     requesterEmail: normalizeInputValue(value.requesterEmail),
+    applicationId: normalizeInputValue(value.applicationId),
     createdAt: value.createdAt || '',
     readAt: value.readAt || '',
   };
@@ -5542,6 +5615,7 @@ function commentReplyActionLabel(action = '') {
 }
 
 function notificationTitle(notification = {}) {
+  if (notification.type === 'application.created') return 'Nueva postulacion para el equipo';
   if (notification.type === 'post.submittedReview') return `Post enviado a revision: ${notification.postTitle || 'Sin titulo'}`;
   if (notification.type === 'comment.created') return `Nuevo comentario: ${notification.postTitle || 'Sin titulo'}`;
   if (notification.type === 'comment.reply') return `Nueva respuesta: ${notification.postTitle || 'Sin titulo'}`;
@@ -5560,6 +5634,7 @@ function notificationTitle(notification = {}) {
 }
 
 function notificationIcon(type = '') {
+  if (type === 'application.created') return 'person_add';
   if (type.startsWith('comment.')) return 'mode_comment';
   if (type === 'post.published') return 'task_alt';
   if (type === 'post.editRequested') return 'pending_actions';

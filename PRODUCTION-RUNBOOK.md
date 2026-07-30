@@ -654,3 +654,29 @@ Guardar el signing secret del webhook en Secret Manager y montarlo como `RESEND_
 8. Ante un error, filtrar por estado `5xx`, copiar el `requestId` y revisar `lastError` en la vista Correos.
 
 El panel muestra hasta 500 requests y 500 entregas recientes. Solo `admin` puede acceder tanto a la UI como a los endpoints `/v1/admin/logs/*`.
+## Postulaciones y paneles internos
+
+1. Crea un bucket privado exclusivo para CVs y configura lifecycle a 365 dias.
+2. Concede a la service account de Cloud Run lectura, escritura y eliminacion de objetos solamente sobre ese bucket.
+3. Habilita TTL de Firestore sobre `teamApplications.expiresAt`.
+4. Despliega `firestore.indexes.json`.
+5. Configura Cloud Run:
+
+```env
+APPLICATIONS_BUCKET=<bucket-privado>
+APPLICATION_RECIPIENTS=dev@politeia.ar,info@politeia.ar
+APPLICATION_RETENTION_DAYS=365
+TURNSTILE_SECRET_KEY=<secret>
+```
+
+6. Configura Vercel con `NEXT_PUBLIC_TURNSTILE_SITE_KEY` y autoriza `politeia.ar` y `www.politeia.ar` en Cloudflare Turnstile.
+7. Despliega primero el backend y luego el frontend.
+8. Verifica `/sumate`, `admin.politeia.ar/blog` y `admin.politeia.ar/admin`. El CV nunca debe exponer una URL publica.
+
+Para construir y desplegar el backend en una sola secuencia:
+
+```powershell
+npm.cmd run blog-api:cloud:build-deploy
+```
+
+El despliegue no se ejecuta si falla Cloud Build.

@@ -70,6 +70,22 @@ export const openApiSpec = {
           deletedAt: { type: 'string', format: 'date-time', nullable: true },
         },
       },
+      TeamApplication: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          fullName: { type: 'string' },
+          email: { type: 'string', format: 'email' },
+          phone: { type: 'string' },
+          linkedinUrl: { type: 'string', format: 'uri' },
+          area: { type: 'string' },
+          message: { type: 'string' },
+          status: { type: 'string', enum: ['new', 'reviewing', 'contacted', 'archived'] },
+          internalNote: { type: 'string' },
+          createdAt: { type: 'string', format: 'date-time' },
+          expiresAt: { type: 'string', format: 'date-time' },
+        },
+      },
     },
   },
   paths: {
@@ -338,6 +354,47 @@ export const openApiSpec = {
         summary: 'Send a Resend test email to the authenticated admin',
         security: [{ sessionCookie: [] }],
         responses: { 200: { description: 'Test accepted by the provider' }, 403: { description: 'Admin role required' } },
+      },
+    },
+    '/applications': {
+      post: {
+        summary: 'Submit a public team application',
+        parameters: [{ name: 'Idempotency-Key', in: 'header', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                required: ['fullName', 'email', 'area', 'message', 'cv', 'consent', 'turnstileToken'],
+                properties: {
+                  fullName: { type: 'string' },
+                  email: { type: 'string', format: 'email' },
+                  phone: { type: 'string' },
+                  linkedinUrl: { type: 'string', format: 'uri' },
+                  area: { type: 'string' },
+                  message: { type: 'string' },
+                  cv: { type: 'string', format: 'binary' },
+                  consent: { type: 'boolean' },
+                  turnstileToken: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+        responses: { 201: { description: 'Application accepted' }, 400: { description: 'Invalid application' } },
+      },
+    },
+    '/applications/manage': {
+      get: {
+        summary: 'List team applications (admin only)',
+        security: [{ sessionCookie: [] }],
+        parameters: [
+          { name: 'status', in: 'query', schema: { type: 'string' } },
+          { name: 'limit', in: 'query', schema: { type: 'integer', maximum: 50 } },
+          { name: 'cursor', in: 'query', schema: { type: 'string' } },
+        ],
+        responses: { 200: { description: 'Paginated applications' }, 403: { description: 'Admin role required' } },
       },
     },
     '/media': {

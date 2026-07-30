@@ -23,6 +23,13 @@ export function middleware(request) {
   const adminOnlyHost = isAdminOnlyHost(hostname);
   const canRenderAdmin = adminOnlyHost || isAllowedPreviewHost(hostname);
 
+  if (pathname.startsWith('/internal')) {
+    if (!canRenderAdmin) {
+      return NextResponse.rewrite(new URL('/404', request.url), { status: 404 });
+    }
+    return NextResponse.next();
+  }
+
   if (pathname.startsWith('/admin')) {
     if (!canRenderAdmin) {
       return NextResponse.rewrite(new URL('/404', request.url), { status: 404 });
@@ -31,8 +38,13 @@ export function middleware(request) {
   }
 
   if (adminOnlyHost) {
+    if (pathname === '/blog' || pathname.startsWith('/blog/')) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/internal/blog';
+      return NextResponse.rewrite(url);
+    }
     const url = request.nextUrl.clone();
-    url.pathname = '/admin';
+    url.pathname = '/blog';
     url.search = '';
     return NextResponse.redirect(url);
   }

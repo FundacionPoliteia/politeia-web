@@ -134,7 +134,7 @@ export default async function Home() {
               <div className="ico">
                 <svg viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4" /><path d="M9 9v.01M9 12v.01M9 15v.01" /></svg>
               </div>
-              <h3>Quorum</h3>
+              <h3>Quórum</h3>
               <p>Seguí qué se vota en el Congreso, quién lo propone y cómo te afecta. En lenguaje claro.</p>
               <span className="go" style={{ color: 'var(--gris)' }}>En desarrollo</span>
             </div>

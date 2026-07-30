@@ -67,6 +67,13 @@ export const config = {
   apiRequestLogsRetentionDays: Math.min(Math.max(Number(process.env.API_REQUEST_LOGS_RETENTION_DAYS || 14), 1), 90),
   cloudRunServiceName: process.env.CLOUD_RUN_SERVICE_NAME || 'politeia-blog-api',
   mailingDispatchToken: process.env.MAILING_DISPATCH_TOKEN || '',
+  applicationsBucket: process.env.APPLICATIONS_BUCKET || '',
+  applicationRecipients: (process.env.APPLICATION_RECIPIENTS || '')
+    .split(',')
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean),
+  applicationRetentionDays: Math.min(Math.max(Number(process.env.APPLICATION_RETENTION_DAYS || 365), 30), 730),
+  turnstileSecretKey: process.env.TURNSTILE_SECRET_KEY || '',
 };
 
 export function requireConfig(keys) {

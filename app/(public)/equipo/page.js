@@ -362,6 +362,36 @@ const TEAM_STYLES = `
     line-height: 1.35;
   }
 
+  .team-page__join {
+    padding: clamp(64px, 9vw, 112px) 0;
+    background: var(--tinta);
+    color: white;
+  }
+
+  .team-page__join-inner {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 32px;
+  }
+
+  .team-page__join h2 {
+    max-width: 700px;
+    margin: 0 0 16px;
+    color: white;
+    font-family: var(--display);
+    font-size: clamp(2.2rem, 5vw, 4.4rem);
+    font-weight: 500;
+    line-height: 1;
+  }
+
+  .team-page__join p {
+    max-width: 620px;
+    margin: 0;
+    color: rgba(255,255,255,.78);
+    line-height: 1.65;
+  }
+
   @media (max-width: 980px) {
     .team-page__leadership-grid {
       grid-template-columns: 1fr;
@@ -397,6 +427,10 @@ const TEAM_STYLES = `
   }
 
   @media (max-width: 680px) {
+    .team-page__join-inner {
+      align-items: flex-start;
+      flex-direction: column;
+    }
     .team-page__section-heading--projects {
       align-items: flex-start;
       flex-direction: column;
@@ -580,6 +614,17 @@ export default function EquipoPage() {
               </article>
             ))}
           </div>
+        </div>
+      </section>
+
+      <section className="team-page__join">
+        <div className="team-page__container team-page__join-inner">
+          <div>
+            <span className="team-page__section-kicker">Participa</span>
+            <h2>Tu mirada tambien puede transformar Politeia.</h2>
+            <p>Conoce las areas de trabajo y contanos como te gustaria aportar al equipo.</p>
+          </div>
+          <Link className="btn btn-primary" href="/sumate">Quiero sumarme</Link>
         </div>
       </section>
     </main>
