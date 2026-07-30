@@ -1,5 +1,6 @@
 ﻿import Link from 'next/link';
 import Hero from '../../components/Hero';
+import CardMotionBackdrop from '../../components/CardMotionBackdrop';
 import NewsletterForm from '../../components/NewsletterForm';
 import ProceduralNewsletterBackdrop from '../../components/ProceduralNewsletterBackdrop';
 import ProjectCard from '../../components/ProjectCard';
@@ -117,7 +118,8 @@ export default async function Home() {
             <p>Un conjunto de aplicaciones abiertas y gratuitas. Cada una resuelve una pregunta concreta.</p>
           </div>
           <div className="cards">
-            <a className="card" href="https://politeiatest.vercel.app/" target="_blank" rel="noopener noreferrer">
+            <a className="card motion-card tool-motion-card" href="https://politeiatest.vercel.app/" target="_blank" rel="noopener noreferrer">
+              <CardMotionBackdrop seed="promesas" variant="tool" />
               <div className="ico">
                 <svg viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round"><path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" /></svg>
               </div>
@@ -125,7 +127,8 @@ export default async function Home() {
               <p>Compará tus posturas con las de los partidos y candidatos antes de votar. Sin sesgos, con fuentes.</p>
               <span className="go">Abrir la app →</span>
             </a>
-            <div className="card soon" aria-disabled="true">
+            <div className="card soon motion-card tool-motion-card" aria-disabled="true">
+              <CardMotionBackdrop seed="quorum" variant="tool" />
               <span className="badge">Próximamente</span>
               <div className="ico">
                 <svg viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4" /><path d="M9 9v.01M9 12v.01M9 15v.01" /></svg>
@@ -134,7 +137,8 @@ export default async function Home() {
               <p>Seguí qué se vota en el Congreso, quién lo propone y cómo te afecta. En lenguaje claro.</p>
               <span className="go" style={{ color: 'var(--gris)' }}>En desarrollo</span>
             </div>
-            <Link className="card" href="/blog">
+            <Link className="card motion-card tool-motion-card" href="/blog">
+              <CardMotionBackdrop seed="blog" variant="tool" />
               <div className="ico">
                 <svg viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z" /></svg>
               </div>
