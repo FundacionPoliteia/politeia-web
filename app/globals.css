@@ -10273,12 +10273,12 @@ a {
   font-size: 18px;
 }
 
-.project-newsletter-nudge {
+.public-newsletter-nudge {
   display: none;
 }
 
 @media(max-width:860px) {
-  .project-newsletter-nudge {
+  .public-newsletter-nudge {
     position: fixed;
     right: 16px;
     bottom: calc(102px + env(safe-area-inset-bottom, 0px));
@@ -10297,10 +10297,10 @@ a {
     background: rgba(255, 255, 255, .97);
     box-shadow: 0 16px 42px rgba(26, 26, 55, .18);
     backdrop-filter: blur(12px);
-    animation: project-nudge-in .24s ease-out;
+    animation: public-nudge-in .24s ease-out;
   }
 
-  .project-newsletter-nudge-icon {
+  .public-newsletter-nudge-icon {
     display: grid;
     place-items: center;
     width: 38px;
@@ -10311,7 +10311,7 @@ a {
     font-size: 20px;
   }
 
-  .project-newsletter-nudge strong {
+  .public-newsletter-nudge strong {
     display: block;
     color: var(--tinta);
     font-family: var(--display);
@@ -10319,14 +10319,14 @@ a {
     line-height: 1.2;
   }
 
-  .project-newsletter-nudge p {
+  .public-newsletter-nudge p {
     margin: 3px 0 0;
     color: var(--gris);
     font-size: .72rem;
     line-height: 1.35;
   }
 
-  .project-newsletter-nudge-link {
+  .public-newsletter-nudge-link {
     display: inline-flex;
     align-items: center;
     gap: 4px;
@@ -10336,11 +10336,11 @@ a {
     white-space: nowrap;
   }
 
-  .project-newsletter-nudge-link .material-symbols-outlined {
+  .public-newsletter-nudge-link .material-symbols-outlined {
     font-size: 16px;
   }
 
-  .project-newsletter-nudge-close {
+  .public-newsletter-nudge-close {
     position: absolute;
     top: 7px;
     right: 7px;
@@ -10355,12 +10355,12 @@ a {
     cursor: pointer;
   }
 
-  .project-newsletter-nudge-close .material-symbols-outlined {
+  .public-newsletter-nudge-close .material-symbols-outlined {
     font-size: 18px;
   }
 }
 
-@keyframes project-nudge-in {
+@keyframes public-nudge-in {
   from {
     opacity: 0;
     transform: translateY(10px);
@@ -10438,17 +10438,17 @@ a {
 }
 
 @media(max-width:560px) {
-  .project-newsletter-nudge {
+  .public-newsletter-nudge {
     grid-template-columns: 34px minmax(0, 1fr);
     padding-right: 38px;
   }
 
-  .project-newsletter-nudge-icon {
+  .public-newsletter-nudge-icon {
     width: 34px;
     height: 34px;
   }
 
-  .project-newsletter-nudge-link {
+  .public-newsletter-nudge-link {
     grid-column: 2;
     justify-self: start;
     margin-top: 2px;
@@ -10469,7 +10469,7 @@ a {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .project-newsletter-nudge {
+  .public-newsletter-nudge {
     animation: none;
   }
 }

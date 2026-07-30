@@ -38,21 +38,21 @@ export default function OrigenPage() {
           </div>
 
           <div className="origin-story__copy">
-            <p className="origin-story__lead">
-              La política se entiende mejor cuando se la mira de cerca, con
-              datos, contexto y sin intermediarios que la vuelvan inaccesible.
+            <p>
+              Politeia nació del encuentro de tres estudiantes de Ciencia
+              Política y Relaciones Internacionales que, cursando su último año
+              de carrera en 2020, decidieron transformar su vocación en una
+              herramienta concreta para acercar la política a la ciudadanía.
             </p>
             <p>
-              Desde Argentina, reunimos a jóvenes de distintas disciplinas,
-              relaciones internacionales, derecho, economía, comunicación y
-              tecnología, con la idea de tender un puente entre las
-              instituciones y la ciudadanía.
+              El punto de partida fue un diagnóstico compartido: la crisis de
+              representación política que atravesaba a la ciudadanía.
             </p>
             <p>
-              Lo que empezó como un espacio de análisis y publicación fue
-              creciendo hasta convertirse en un conjunto de herramientas y
-              proyectos abiertos que ayudan a participar mejor de la vida
-              democrática.
+              La iniciativa se originó como una aplicación desarrollada durante
+              las elecciones generales de 2021 para difundir las propuestas de
+              los candidatos, y creció progresivamente hacia una estructura más
+              amplia capaz de albergar múltiples proyectos.
             </p>
           </div>
         </div>

@@ -4,9 +4,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import ProjectCard from '../../../components/ProjectCard';
 import { PUBLIC_PROJECTS } from '../../../lib/publicProjects';
 
-const NEWSLETTER_NUDGE_STORAGE_KEY = 'politeia:projects-newsletter-nudge';
-const NEWSLETTER_NUDGE_COOLDOWN = 14 * 24 * 60 * 60 * 1000;
-
 function getInitials(name) {
   return name
     .split(' ')
@@ -183,43 +180,6 @@ function ProyectModal({ project, onClose }) {
   );
 }
 
-function NewsletterNudge({ hidden = false }) {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    const isMobile = window.matchMedia('(max-width: 860px)').matches;
-    const dismissedAt = Number(window.localStorage.getItem(NEWSLETTER_NUDGE_STORAGE_KEY) || 0);
-    if (!isMobile || Date.now() - dismissedAt < NEWSLETTER_NUDGE_COOLDOWN) return undefined;
-
-    const timer = window.setTimeout(() => setVisible(true), 4500);
-    return () => window.clearTimeout(timer);
-  }, []);
-
-  const dismiss = useCallback(() => {
-    window.localStorage.setItem(NEWSLETTER_NUDGE_STORAGE_KEY, String(Date.now()));
-    setVisible(false);
-  }, []);
-
-  if (!visible || hidden) return null;
-
-  return (
-    <aside aria-label="Invitación al newsletter" className="project-newsletter-nudge" role="region">
-      <button aria-label="Cerrar invitación" className="project-newsletter-nudge-close" onClick={dismiss} type="button">
-        <span aria-hidden="true" className="material-symbols-outlined">close</span>
-      </button>
-      <span aria-hidden="true" className="project-newsletter-nudge-icon material-symbols-outlined">mail</span>
-      <div>
-        <strong>¿Querés recibir todas las novedades?</strong>
-        <p>Notas y proyectos de Politeia, directo en tu correo.</p>
-      </div>
-      <a className="project-newsletter-nudge-link" href="/#news" onClick={dismiss}>
-        Suscribirme
-        <span aria-hidden="true" className="material-symbols-outlined">arrow_forward</span>
-      </a>
-    </aside>
-  );
-}
-
 export default function ProyectosPage() {
   const [proyectoModal, setProyectoModal] = useState(null);
 
@@ -278,7 +238,6 @@ export default function ProyectosPage() {
       {proyectoModal && (
         <ProyectModal project={proyectoModal} onClose={closeModal} />
       )}
-      <NewsletterNudge hidden={Boolean(proyectoModal)} />
     </main>
   );
 }
