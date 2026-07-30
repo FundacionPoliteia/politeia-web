@@ -2323,147 +2323,89 @@ a {
   isolation: isolate
 }
 
-.motion-card > :not(.card-motion) {
+.motion-card > :not(.soft-parallax) {
   position: relative;
   z-index: 2
 }
 
-.card-motion {
+.soft-parallax {
   position: absolute;
   z-index: 0;
   inset: 0;
   overflow: hidden;
-  pointer-events: none
+  pointer-events: none;
+  contain: strict
 }
 
-.card-motion::after {
+.soft-parallax__field {
   position: absolute;
-  inset: 0;
-  background: rgba(222, 239, 244, .12);
-  content: "";
-  opacity: 0;
-  transition: opacity .7s ease
-}
-
-.card-motion__piece {
-  position: absolute;
-  top: var(--motion-y);
-  left: var(--motion-x);
-  width: var(--motion-length);
-  height: var(--motion-height);
-  border-top: 1px solid rgba(19, 122, 159, .16);
+  top: var(--field-y);
+  left: var(--field-x);
+  width: var(--field-size);
+  height: var(--field-size);
   border-radius: 50%;
-  filter: blur(var(--motion-blur));
-  opacity: 0;
-  transform: translate3d(-50%, -50%, 0) rotate(var(--motion-angle));
-  transform-origin: center;
-  transition: opacity .7s ease;
-  animation: project-contour var(--motion-duration) ease-in-out var(--motion-delay) infinite alternate;
-  animation-play-state: paused;
-  will-change: transform
+  background: rgba(19, 122, 159, var(--field-opacity));
+  filter: blur(var(--field-blur));
+  opacity: .38;
+  transform: translate3d(-50%, calc(-50% + var(--field-parallax-y, 0px)), 0);
+  transition: opacity .9s ease;
+  animation: soft-field-drift var(--field-duration) ease-in-out var(--field-delay) infinite alternate;
+  will-change: transform, opacity
 }
 
-.motion-card:is(:hover, :focus-visible, :active) .card-motion::after {
-  opacity: 1
+.soft-parallax--project .soft-parallax__field {
+  box-shadow: 0 0 44px rgba(19, 122, 159, .05)
 }
 
-.motion-card:is(:hover, :focus-visible, :active) .card-motion__piece {
-  opacity: var(--motion-opacity);
-  animation-play-state: running
+.soft-parallax--tool .soft-parallax__field {
+  background: rgba(26, 26, 55, var(--field-opacity));
+  box-shadow: 0 0 38px rgba(19, 122, 159, .04)
 }
 
-.motion-card:active .card-motion__piece {
-  opacity: min(1, calc(var(--motion-opacity) + .08))
+.project-card[data-motion-key="globeia"] .soft-parallax__field {
+  background: rgba(19, 122, 159, var(--field-opacity))
 }
 
-.project-card[data-motion-key="globeia"] .card-motion__piece {
-  height: calc(var(--motion-height) + 22px);
-  border-color: rgba(26, 26, 55, .15)
+.project-card[data-motion-key="quorum"] .soft-parallax__field {
+  background: rgba(107, 108, 120, var(--field-opacity))
 }
 
-.project-card[data-motion-key="quorum"] .card-motion__piece {
-  height: 34px;
-  border-radius: 5px;
-  border-color: rgba(107, 108, 120, .16)
+.project-card[data-motion-key="politez"] .soft-parallax__field {
+  background: rgba(33, 148, 176, var(--field-opacity))
 }
 
-.project-card[data-motion-key="politez"] .card-motion__piece {
-  height: 48px;
-  border-style: dashed
+.motion-card:is(:hover, :focus-visible, :active) .soft-parallax__field {
+  opacity: .82
 }
 
-@keyframes project-contour {
+.motion-card:active .soft-parallax__field {
+  opacity: .94
+}
+
+.tool-motion-card.soon .soft-parallax__field {
+  background: rgba(107, 108, 120, var(--field-opacity))
+}
+
+@keyframes soft-field-drift {
   from {
-    transform: translate3d(-50%, -50%, 0) rotate(var(--motion-angle)) scale(.98)
+    transform: translate3d(
+      -50%,
+      calc(-50% + var(--field-parallax-y, 0px)),
+      0
+    ) scale(.94)
   }
 
   to {
     transform: translate3d(
-      calc(-50% + var(--motion-shift)),
-      calc(-50% - 4px),
+      calc(-50% + 12px),
+      calc(-50% + var(--field-parallax-y, 0px) - 8px),
       0
-    ) rotate(calc(var(--motion-angle) + 2deg)) scale(1.025)
-  }
-}
-
-.card-motion--tool .card-motion__piece {
-  width: var(--motion-length);
-  height: 1px;
-  border: 0;
-  border-radius: 0;
-  background: rgba(19, 122, 159, .15);
-  animation-name: tool-signal;
-  animation-timing-function: ease-in-out
-}
-
-.card-motion--tool .card-motion__piece.is-marker {
-  width: 7px;
-  height: 7px;
-  border: 1px solid rgba(19, 122, 159, .18);
-  background: transparent;
-  transform: translate3d(-50%, -50%, 0) rotate(45deg);
-  animation-name: tool-marker
-}
-
-.tool-motion-card:is(:hover, :focus-visible, :active) .card-motion__piece {
-  opacity: var(--motion-opacity)
-}
-
-.tool-motion-card.soon .card-motion__piece {
-  border-color: rgba(107, 108, 120, .14);
-  background: rgba(107, 108, 120, .11)
-}
-
-@keyframes tool-signal {
-  from {
-    transform: translate3d(-50%, -50%, 0) rotate(var(--motion-angle)) scaleX(.88)
-  }
-
-  to {
-    transform: translate3d(
-      calc(-50% + var(--motion-shift)),
-      calc(-50% - 3px),
-      0
-    ) rotate(var(--motion-angle)) scaleX(1.04)
-  }
-}
-
-@keyframes tool-marker {
-  from {
-    transform: translate3d(-50%, -50%, 0) rotate(45deg)
-  }
-
-  to {
-    transform: translate3d(
-      calc(-50% + var(--motion-shift)),
-      calc(-50% - 5px),
-      0
-    ) rotate(105deg)
+    ) scale(1.045)
   }
 }
 
 @media(prefers-reduced-motion:reduce) {
-  .card-motion__piece {
+  .soft-parallax__field {
     animation: none !important
   }
 }
@@ -2625,60 +2567,17 @@ a {
   content: none
 }
 
-.news-box > :not(.news-procedural-backdrop) {
+.news-box > :not(.soft-parallax) {
   position: relative;
   z-index: 1
 }
 
-.news-procedural-backdrop {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  overflow: hidden;
-  perspective: 900px;
-  pointer-events: none
-}
-
-.news-procedural-ring {
-  position: absolute;
-  top: var(--ring-y);
-  left: var(--ring-x);
-  width: var(--ring-size);
-  height: var(--ring-size);
-  border: var(--ring-stroke) solid rgba(223, 243, 248, var(--ring-opacity));
-  border-radius: 50%;
-  filter: blur(var(--ring-blur));
+.soft-parallax--newsletter .soft-parallax__field {
+  background: rgba(223, 243, 248, var(--field-opacity));
   box-shadow:
-    inset 0 0 36px rgba(255, 255, 255, .01),
-    0 0 64px rgba(20, 135, 171, .025);
-  transform: translate3d(-50%, -50%, var(--ring-z-from));
-  animation: newsletter-ring-drift var(--ring-duration) ease-in-out var(--ring-delay) infinite alternate;
-  will-change: transform, opacity
-}
-
-@keyframes newsletter-ring-drift {
-  from {
-    opacity: var(--ring-opacity-from);
-    transform: translate3d(
-      calc(-50% + var(--ring-dx-from)),
-      calc(-50% + var(--ring-dy-from)),
-      var(--ring-z-from)
-    ) scale(var(--ring-scale-from))
-  }
-  to {
-    opacity: 1;
-    transform: translate3d(
-      calc(-50% + var(--ring-dx)),
-      calc(-50% + var(--ring-dy)),
-      var(--ring-z-to)
-    ) scale(var(--ring-scale-to))
-  }
-}
-
-@media(prefers-reduced-motion:reduce) {
-  .news-procedural-ring {
-    animation: none
-  }
+    0 0 90px rgba(20, 135, 171, .09),
+    inset 0 0 60px rgba(255, 255, 255, .03);
+  opacity: .7
 }
 
 .news-box h2 {
@@ -10623,12 +10522,6 @@ a {
   .blog-date-filter button {
     min-width: 0;
     padding-inline: 7px
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .news-procedural-ring {
-    animation: none
   }
 }
 
