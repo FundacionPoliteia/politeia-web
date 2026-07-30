@@ -2323,7 +2323,8 @@ a {
   isolation: isolate
 }
 
-.motion-card > :not(.soft-parallax) {
+.motion-card > :not(.soft-parallax):not(.badge) {
+  position: relative;
   z-index: 2
 }
 
