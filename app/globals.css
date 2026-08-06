@@ -4941,6 +4941,10 @@ a {
   min-width: 0
 }
 
+.admin-field-label-static {
+  min-height: 40px
+}
+
 .admin-help-trigger-wrap {
   display: inline-flex;
   align-items: center;
@@ -6170,6 +6174,16 @@ a {
   margin: -8px 0 18px
 }
 
+.admin-tag-suggestions > p {
+  color: var(--gris);
+  font-size: .75rem;
+  margin: 8px 0 14px
+}
+
+.admin-tag-suggestions .admin-taxonomy-suggestions {
+  margin-top: 0
+}
+
 .admin-taxonomy-suggestions button {
   border: 1px solid rgba(19, 122, 159, .18);
   border-radius: 999px;
@@ -6186,6 +6200,17 @@ a {
 .admin-taxonomy-suggestions button:not(:disabled):hover {
   background: rgba(19, 122, 159, .14);
   border-color: rgba(19, 122, 159, .28)
+}
+
+.admin-taxonomy-suggestions button.is-contextual {
+  background: rgba(19, 122, 159, .14);
+  border-color: rgba(19, 122, 159, .32)
+}
+
+.admin-taxonomy-suggestions button.admin-tag-suggestions-more {
+  background: transparent;
+  border-color: var(--linea);
+  color: var(--tinta)
 }
 
 .admin-taxonomy-suggestions button:disabled {
@@ -6313,8 +6338,10 @@ a {
   margin: 12px 0 10px
 }
 
-.admin-content-head span {
-  display: block;
+.admin-content-head > div:first-child > .admin-field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: var(--tinta);
   font-weight: 700;
   font-size: .78rem;

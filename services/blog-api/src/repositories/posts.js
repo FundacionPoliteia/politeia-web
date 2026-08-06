@@ -59,8 +59,24 @@ export async function listManagePosts({ limit = 30, status = '', cursor = '', us
     .orderBy('updatedAt', 'desc')
     .limit(hasFirestoreTestOverride() ? safeLimit * 4 : safeLimit + 1);
   if (cursor) query = query.startAfter(Timestamp.fromDate(new Date(cursor)));
-  const snapshot = await query.get();
-  const fetchedItems = snapshot.docs.map(serializeDoc);
+  let snapshot;
+  let usedCompatibilityQuery = false;
+  try {
+    snapshot = await query.get();
+  } catch (err) {
+    if (managesAllPosts || !isMissingFirestoreIndexError(err)) throw err;
+    snapshot = await posts()
+      .where('authorEmail', '==', normalizeEmail(user?.email))
+      .get();
+    usedCompatibilityQuery = true;
+  }
+  let fetchedItems = snapshot.docs.map(serializeDoc);
+  if (usedCompatibilityQuery) {
+    fetchedItems = fetchedItems
+      .filter((post) => !cursor || timestampValue(post.updatedAt) < Date.parse(cursor))
+      .sort((a, b) => timestampValue(b.updatedAt) - timestampValue(a.updatedAt))
+      .slice(0, safeLimit + 1);
+  }
   const consumedItems = hasFirestoreTestOverride()
     ? fetchedItems
     : fetchedItems.slice(0, safeLimit);
@@ -83,6 +99,18 @@ export async function listManagePosts({ limit = 30, status = '', cursor = '', us
     ? consumedItems[consumedItems.length - 1]?.updatedAt || null
     : null;
   return { items: page, nextCursor };
+}
+
+function timestampValue(value) {
+  const timestamp = Date.parse(value || '');
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function isMissingFirestoreIndexError(err) {
+  const code = String(err?.code || '').toUpperCase();
+  const message = String(err?.message || err?.details || '').toLowerCase();
+  return (code === '9' || code === 'FAILED_PRECONDITION')
+    && message.includes('index');
 }
 
 function buildManagePostsQuery({ managesAllPosts, status, user }) {

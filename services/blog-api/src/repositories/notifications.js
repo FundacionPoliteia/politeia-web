@@ -237,10 +237,43 @@ async function queryRelevantEventDocs({ email, roles, since, limit }) {
       .limit(queryLimit)
       .get());
   }
-  const snapshots = await Promise.all(queries);
+  let snapshots;
+  try {
+    snapshots = await Promise.all(queries);
+  } catch (err) {
+    if (!isMissingFirestoreIndexError(err)) throw err;
+    snapshots = await queryRelevantEventDocsWithoutCompositeIndexes({
+      email,
+      roles,
+      limit: queryLimit,
+    });
+  }
   const docsById = new Map();
   snapshots.forEach((snapshot) => snapshot.docs.forEach((doc) => docsById.set(doc.id, doc)));
   return [...docsById.values()];
+}
+
+async function queryRelevantEventDocsWithoutCompositeIndexes({ email, roles, limit }) {
+  const fallbackQueries = [
+    events()
+      .where('targetEmails', 'array-contains', email)
+      .limit(limit)
+      .get(),
+  ];
+  if (roles.length) {
+    fallbackQueries.push(events()
+      .where('targetRoles', 'array-contains-any', roles)
+      .limit(limit)
+      .get());
+  }
+  return Promise.all(fallbackQueries);
+}
+
+function isMissingFirestoreIndexError(err) {
+  const code = String(err?.code || '').toUpperCase();
+  const message = String(err?.message || err?.details || '').toLowerCase();
+  return (code === '9' || code === 'FAILED_PRECONDITION')
+    && message.includes('index');
 }
 
 function parseNotificationCursor(value) {

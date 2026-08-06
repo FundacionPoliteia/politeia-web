@@ -30,6 +30,29 @@ const SESSION_REFRESH_COOLDOWN_MS = 5 * 60 * 1000;
 const UI_PREFERENCES_SYNC_DELAY_MS = 5 * 1000;
 const DEFAULT_NOTIFICATION_POLICY = { recentDays: 3, retentionDays: 7 };
 const UI_PREFERENCES_STORAGE_PREFIX = 'politeia:admin-ui:';
+const TAG_SUGGESTION_LIMIT = 8;
+const POLITICAL_TAG_SUGGESTIONS = [
+  'Ciudadanía',
+  'Congreso',
+  'Democracia',
+  'Derechos Humanos',
+  'Economía',
+  'Elecciones',
+  'Federalismo',
+  'Gobierno',
+  'Instituciones',
+  'Justicia',
+  'La Libertad Avanza',
+  'Libertad de Expresión',
+  'Opinión Pública',
+  'Oposición',
+  'Participación',
+  'Partidos Políticos',
+  'Políticas Públicas',
+  'Reforma Electoral',
+  'Relaciones Internacionales',
+  'Transparencia',
+];
 const DEFAULT_UI_PREFERENCES = {
   version: 2,
   lastPanelTab: '',
@@ -232,6 +255,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
   const [statusFilter, setStatusFilter] = useState('');
   const [postSearch, setPostSearch] = useState('');
   const [tagDraft, setTagDraft] = useState('');
+  const [showAllTagSuggestions, setShowAllTagSuggestions] = useState(false);
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [actionBusy, setActionBusy] = useState({});
@@ -2065,6 +2089,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
     setSavedForm(nextForm);
     setUseManualAuthorNote(Boolean(nextForm.authorNote));
     setTagDraft('');
+    setShowAllTagSuggestions(false);
     setCategorySearchTerm('');
     setCoverImageError('');
   }
@@ -2370,6 +2395,10 @@ export default function AdminConsole({ surface = 'editorial' }) {
   }, [categories, posts]);
   const tagOptions = useMemo(() => {
     const values = new Map();
+    POLITICAL_TAG_SUGGESTIONS.forEach((tag) => {
+      const key = taxonomyKey(tag);
+      if (key && !values.has(key)) values.set(key, tag);
+    });
     posts.forEach((post) => {
       sanitizeTags(post.tags || []).forEach((tag) => {
         const key = taxonomyKey(tag);
@@ -2403,6 +2432,28 @@ export default function AdminConsole({ surface = 'editorial' }) {
   const currentTags = useMemo(
     () => parseTagsText(form.tagsText),
     [form.tagsText]
+  );
+  const rankedTagSuggestions = useMemo(() => {
+    const selectedKeys = new Set(currentTags.map((tag) => taxonomyKey(tag)));
+    const query = normalizeTagSuggestionText(tagDraft);
+    const titleText = normalizeTagSuggestionText(form.title);
+    const contentText = normalizeTagSuggestionText(`${form.contentMarkdown || ''} ${form.excerpt || ''}`);
+    const categoryText = normalizeTagSuggestionText(form.category);
+
+    return tagOptions
+      .filter((tag) => !selectedKeys.has(taxonomyKey(tag)))
+      .filter((tag) => !query || normalizeTagSuggestionText(tag).includes(query))
+      .map((tag) => ({
+        tag,
+        score: tagSuggestionScore(tag, { titleText, contentText, categoryText, query }),
+      }))
+      .sort((left, right) => right.score - left.score || left.tag.localeCompare(right.tag, 'es'));
+  }, [currentTags, form.category, form.contentMarkdown, form.excerpt, form.title, tagDraft, tagOptions]);
+  const visibleTagSuggestions = useMemo(
+    () => showAllTagSuggestions
+      ? rankedTagSuggestions
+      : rankedTagSuggestions.slice(0, TAG_SUGGESTION_LIMIT),
+    [rankedTagSuggestions, showAllTagSuggestions]
   );
   const previewTags = useMemo(() => {
     return currentTags.length ? currentTags : ['Nota'];
@@ -3769,6 +3820,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
                         setSavedForm(nextForm);
                         setUseManualAuthorNote(false);
                         setTagDraft('');
+                        setShowAllTagSuggestions(false);
                         setCategorySearchTerm('');
                         setCoverImageError('');
                       }}
@@ -3864,7 +3916,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
                       <input disabled={publishedAuthorLocked} value={form.authorName} onChange={(e) => updateForm('authorName', e.target.value)} placeholder={user?.name || user?.email || 'Nombre visible'} />
                     </label>
                     <label>
-                      Categoría
+                      <span className="admin-field-label admin-field-label-static">Categoría</span>
                       <div className="admin-category-combobox">
                         <input
                           aria-autocomplete="list"
@@ -4125,15 +4177,41 @@ export default function AdminConsole({ surface = 'editorial' }) {
                         placeholder={currentTags.length ? 'Agregar otro tag' : 'Política, democracia, análisis'}
                       />
                     </div>
-                    <FieldHelper description="Separá los temas con coma o Enter. Cada uno se convierte en un tag." topicId="blogs-tags" />
+                    <FieldHelper description="Separá los temas con coma o Enter. Cada uno se convierte en un tag." />
                   </div>
-                  {tagOptions.length > 0 && (
-                    <div className="admin-taxonomy-suggestions">
-                      {tagOptions.slice(0, 14).map((option) => (
-                        <button disabled={publishedAuthorLocked} key={option} onClick={() => addTagSuggestion(option)} type="button">
-                          {option}
-                        </button>
-                      ))}
+                  {rankedTagSuggestions.length > 0 && (
+                    <div className="admin-tag-suggestions">
+                      <p>
+                        {tagDraft
+                          ? 'Coincidencias entre los tags existentes'
+                          : 'Sugeridos según el título y el contenido'}
+                      </p>
+                      <div className="admin-taxonomy-suggestions">
+                        {visibleTagSuggestions.map(({ tag, score }) => (
+                          <button
+                            className={score > 0 ? 'is-contextual' : ''}
+                            disabled={publishedAuthorLocked}
+                            key={tag}
+                            onClick={() => addTagSuggestion(tag)}
+                            type="button"
+                          >
+                            {tag}
+                          </button>
+                        ))}
+                        {rankedTagSuggestions.length > TAG_SUGGESTION_LIMIT && (
+                          <button
+                            aria-expanded={showAllTagSuggestions}
+                            className="admin-tag-suggestions-more"
+                            disabled={publishedAuthorLocked}
+                            onClick={() => setShowAllTagSuggestions((current) => !current)}
+                            type="button"
+                          >
+                            {showAllTagSuggestions
+                              ? 'Ver menos'
+                              : `Ver ${rankedTagSuggestions.length - TAG_SUGGESTION_LIMIT} más`}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   )}
 
@@ -5122,6 +5200,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
       if (nextTag && !tags.some((item) => taxonomyKey(item) === taxonomyKey(nextTag))) tags.push(nextTag);
       return normalizeForm({ ...current, tagsText: tags.join(', ') });
     });
+    setShowAllTagSuggestions(false);
   }
 
   function commitTagDraft(value = tagDraft) {
@@ -5134,9 +5213,11 @@ export default function AdminConsole({ surface = 'editorial' }) {
       ]).join(', '),
     }));
     setTagDraft('');
+    setShowAllTagSuggestions(false);
   }
 
   function handleTagDraftChange(value) {
+    setShowAllTagSuggestions(false);
     const pieces = String(value || '').split(',');
     if (pieces.length === 1) {
       setTagDraft(value);
@@ -5290,6 +5371,40 @@ function deriveExcerpt(markdown = '', maxLength = 180) {
     ? clipped.slice(0, lastSpace)
     : clipped.slice(0, maxLength);
   return `${safeText.trim()}...`;
+}
+
+function normalizeTagSuggestionText(value = '') {
+  return taxonomyKey(String(value || ''))
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function tagSuggestionScore(tag, { titleText = '', contentText = '', categoryText = '', query = '' } = {}) {
+  const tagText = normalizeTagSuggestionText(tag);
+  if (!tagText) return 0;
+
+  let score = 0;
+  if (query) {
+    if (tagText === query) score += 6000;
+    else if (tagText.startsWith(query)) score += 5000;
+    else if (tagText.includes(query)) score += 4000;
+  }
+  if (containsTagPhrase(titleText, tagText)) score += 3000;
+  if (containsTagPhrase(contentText, tagText)) score += 1800;
+  if (containsTagPhrase(categoryText, tagText)) score += 1200;
+
+  const meaningfulWords = tagText.split(' ').filter((word) => word.length > 2);
+  meaningfulWords.forEach((word) => {
+    if (containsTagPhrase(titleText, word)) score += 90;
+    if (containsTagPhrase(contentText, word)) score += 35;
+  });
+  return score;
+}
+
+function containsTagPhrase(text = '', phrase = '') {
+  if (!text || !phrase) return false;
+  return ` ${text} `.includes(` ${phrase} `);
 }
 
 function normalizeFormReferences(value = []) {
