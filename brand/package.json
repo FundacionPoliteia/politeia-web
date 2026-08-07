@@ -1,0 +1,13 @@
+{
+  "name": "@politeia/brand",
+  "version": "1.0.0",
+  "private": true,
+  "files": [
+    "politeia-tokens.css",
+    "politeia-tokens.json"
+  ],
+  "exports": {
+    "./tokens.css": "./politeia-tokens.css",
+    "./tokens.json": "./politeia-tokens.json"
+  }
+}

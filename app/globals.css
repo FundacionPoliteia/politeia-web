@@ -10445,6 +10445,10 @@ a {
     line-height: 1;
   }
 
+  .public-newsletter-nudge.is-restored {
+    animation: none;
+  }
+
   .public-newsletter-nudge strong {
     display: block;
     color: var(--tinta);

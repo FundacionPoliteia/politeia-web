@@ -1,0 +1,33 @@
+name: Quórum CI
+
+on:
+  pull_request:
+    paths: ["apps/quorum/**", "services/quorum-api/**", "packages/quorum-contracts/**", "brand/**", "infra/quorum/**", "package.json", "package-lock.json"]
+  push:
+    branches: [main]
+    paths: ["apps/quorum/**", "services/quorum-api/**", "packages/quorum-contracts/**", "brand/**", "infra/quorum/**", "package.json", "package-lock.json"]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm run quorum:secrets:check
+      - run: npm ci
+      - run: npm run quorum:check
+      - run: npm run quorum:test
+      - run: npm audit --omit=dev --audit-level=high
+      - run: npm run quorum:build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run quorum:e2e
+
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform fmt -check -recursive infra/quorum/terraform
+      - run: terraform -chdir=infra/quorum/terraform init -backend=false
+      - run: terraform -chdir=infra/quorum/terraform validate

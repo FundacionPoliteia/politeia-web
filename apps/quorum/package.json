@@ -1,0 +1,39 @@
+{
+  "name": "@politeia/quorum-web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3100",
+    "build": "next build",
+    "start": "next start -p 3100",
+    "check": "tsc --noEmit",
+    "test:unit": "vitest run tests/unit",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@politeia/brand": "1.0.0",
+    "@politeia/quorum-contracts": "0.1.0",
+    "@tiptap/extension-image": "^3.27.1",
+    "@tiptap/extension-link": "^3.27.1",
+    "@tiptap/extension-placeholder": "^3.27.1",
+    "@tiptap/extension-table": "^3.27.1",
+    "@tiptap/react": "^3.27.1",
+    "@tiptap/starter-kit": "^3.27.1",
+    "marked": "^18.0.5",
+    "next": "15.5.22",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "turndown": "^7.2.4",
+    "turndown-plugin-gfm": "^1.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.7",
+    "@types/react": "^19.0.7",
+    "@types/react-dom": "^19.0.3",
+    "@types/turndown": "^5.0.5",
+    "@axe-core/playwright": "^4.10.2",
+    "@playwright/test": "^1.54.1",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
+}
