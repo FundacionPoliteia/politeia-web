@@ -1,26 +1,26 @@
 locals {
   all_environments = {
     staging = {
-      database        = "quorum-staging"
-      api_domain      = var.domains.api_staging
-      public_domain   = var.domains.public_staging
-      manage_domain   = var.domains.manage_staging
-      image            = var.api_images.staging
-      revalidate_url   = var.vercel_revalidate_urls.staging
+      database       = "quorum-staging"
+      api_domain     = var.domains.api_staging
+      public_domain  = var.domains.public_staging
+      manage_domain  = var.domains.manage_staging
+      image          = var.api_images.staging
+      revalidate_url = var.vercel_revalidate_urls.staging
     }
     production = {
-      database        = "quorum-production"
-      api_domain      = var.domains.api_production
-      public_domain   = var.domains.public_production
-      manage_domain   = var.domains.manage_production
-      image            = var.api_images.production
-      revalidate_url   = var.vercel_revalidate_urls.production
+      database       = "quorum-production"
+      api_domain     = var.domains.api_production
+      public_domain  = var.domains.public_production
+      manage_domain  = var.domains.manage_production
+      image          = var.api_images.production
+      revalidate_url = var.vercel_revalidate_urls.production
     }
   }
-  environments = { for key, value in local.all_environments : key => value if contains(var.deployment_environments, key) }
-  apis = toset(["run.googleapis.com", "firestore.googleapis.com", "storage.googleapis.com", "secretmanager.googleapis.com", "cloudscheduler.googleapis.com", "artifactregistry.googleapis.com"])
+  environments    = { for key, value in local.all_environments : key => value if contains(var.deployment_environments, key) }
+  apis            = toset(["run.googleapis.com", "firestore.googleapis.com", "storage.googleapis.com", "secretmanager.googleapis.com", "cloudscheduler.googleapis.com", "artifactregistry.googleapis.com"])
   secret_suffixes = toset(["session-secret", "google-client-id", "public-access-emails", "public-gate-secret", "resend-key", "resend-webhook", "turnstile-secret", "dispatch-token", "revalidate-secret"])
-  secrets = { for pair in setproduct(keys(local.environments), local.secret_suffixes) : "${pair[0]}-${pair[1]}" => { env = pair[0], suffix = pair[1] } }
+  secrets         = { for pair in setproduct(keys(local.environments), local.secret_suffixes) : "${pair[0]}-${pair[1]}" => { env = pair[0], suffix = pair[1] } }
 }
 
 resource "google_project_service" "required" {

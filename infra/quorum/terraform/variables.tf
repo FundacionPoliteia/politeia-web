@@ -16,16 +16,16 @@ variable "deployment_environments" {
 }
 variable "api_images" {
   description = "Immutable container image by environment."
-  type = object({ staging = string, production = string })
+  type        = object({ staging = string, production = string })
 }
 variable "domains" {
   type = object({
-    public_staging     = string
-    manage_staging     = string
-    api_staging        = string
-    public_production  = string
-    manage_production  = string
-    api_production     = string
+    public_staging    = string
+    manage_staging    = string
+    api_staging       = string
+    public_production = string
+    manage_production = string
+    api_production    = string
   })
 }
 variable "vercel_revalidate_urls" {
