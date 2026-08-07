@@ -417,6 +417,81 @@ test('role assignments allow primary-domain and configured external Gmail emails
   assert.equal(isAllowedRoleEmail('persona@example.com'), false);
 });
 
+test('role assignment endpoints persist users and synchronize their base profiles', async () => {
+  const firestore = createMemoryFirestore();
+  const previousDevAuth = config.devAuth;
+  setFirestoreForTests(firestore);
+  config.devAuth = false;
+  const adminCookie = `${config.sessionCookieName}=${encodeURIComponent(buildSessionCookie({
+    email: 'dev@politeia.ar',
+    name: 'Development Admin',
+    roles: ['admin'],
+  }))}`;
+
+  try {
+    const app = createApp();
+    const created = await request(app)
+      .put('/v1/users/nueva.persona%40gmail.com/roles')
+      .set('Cookie', adminCookie)
+      .send({ roles: ['blog', 'newsletter'] })
+      .expect(200);
+
+    assert.equal(created.body.item.email, 'nueva.persona@gmail.com');
+    assert.deepEqual(created.body.item.roles, ['blog', 'newsletter']);
+
+    const assignments = await request(app)
+      .get('/v1/users')
+      .set('Cookie', adminCookie)
+      .expect(200);
+    assert.deepEqual(assignments.body.items.map((item) => item.email), ['nueva.persona@gmail.com']);
+
+    await firestore.collection('users').doc('perfil.heredado@gmail.com').set({
+      email: 'perfil.heredado@gmail.com',
+      roles: ['blog'],
+      active: true,
+      updatedAt: '2026-08-07T12:00:00.000Z',
+    });
+
+    const profileDoc = await firestore.collection('userProfiles').doc('nueva.persona@gmail.com').get();
+    assert.equal(profileDoc.exists, true);
+    assert.deepEqual(profileDoc.data().accountRoles, ['blog', 'newsletter']);
+
+    const profiles = await request(app)
+      .get('/v1/profile/manage')
+      .set('Cookie', adminCookie)
+      .expect(200);
+    const profile = profiles.body.items.find((item) => item.email === 'nueva.persona@gmail.com');
+    const legacyProfile = profiles.body.items.find((item) => item.email === 'perfil.heredado@gmail.com');
+    assert.ok(profile);
+    assert.ok(legacyProfile);
+    assert.deepEqual(profile.accountRoles, ['blog', 'newsletter']);
+    assert.deepEqual(legacyProfile.accountRoles, ['blog']);
+
+    await request(app)
+      .patch(`/v1/profile/manage/${encodeURIComponent(legacyProfile.id)}`)
+      .set('Cookie', adminCookie)
+      .send({ firstName: 'Perfil', lastName: 'Heredado' })
+      .expect(200);
+    const materializedLegacyProfile = await firestore.collection('userProfiles').doc('perfil.heredado@gmail.com').get();
+    assert.equal(materializedLegacyProfile.exists, true);
+    assert.equal(materializedLegacyProfile.data().fullName, 'Perfil Heredado');
+
+    await request(app)
+      .delete('/v1/users/nueva.persona%40gmail.com')
+      .set('Cookie', adminCookie)
+      .expect(200);
+
+    const removedAssignment = await firestore.collection('users').doc('nueva.persona@gmail.com').get();
+    const retainedProfile = await firestore.collection('userProfiles').doc('nueva.persona@gmail.com').get();
+    assert.equal(removedAssignment.data().active, false);
+    assert.deepEqual(removedAssignment.data().roles, []);
+    assert.deepEqual(retainedProfile.data().accountRoles, []);
+  } finally {
+    config.devAuth = previousDevAuth;
+    setFirestoreForTests(null);
+  }
+});
+
 test('newsletter administration accepts newsletter and admin roles only', async () => {
   const firestore = createMemoryFirestore();
   const previousDevAuth = config.devAuth;

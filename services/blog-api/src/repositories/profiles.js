@@ -2,7 +2,7 @@ import { db, hasFirestoreTestOverride, serializeDoc, serverTimestamp } from '../
 import { config } from '../config.js';
 import { HttpError } from '../errors.js';
 import { writeAuditLog } from './audit.js';
-import { listUserRoleAssignments, normalizeEmail } from './users.js';
+import { listUserRoleAssignments, normalizeEmail, resolveAssignedRoles } from './users.js';
 import { isValidSlug, slugify } from '../utils/slug.js';
 
 const profiles = () => db().collection('userProfiles');
@@ -75,24 +75,41 @@ export async function updateUserProfile(user, data) {
 }
 
 export async function listUserProfiles() {
-  const [snapshot, postSnapshot] = await Promise.all([
+  const [snapshot, postSnapshot, assignmentResult] = await Promise.all([
     profiles().get(),
     hasFirestoreTestOverride()
       ? posts().get()
       : posts().select('authorName', 'deletedAt').get(),
+    listUserRoleAssignments(),
   ]);
   const authorNameKeys = new Set(postSnapshot.docs
     .map(serializeDoc)
     .filter((post) => post && !post.deletedAt)
     .map((post) => authorKey(post.authorName))
     .filter(Boolean));
-  const profileItems = snapshot.docs.map((doc) => serializeDoc(doc));
+  const storedProfileItems = snapshot.docs.map((doc) => serializeDoc(doc));
+  const storedProfileEmails = new Set(storedProfileItems
+    .filter((item) => item?.managedAuthor !== true)
+    .map((item) => normalizeEmail(item?.email || item?.id))
+    .filter(Boolean));
+  const missingAccountProfiles = (assignmentResult.items || [])
+    .filter((assignment) => assignment?.active !== false && assignment?.email)
+    .filter((assignment) => !storedProfileEmails.has(normalizeEmail(assignment.email)))
+    .map((assignment) => ({
+      id: profileId(assignment.email),
+      email: normalizeEmail(assignment.email),
+      accountRoles: assignment.roles || [],
+      managedAuthor: false,
+      createdAt: assignment.createdAt || '',
+      updatedAt: assignment.updatedAt || '',
+      updatedBy: assignment.updatedBy || '',
+    }));
+  const profileItems = [...storedProfileItems, ...missingAccountProfiles];
   const managedNameKeys = new Set(profileItems
     .filter((item) => item?.managedAuthor === true)
     .map((item) => item.identityNameKey || identityNameKey(item.fullName || buildFullName(item.firstName, item.lastName)))
     .filter(Boolean));
-  const items = await Promise.all(snapshot.docs
-    .map((doc) => serializeDoc(doc))
+  const items = await Promise.all(profileItems
     .map((item) => toUserProfile(item, { email: item?.email }, { authorNameKeys, managedNameKeys })));
   items.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
 
@@ -209,9 +226,17 @@ export async function updateAuthorProfileAsAdmin(id = '', data, actorEmail = '')
 
   const ref = profiles().doc(cleanId);
   const beforeDoc = await ref.get();
-  if (!beforeDoc.exists) throw new HttpError(404, 'Author profile not found');
-
-  const stored = serializeDoc(beforeDoc);
+  let stored = beforeDoc.exists ? serializeDoc(beforeDoc) : null;
+  if (!stored) {
+    const assignedRoles = await resolveAssignedRoles(cleanId);
+    if (!assignedRoles.length) throw new HttpError(404, 'Author profile not found');
+    stored = {
+      id: profileId(cleanId),
+      email: normalizeEmail(cleanId),
+      accountRoles: assignedRoles,
+      managedAuthor: false,
+    };
+  }
   const storedAccountEmail = stored?.managedAuthor === true
     ? ''
     : normalizeEmail(stored?.email || stored?.id);
@@ -247,6 +272,9 @@ export async function updateAuthorProfileAsAdmin(id = '', data, actorEmail = '')
     ...clean,
     email: isManagedAuthor ? '' : before.email,
     managedAuthor: isManagedAuthor,
+    ...(isManagedAuthor ? {} : {
+      accountRoles: sanitizeInternalRoles(stored.accountRoles || before.accountRoles),
+    }),
     publicProfileEnabled: clean.publicProfileEnabled,
     publicProfilePreferenceSet: true,
     fullName,
@@ -426,6 +454,7 @@ async function toUserProfile(item, user, context = null) {
     id: item?.id || profileId(user?.email),
     email: normalizeEmail(item?.email || user?.email),
     ...clean,
+    accountRoles: sanitizeInternalRoles(item?.accountRoles || user?.roles),
     managedAuthor: item?.managedAuthor === true,
     publicProfileEnabled,
     canSharePublicProfile,

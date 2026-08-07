@@ -1100,13 +1100,10 @@ export default function AdminConsole({ surface = 'editorial' }) {
       const data = await api('/v1/users');
       const items = data.items || [];
       setAdminUsers(items);
-      setAdminUserDrafts((current) => {
-        const next = { ...current };
-        items.forEach((item) => {
-          if (!next[item.email]) next[item.email] = normalizeAssignedRoleSelection(item.roles || []);
-        });
-        return next;
-      });
+      setAdminUserDrafts(Object.fromEntries(items.map((item) => [
+        item.email,
+        normalizeAssignedRoleSelection(item.roles || []),
+      ])));
     } catch (err) {
       setMessage(err.message);
     }
@@ -2262,7 +2259,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
     }
   }
 
-  function addAdminUserDraft() {
+  async function addAdminUser() {
     const email = normalizeRoleEmail(adminUserEmail);
     if (!isAllowedRoleEmail(email)) {
       setMessage(`Usa un email @${ALLOWED_EMAIL_DOMAIN} o @${ASSIGNED_EMAIL_DOMAIN}.`);
@@ -2272,15 +2269,34 @@ export default function AdminConsole({ surface = 'editorial' }) {
       setMessage('Elegí al menos un rol para aplicar.');
       return;
     }
+    if (adminUsers.some((item) => item.email === email)) {
+      setMessage(`${email} ya existe. Modifica sus roles en la tabla y presiona Guardar.`);
+      setAdminUserSearch(email);
+      setAdminUsersOpen(true);
+      return;
+    }
 
-    setAdminUsers((current) => (
-      current.some((item) => item.email === email)
-        ? current
-        : [{ email, roles: [], active: true, isDraft: true }, ...current]
-    ));
-    setAdminUserDrafts((current) => ({ ...current, [email]: current[email] || normalizeAssignedRoleSelection(adminUserNewRoles) }));
-    setAdminUserEmail('');
-    setAdminUsersOpen(true);
+    try {
+      setBusy(true);
+      setMessage('');
+      const data = await withActionLoading(`user-create:${email}`, () => api(`/v1/users/${encodeURIComponent(email)}/roles`, {
+        method: 'PUT',
+        body: JSON.stringify({ roles: normalizeAssignedRoleSelection(adminUserNewRoles) }),
+      }));
+      setAdminUsers((current) => upsertAdminUserItem(current, data.item));
+      setAdminUserDrafts((current) => ({
+        ...current,
+        [email]: normalizeAssignedRoleSelection(data.item?.roles || []),
+      }));
+      setAdminUserEmail('');
+      setAdminUserNewRoles(['blog']);
+      setAdminUsersOpen(true);
+      setMessage(`${email} fue habilitado y su perfil base quedo creado.`);
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setBusy(false);
+    }
   }
 
   function toggleNewAdminUserRole(role) {
@@ -3474,15 +3490,16 @@ export default function AdminConsole({ surface = 'editorial' }) {
                               onKeyDown={(e) => {
                                 if (e.key === 'Enter') {
                                   e.preventDefault();
-                                  addAdminUserDraft();
+                                  addAdminUser();
                                 }
                               }}
                               placeholder={`persona@${ALLOWED_EMAIL_DOMAIN} o persona@${ASSIGNED_EMAIL_DOMAIN}`}
                               type="email"
                               value={adminUserEmail}
                             />
-                            <button className="btn btn-primary" disabled={busy || !adminUserNewRoles.length} onClick={addAdminUserDraft} type="button">
-                              Agregar
+                            <button className="btn btn-primary" disabled={busy || !adminUserNewRoles.length} onClick={addAdminUser} type="button">
+                              {isActionLoading('user-create') ? 'Agregando...' : 'Agregar'}
+                              <ActionSpinner active={isActionLoading('user-create')} />
                             </button>
                           </div>
                         </label>
@@ -3526,8 +3543,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
                                 <tr className={changed ? 'selected' : ''} key={item.email}>
                                   <td>
                                     <strong>{item.email}</strong>
-                                    {item.isDraft && <small>Nuevo usuario sin guardar</small>}
-                                    {!item.isDraft && item.updatedBy && <small>Ultimo cambio: {item.updatedBy}</small>}
+                                    {item.updatedBy && <small>Ultimo cambio: {item.updatedBy}</small>}
                                   </td>
                                   <td>
                                     <div className="admin-role-checks">
@@ -3549,7 +3565,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
                                     <div className="admin-table-actions">
                                       <button
                                         className="btn btn-ghost"
-                                        disabled={busy || isActionLoading(`user-save:${item.email}`) || (!changed && !item.isDraft)}
+                                        disabled={busy || isActionLoading(`user-save:${item.email}`) || !changed}
                                         onClick={() => saveAdminUserRoles(item.email)}
                                         type="button"
                                       >
@@ -3558,7 +3574,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
                                       </button>
                                       <button
                                         className="btn btn-ghost danger"
-                                        disabled={busy || isActionLoading(`user-delete:${item.email}`) || item.isDraft}
+                                        disabled={busy || isActionLoading(`user-delete:${item.email}`)}
                                         onClick={() => deleteAdminUserRoles(item.email)}
                                         type="button"
                                       >

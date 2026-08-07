@@ -6,6 +6,7 @@ import { writeAuditLog } from './audit.js';
 export const ASSIGNABLE_ROLES = ['admin', 'reviewer', 'blog', 'newsletter'];
 
 const users = () => db().collection('users');
+const userProfiles = () => db().collection('userProfiles');
 
 export async function listUserRoleAssignments() {
   const snapshot = await users().orderBy('updatedAt', 'desc').limit(200).get();
@@ -36,23 +37,41 @@ export async function upsertUserRoleAssignment(email, roles, actorEmail) {
   assertPrimaryDomainActor(actorEmail);
   const cleanRoles = sanitizeAssignedRoles(roles);
   const ref = users().doc(roleAssignmentId(cleanEmail));
-  const beforeDoc = await ref.get();
-  const before = beforeDoc.exists ? serializeDoc(beforeDoc) : null;
+  const profileRef = userProfiles().doc(profileId(cleanEmail));
+  const before = await db().runTransaction(async (transaction) => {
+    const beforeDoc = await transaction.get(ref);
+    const profileDoc = await transaction.get(profileRef);
+    const stored = beforeDoc.exists ? serializeDoc(beforeDoc) : null;
+    const assignmentPatch = {
+      email: cleanEmail,
+      roles: cleanRoles,
+      active: cleanRoles.length > 0,
+      deletedAt: null,
+      updatedAt: serverTimestamp(),
+      updatedBy: actorEmail,
+      ...(stored ? {} : {
+        createdAt: serverTimestamp(),
+        createdBy: actorEmail,
+      }),
+    };
+    const profilePatch = {
+      email: cleanEmail,
+      managedAuthor: false,
+      accountRoles: cleanRoles,
+      rolesUpdatedAt: serverTimestamp(),
+      rolesUpdatedBy: actorEmail,
+      updatedAt: serverTimestamp(),
+      updatedBy: actorEmail,
+      ...(profileDoc.exists ? {} : {
+        createdAt: serverTimestamp(),
+        createdBy: actorEmail,
+      }),
+    };
 
-  const patch = {
-    email: cleanEmail,
-    roles: cleanRoles,
-    active: cleanRoles.length > 0,
-    deletedAt: null,
-    updatedAt: serverTimestamp(),
-    updatedBy: actorEmail,
-  };
-  if (!before) {
-    patch.createdAt = serverTimestamp();
-    patch.createdBy = actorEmail;
-  }
-
-  await ref.set(patch, { merge: true });
+    transaction.set(ref, assignmentPatch, { merge: true });
+    transaction.set(profileRef, profilePatch, { merge: true });
+    return stored;
+  });
   const after = toUserRoleAssignment(serializeDoc(await ref.get()));
   await writeAuditLog({
     actorEmail,
@@ -71,17 +90,29 @@ export async function deleteUserRoleAssignment(email, actorEmail) {
   assertAllowedEmail(cleanEmail);
   assertPrimaryDomainActor(actorEmail);
   const ref = users().doc(roleAssignmentId(cleanEmail));
-  const beforeDoc = await ref.get();
-  if (!beforeDoc.exists) throw new HttpError(404, 'User role assignment not found');
-  const before = serializeDoc(beforeDoc);
-  if (before.deletedAt) throw new HttpError(404, 'User role assignment not found');
+  const profileRef = userProfiles().doc(profileId(cleanEmail));
+  const before = await db().runTransaction(async (transaction) => {
+    const beforeDoc = await transaction.get(ref);
+    if (!beforeDoc.exists) throw new HttpError(404, 'User role assignment not found');
+    const stored = serializeDoc(beforeDoc);
+    if (stored.deletedAt) throw new HttpError(404, 'User role assignment not found');
 
-  await ref.update({
-    roles: [],
-    active: false,
-    deletedAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-    updatedBy: actorEmail,
+    transaction.update(ref, {
+      roles: [],
+      active: false,
+      deletedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      updatedBy: actorEmail,
+    });
+    transaction.set(profileRef, {
+      email: cleanEmail,
+      accountRoles: [],
+      rolesUpdatedAt: serverTimestamp(),
+      rolesUpdatedBy: actorEmail,
+      updatedAt: serverTimestamp(),
+      updatedBy: actorEmail,
+    }, { merge: true });
+    return stored;
   });
 
   const after = toUserRoleAssignment(serializeDoc(await ref.get()));
@@ -177,6 +208,10 @@ function assertPrimaryDomainActor(actorEmail) {
 }
 
 function roleAssignmentId(email) {
+  return normalizeEmail(email).replaceAll('/', '_');
+}
+
+function profileId(email) {
   return normalizeEmail(email).replaceAll('/', '_');
 }
 
