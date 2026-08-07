@@ -290,7 +290,15 @@ resource "google_cloud_run_v2_service" "api" {
       }
     }
   }
-  depends_on = [google_project_service.required]
+  depends_on = [
+    google_project_service.required,
+    google_project_iam_member.api_datastore,
+    google_project_iam_member.api_export,
+    google_storage_bucket_iam_member.api_documents,
+    google_storage_bucket_iam_member.api_backups,
+    google_storage_bucket_iam_member.api_source_snapshots_create,
+    google_secret_manager_secret_iam_member.api,
+  ]
 }
 
 resource "google_cloud_run_v2_service_iam_member" "public" {
