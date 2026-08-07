@@ -1,4 +1,5 @@
 import './globals.css';
+import PublicNewsletterNudge from '../components/PublicNewsletterNudge';
 
 export const metadata = {
   title: 'Politeia - Fundación',
@@ -34,6 +35,7 @@ export default function RootLayout({ children }) {
       </head>
       <body>
         {children}
+        <PublicNewsletterNudge />
       </body>
     </html>
   );

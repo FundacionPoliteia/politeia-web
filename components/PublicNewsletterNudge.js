@@ -2,28 +2,52 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 const SESSION_KEY = 'politeia:newsletter-nudge-dismissed';
+const INTERNAL_PATH_PREFIXES = ['/admin', '/internal', '/404'];
 
 export default function PublicNewsletterNudge() {
   const pathname = usePathname();
+  const timerRef = useRef(null);
+  const phaseRef = useRef('idle');
+  const [publicHost, setPublicHost] = useState(false);
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    setVisible(false);
-    if (window.sessionStorage.getItem(SESSION_KEY) === 'true') return undefined;
-    if (window.location.hash === '#news') return undefined;
+    const hostname = window.location.hostname.toLowerCase();
+    const internalHost = hostname === 'admin.politeia.ar' || hostname.startsWith('admin.localhost');
+    setPublicHost(!internalHost);
 
-    let timer = null;
-    const schedule = (delay) => {
-      if (timer) return;
-      timer = window.setTimeout(() => setVisible(true), delay);
+    if (window.sessionStorage.getItem(SESSION_KEY) === 'true') {
+      phaseRef.current = 'dismissed';
+    }
+
+    return () => {
+      if (timerRef.current) window.clearTimeout(timerRef.current);
     };
+  }, []);
+
+  const schedule = useCallback((delay) => {
+    if (phaseRef.current !== 'idle') return;
+    phaseRef.current = 'scheduled';
+    timerRef.current = window.setTimeout(() => {
+      timerRef.current = null;
+      phaseRef.current = 'visible';
+      setVisible(true);
+    }, delay);
+  }, []);
+
+  const internalPath = INTERNAL_PATH_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+  const publicSurface = publicHost && !internalPath;
+
+  useEffect(() => {
+    if (!publicSurface || phaseRef.current !== 'idle') return undefined;
+    if (window.location.hash === '#news') return undefined;
 
     if (pathname !== '/') {
       schedule(2500);
-      return () => window.clearTimeout(timer);
+      return undefined;
     }
 
     const onScroll = () => {
@@ -35,16 +59,20 @@ export default function PublicNewsletterNudge() {
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => {
       window.removeEventListener('scroll', onScroll);
-      if (timer) window.clearTimeout(timer);
     };
-  }, [pathname]);
+  }, [pathname, publicSurface, schedule]);
 
   const dismiss = useCallback(() => {
     window.sessionStorage.setItem(SESSION_KEY, 'true');
+    phaseRef.current = 'dismissed';
+    if (timerRef.current) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
     setVisible(false);
   }, []);
 
-  if (!visible) return null;
+  if (!publicSurface || !visible) return null;
 
   return (
     <aside aria-label="Invitación al newsletter" className="public-newsletter-nudge" role="region">
