@@ -143,6 +143,8 @@ terraform -chdir=infra/quorum/terraform plan -target=google_project_service.requ
 terraform -chdir=infra/quorum/terraform apply -target=google_project_service.required -target=google_secret_manager_secret.quorum
 ```
 
+Antes de cargar las versiones, completar la sección **4. Configurar Google Sign-In** para obtener el Client ID web. Después volver a este punto.
+
 Abrir Google Cloud → Security → Secret Manager. Cargar una versión para cada secreto de staging:
 
 | Secret Manager | Contenido | También se carga en Vercel |
