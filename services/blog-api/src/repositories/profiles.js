@@ -82,11 +82,17 @@ export async function listUserProfiles() {
       : posts().select('authorName', 'deletedAt').get(),
     listUserRoleAssignments(),
   ]);
-  const authorNameKeys = new Set(postSnapshot.docs
+  const activePosts = postSnapshot.docs
     .map(serializeDoc)
-    .filter((post) => post && !post.deletedAt)
+    .filter((post) => post && !post.deletedAt);
+  const authorNameKeys = new Set(activePosts
     .map((post) => authorKey(post.authorName))
     .filter(Boolean));
+  const authorPostCounts = activePosts.reduce((counts, post) => {
+    const key = identityNameKey(post.authorName);
+    if (key) counts.set(key, (counts.get(key) || 0) + 1);
+    return counts;
+  }, new Map());
   const storedProfileItems = snapshot.docs.map((doc) => serializeDoc(doc));
   const storedProfileEmails = new Set(storedProfileItems
     .filter((item) => item?.managedAuthor !== true)
@@ -110,7 +116,7 @@ export async function listUserProfiles() {
     .map((item) => item.identityNameKey || identityNameKey(item.fullName || buildFullName(item.firstName, item.lastName)))
     .filter(Boolean));
   const items = await Promise.all(profileItems
-    .map((item) => toUserProfile(item, { email: item?.email }, { authorNameKeys, managedNameKeys })));
+    .map((item) => toUserProfile(item, { email: item?.email }, { authorNameKeys, managedNameKeys, authorPostCounts })));
   items.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
 
   return { items };
@@ -462,6 +468,7 @@ async function toUserProfile(item, user, context = null) {
     authorSlug: slugify(item?.authorSlug || fullName),
     createdAt: item?.createdAt || '',
     updatedAt: item?.updatedAt || '',
+    postCount: context ? Number(context.authorPostCounts?.get(managedKey) || 0) : undefined,
   };
 }
 

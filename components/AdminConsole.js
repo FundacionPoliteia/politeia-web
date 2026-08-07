@@ -316,6 +316,8 @@ export default function AdminConsole({ surface = 'editorial' }) {
   const [adminProfileEditingId, setAdminProfileEditingId] = useState('');
   const [adminProfilePhotoMode, setAdminProfilePhotoMode] = useState('url');
   const [adminProfileDeleteTarget, setAdminProfileDeleteTarget] = useState(null);
+  const [adminProfileLinkTarget, setAdminProfileLinkTarget] = useState(null);
+  const [adminProfileLinkManagedId, setAdminProfileLinkManagedId] = useState('');
   const [profileClaimMatch, setProfileClaimMatch] = useState({ candidate: null, claim: null, nameLocked: false });
   const [profileClaimConfirmOpen, setProfileClaimConfirmOpen] = useState(false);
   const [adminProfileClaims, setAdminProfileClaims] = useState([]);
@@ -405,6 +407,14 @@ export default function AdminConsole({ surface = 'editorial' }) {
   const adminProfileBeingEdited = useMemo(
     () => adminProfiles.find((profile) => profile.id === adminProfileEditingId) || null,
     [adminProfiles, adminProfileEditingId]
+  );
+  const managedAdminProfiles = useMemo(
+    () => adminProfiles.filter((profile) => profile.managedAuthor),
+    [adminProfiles]
+  );
+  const selectedManagedAdminProfile = useMemo(
+    () => managedAdminProfiles.find((profile) => profile.id === adminProfileLinkManagedId) || null,
+    [adminProfileLinkManagedId, managedAdminProfiles]
   );
   const pendingAdminProfileClaimCount = useMemo(
     () => adminProfileClaims.filter((claim) => ['pending', 'processing'].includes(claim.status)).length,
@@ -761,6 +771,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
       || editRequestConfirmOpen
       || categoryDeleteTarget
       || adminProfileDeleteTarget
+      || adminProfileLinkTarget
       || profileClaimConfirmOpen
       || adminProfileClaimDialog
       || notificationActionDialog
@@ -780,6 +791,11 @@ export default function AdminConsole({ surface = 'editorial' }) {
       }
       if (adminProfileDeleteTarget) {
         setAdminProfileDeleteTarget(null);
+        return;
+      }
+      if (adminProfileLinkTarget) {
+        setAdminProfileLinkTarget(null);
+        setAdminProfileLinkManagedId('');
         return;
       }
       if (notificationActionDialog) {
@@ -820,7 +836,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
 
     window.addEventListener('keydown', handleModalEscape);
     return () => window.removeEventListener('keydown', handleModalEscape);
-  }, [adminProfileClaimDialog, adminProfileDeleteTarget, busy, categoryDeleteTarget, editRequestConfirmOpen, editingReviewComment, notificationActionDialog, pendingAction, previewOpen, profileClaimConfirmOpen, profileConsentOpen, profilePreviewOpen, reviewCommentDialog, savingProfile]);
+  }, [adminProfileClaimDialog, adminProfileDeleteTarget, adminProfileLinkTarget, busy, categoryDeleteTarget, editRequestConfirmOpen, editingReviewComment, notificationActionDialog, pendingAction, previewOpen, profileClaimConfirmOpen, profileConsentOpen, profilePreviewOpen, reviewCommentDialog, savingProfile]);
 
   function initializeGoogle() {
     if (userRef.current) {
@@ -1560,6 +1576,27 @@ export default function AdminConsole({ surface = 'editorial' }) {
       setAdminProfileDeleteTarget(null);
       await loadAdminProfiles();
       setMessage('Perfil de autor eliminado.');
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  async function linkAdminProfile() {
+    if (!adminProfileLinkTarget?.email || !adminProfileLinkManagedId) return;
+    const actionKey = `admin-profile-link:${adminProfileLinkTarget.email}`;
+    try {
+      setMessage('');
+      await withActionLoading(actionKey, () => api('/v1/profile/manage/link', {
+        method: 'POST',
+        body: JSON.stringify({
+          requesterEmail: adminProfileLinkTarget.email,
+          managedProfileId: adminProfileLinkManagedId,
+        }),
+      }));
+      setAdminProfileLinkTarget(null);
+      setAdminProfileLinkManagedId('');
+      await Promise.all([loadAdminProfiles(), loadAdminProfileClaims()]);
+      setMessage('Cuenta vinculada, rol blog concedido y notas transferidas.');
     } catch (err) {
       setMessage(err.message);
     }
@@ -3416,6 +3453,20 @@ export default function AdminConsole({ surface = 'editorial' }) {
                                 >
                                   Editar
                                 </button>
+                                {!profile.managedAuthor && managedAdminProfiles.length > 0 && (
+                                  <button
+                                    className="btn btn-ghost admin-profile-link-button"
+                                    disabled={isActionLoading(`admin-profile-link:${profile.email}`)}
+                                    onClick={() => {
+                                      const matchingProfile = managedAdminProfiles.find((managedProfile) => taxonomyKey(managedProfile.fullName) === taxonomyKey(profile.fullName));
+                                      setAdminProfileLinkTarget(profile);
+                                      setAdminProfileLinkManagedId(matchingProfile?.id || '');
+                                    }}
+                                    type="button"
+                                  >
+                                    Vincular
+                                  </button>
+                                )}
                                 {profile.managedAuthor && (
                                   <button
                                     className="btn btn-ghost danger"
@@ -4704,6 +4755,69 @@ export default function AdminConsole({ surface = 'editorial' }) {
                   </div>
                 </div>
               )}
+              {adminProfileLinkTarget && (
+                <div
+                  className="admin-modal-backdrop"
+                  onMouseDown={() => {
+                    if (isActionLoading(`admin-profile-link:${adminProfileLinkTarget.email}`)) return;
+                    setAdminProfileLinkTarget(null);
+                    setAdminProfileLinkManagedId('');
+                  }}
+                  role="presentation"
+                >
+                  <div aria-labelledby="admin-profile-link-title" aria-modal="true" className="admin-modal admin-profile-claim-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog">
+                    <span className="eyebrow">Vinculacion administrativa</span>
+                    <h3 id="admin-profile-link-title">Vincular una cuenta con un autor</h3>
+                    <dl className="admin-claim-details">
+                      <div><dt>Cuenta</dt><dd>{adminProfileLinkTarget.email}</dd></div>
+                      <div><dt>Perfil actual</dt><dd>{adminProfileLinkTarget.fullName || 'Sin nombre cargado'}</dd></div>
+                    </dl>
+                    <label className="admin-profile-link-select">
+                      Perfil gestionado
+                      <select onChange={(event) => setAdminProfileLinkManagedId(event.target.value)} value={adminProfileLinkManagedId}>
+                        <option value="">Selecciona un perfil</option>
+                        {managedAdminProfiles.map((profile) => (
+                          <option key={profile.id} value={profile.id}>
+                            {profile.fullName} ({profile.postCount} {profile.postCount === 1 ? 'nota' : 'notas'})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    {selectedManagedAdminProfile && (
+                      <div className="admin-profile-link-summary">
+                        <strong>{selectedManagedAdminProfile.fullName}</strong>
+                        <span>{selectedManagedAdminProfile.postCount} {selectedManagedAdminProfile.postCount === 1 ? 'nota sera transferida' : 'notas seran transferidas'}</span>
+                      </div>
+                    )}
+                    <div className="admin-profile-warning">
+                      <strong>Esta accion cambia la identidad editorial de la cuenta.</strong>
+                      <span>Los datos del perfil gestionado reemplazaran nombre, foto, descripcion, Sobre mi, cierre y preferencia publica. La cuenta recibira el rol Blog y heredara las notas del autor. Los comentarios historicos no cambian de autoria.</span>
+                    </div>
+                    <div className="admin-modal-actions">
+                      <button
+                        className="btn btn-ghost"
+                        disabled={isActionLoading(`admin-profile-link:${adminProfileLinkTarget.email}`)}
+                        onClick={() => {
+                          setAdminProfileLinkTarget(null);
+                          setAdminProfileLinkManagedId('');
+                        }}
+                        type="button"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        className="btn btn-primary"
+                        disabled={!adminProfileLinkManagedId || isActionLoading(`admin-profile-link:${adminProfileLinkTarget.email}`)}
+                        onClick={linkAdminProfile}
+                        type="button"
+                      >
+                        {isActionLoading(`admin-profile-link:${adminProfileLinkTarget.email}`) ? 'Vinculando...' : 'Confirmar vinculacion'}
+                        <ActionSpinner active={isActionLoading(`admin-profile-link:${adminProfileLinkTarget.email}`)} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
               {profilePreviewOpen && (
                 <div
                   className="admin-preview-modal-backdrop profile-preview-backdrop"
@@ -5947,6 +6061,7 @@ function normalizeAdminProfile(value = {}) {
     id: normalizeInputValue(value.id),
     email: normalizeInputValue(value.email),
     managedAuthor: normalizeBoolean(value.managedAuthor),
+    postCount: Math.max(0, Number(value.postCount) || 0),
   };
 }
 

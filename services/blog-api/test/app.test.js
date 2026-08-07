@@ -43,6 +43,7 @@ import {
   blockProfileClaim,
   createProfileClaim,
   getProfileClaimMatch,
+  linkManagedProfileAsAdmin,
   listMyProfileClaims,
   releaseProfileClaim,
 } from '../src/repositories/profileClaims.js';
@@ -2295,6 +2296,55 @@ test('managed profile claim transfers profile, roles and every non-deleted post'
     assert.equal((await posts.doc('edition').get()).data().publicAuthorEmail, requester.email);
     assert.equal((await posts.doc('draft').get()).data().publicAuthorEmail, undefined);
     assert.equal((await posts.doc('deleted').get()).data().authorEmail, '');
+  } finally {
+    setFirestoreForTests(null);
+  }
+});
+
+test('admin can directly link an existing account to a managed author without a name match', async () => {
+  const firestore = createMemoryFirestore();
+  setFirestoreForTests(firestore);
+  const requesterEmail = 'cuenta@gmail.com';
+  const admin = { email: 'dev@politeia.ar', name: 'Admin', roles: ['admin'] };
+
+  try {
+    const managed = await createManagedAuthorProfile({
+      firstName: 'Autora',
+      lastName: 'Historica',
+      description: 'Perfil importado',
+      publicProfileEnabled: true,
+    }, admin.email);
+    await firestore.collection('users').doc(requesterEmail).set({
+      email: requesterEmail,
+      roles: ['newsletter'],
+      active: true,
+      deletedAt: null,
+    });
+    await firestore.collection('userProfiles').doc(requesterEmail).set({
+      email: requesterEmail,
+      managedAuthor: false,
+    });
+    await firestore.collection('posts').doc('legacy-post').set({
+      authorName: 'Autora Historica',
+      authorEmail: '',
+      status: 'published',
+      deletedAt: null,
+    });
+
+    const linked = await linkManagedProfileAsAdmin({
+      requesterEmail,
+      managedProfileId: managed.id,
+    }, admin);
+
+    assert.equal(linked.status, 'approved');
+    assert.equal(linked.adminInitiated, true);
+    assert.equal(linked.transferredPostCount, 1);
+    assert.deepEqual(await resolveAssignedRoles(requesterEmail), ['blog', 'newsletter']);
+    const account = await getUserProfile({ email: requesterEmail, roles: ['blog', 'newsletter'] });
+    assert.equal(account.fullName, 'Autora Historica');
+    assert.equal(account.description, 'Perfil importado');
+    assert.equal((await firestore.collection('userProfiles').doc(managed.id).get()).exists, false);
+    assert.equal((await firestore.collection('posts').doc('legacy-post').get()).data().authorEmail, requesterEmail);
   } finally {
     setFirestoreForTests(null);
   }
