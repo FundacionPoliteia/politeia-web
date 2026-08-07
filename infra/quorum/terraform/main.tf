@@ -29,6 +29,16 @@ resource "google_project_service" "required" {
   disable_on_destroy = false
 }
 
+resource "google_artifact_registry_repository" "quorum" {
+  project       = var.project_id
+  location      = var.region
+  repository_id = "quorum"
+  description   = "Container images for the Quorum API"
+  format        = "DOCKER"
+
+  depends_on = [google_project_service.required]
+}
+
 resource "google_firestore_database" "quorum" {
   for_each                = local.environments
   project                 = var.project_id
