@@ -42,7 +42,7 @@ export async function middleware(request: NextRequest) {
 }
 
 async function hasValidSession(token: string) {
-  const secret = process.env.SESSION_SECRET || '';
+  const secret = (process.env.SESSION_SECRET || '').trim();
   if (!token || secret.length < 32) return false;
   const separator = token.lastIndexOf('.');
   if (separator < 1) return false;

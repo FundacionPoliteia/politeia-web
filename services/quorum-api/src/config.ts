@@ -21,7 +21,7 @@ export const config = {
   backupInvokerEmail: (process.env.BACKUP_INVOKER_EMAIL || '').toLowerCase(),
   publicApiUrl: (process.env.PUBLIC_API_URL || 'http://localhost:8090').replace(/\/$/, ''),
   allowedOrigins: list(process.env.ALLOWED_ORIGINS || 'http://localhost:3100,http://gestion.localhost:3100'),
-  sessionSecret: process.env.SESSION_SECRET || (process.env.NODE_ENV === 'production' ? '' : 'quorum-local-session-secret-change-me'),
+  sessionSecret: (process.env.SESSION_SECRET || (process.env.NODE_ENV === 'production' ? '' : 'quorum-local-session-secret-change-me')).trim(),
   sessionCookieName: process.env.SESSION_COOKIE_NAME || 'quorum_session',
   sessionCookieDomain: process.env.SESSION_COOKIE_DOMAIN || '',
   googleClientId: process.env.GOOGLE_CLIENT_ID || '',
