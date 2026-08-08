@@ -1,6 +1,6 @@
 {
   "framework": "nextjs",
-  "buildCommand": "cd ../.. && npm run build --workspace @politeia/quorum-web",
+  "buildCommand": "cd ../.. && npm run build --workspace @politeia/quorum-contracts && npm run build --workspace @politeia/quorum-web",
   "installCommand": "cd ../.. && npm ci",
   "regions": ["gru1"],
   "headers": [
