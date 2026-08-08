@@ -8,6 +8,7 @@ import {
   upsertUserRoleAssignment,
 } from '../repositories/users.js';
 import { notifyRolesChanged, safeNotify } from '../repositories/notifications.js';
+import { invalidateProfileCaches } from '../repositories/profiles.js';
 
 export function usersRouter({ writeLimiter }) {
   const router = Router();
@@ -27,6 +28,7 @@ export function usersRouter({ writeLimiter }) {
     try {
       const item = await upsertUserRoleAssignment(req.params.email, req.body?.roles || [], req.user.email);
       clearRoleCache(item.email);
+      invalidateProfileCaches();
       await safeNotify(() => notifyRolesChanged(item, req.user.email));
       res.json({ item });
     } catch (err) {
@@ -38,6 +40,7 @@ export function usersRouter({ writeLimiter }) {
     try {
       const item = await deleteUserRoleAssignment(req.params.email, req.user.email);
       clearRoleCache(item.email);
+      invalidateProfileCaches();
       await safeNotify(() => notifyRolesChanged(item, req.user.email));
       res.json({ item });
     } catch (err) {

@@ -17,6 +17,7 @@ import {
   blockProfileClaim,
   createProfileClaim,
   getProfileClaimMatch,
+  linkManagedProfileAsAdmin,
   listManagedProfileClaims,
   listMyProfileClaims,
   releaseProfileClaim,
@@ -96,6 +97,15 @@ export function profileRouter({ writeLimiter }) {
   router.post('/manage/claims/:id/release', writeLimiter, requireAuth, requireRole('admin'), async (req, res, next) => {
     try {
       const item = await releaseProfileClaim(req.params.id, req.user);
+      res.json({ item });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.post('/manage/link', writeLimiter, requireAuth, requireRole('admin'), async (req, res, next) => {
+    try {
+      const item = await linkManagedProfileAsAdmin(req.body || {}, req.user);
       res.json({ item });
     } catch (err) {
       next(err);

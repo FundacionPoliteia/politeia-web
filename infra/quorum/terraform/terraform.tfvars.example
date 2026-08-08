@@ -1,0 +1,41 @@
+project_id = "politeia-quorum"
+region     = "southamerica-east1"
+deployment_environments = ["staging"]
+
+api_images = {
+  staging    = "southamerica-east1-docker.pkg.dev/politeia-quorum/quorum/quorum-api:REPLACE_WITH_COMMIT_SHA"
+  production = "southamerica-east1-docker.pkg.dev/politeia-quorum/quorum/quorum-api:REPLACE_WITH_APPROVED_COMMIT_SHA"
+}
+
+domains = {
+  public_staging    = "staging.quorum.politeia.ar"
+  manage_staging    = "gestion.staging.quorum.politeia.ar"
+  api_staging       = "api.staging.quorum.politeia.ar"
+  public_production = "quorum.politeia.ar"
+  manage_production = "gestion.quorum.politeia.ar"
+  api_production    = "api.quorum.politeia.ar"
+}
+
+vercel_revalidate_urls = {
+  staging    = "https://staging.quorum.politeia.ar/api/revalidate"
+  production = "https://quorum.politeia.ar/api/revalidate"
+}
+
+# Closed batch: both environments remain private until the public launch.
+public_access_required = {
+  staging    = true
+  production = true
+}
+
+# Prefer exact tester emails in the public-access-emails secret.
+public_access_allowed_domains = {
+  staging    = ""
+  production = ""
+}
+
+congress_import_enabled    = { staging = false, production = false }
+hcdn_import_enabled        = { staging = false, production = false }
+senate_import_enabled      = { staging = false, production = false }
+congress_auto_sync_enabled = { staging = false, production = false }
+congress_import_mode       = { staging = "shadow", production = "shadow" }
+congress_sync_interval_days = 90

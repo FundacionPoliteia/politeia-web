@@ -1,0 +1,8 @@
+{
+  "indexes": [
+    { "collectionGroup": "quorumProjects", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "order", "order": "ASCENDING" }] },
+    { "collectionGroup": "quorumContentRevisions", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "projectId", "order": "ASCENDING" }, { "fieldPath": "number", "order": "DESCENDING" }] },
+    { "collectionGroup": "quorumMailJobs", "queryScope": "COLLECTION", "fields": [{ "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "ASCENDING" }] }
+  ],
+  "fieldOverrides": []
+}

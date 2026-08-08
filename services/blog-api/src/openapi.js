@@ -115,6 +115,32 @@ export const openApiSpec = {
         responses: { 200: { description: 'Session cleared' } },
       },
     },
+    '/profile/manage/link': {
+      post: {
+        summary: 'Link an internal account to a managed author profile',
+        security: [{ sessionCookie: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['requesterEmail', 'managedProfileId'],
+                properties: {
+                  requesterEmail: { type: 'string', format: 'email' },
+                  managedProfileId: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Profile linked and editorial ownership transferred' },
+          403: { description: 'Admin role required' },
+          409: { description: 'Profile is unavailable or already being processed' },
+        },
+      },
+    },
     '/categories': {
       get: {
         summary: 'List shared blog categories',

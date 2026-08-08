@@ -3,8 +3,17 @@ node_modules/
 **/node_modules/
 .next/
 **/.next/
+**/.next-*/
 out/
+dist/
+**/dist/
+*.tsbuildinfo
+**/*.tsbuildinfo
 coverage/
+test-results/
+**/test-results/
+playwright-report/
+**/playwright-report/
 
 # Local environment files. Keep documented templates versioned.
 .env
@@ -36,4 +45,13 @@ credentials*.json
 cloudrun-env.local.yaml
 cloudrun-env.local.yml
 cloudrun-env.yaml
+
+# Terraform state and private values never belong in Git.
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfplan
+crash.log
+!*.tfvars.example
 

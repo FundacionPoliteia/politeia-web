@@ -8,7 +8,11 @@ import {
   invalidateProfileCaches,
   sanitizeProfile,
 } from './profiles.js';
-import { grantBlogRoleForProfileClaim, normalizeEmail } from './users.js';
+import {
+  grantBlogRoleForProfileClaim,
+  normalizeEmail,
+  resolveAssignedRoles,
+} from './users.js';
 import {
   notifyProfileClaimApproved,
   notifyProfileClaimBlocked,
@@ -115,6 +119,67 @@ export async function listManagedProfileClaims() {
   };
 }
 
+export async function linkManagedProfileAsAdmin(body = {}, adminUser) {
+  const actorEmail = requireEmail(adminUser);
+  const requesterEmail = normalizeEmail(body.requesterEmail);
+  const managedProfileId = normalizeId(body.managedProfileId);
+  if (!requesterEmail) throw new HttpError(400, 'La cuenta a vincular es obligatoria');
+  if (!managedProfileId) throw new HttpError(400, 'El perfil gestionado es obligatorio');
+
+  const [managedProfile, account, assignedRoles] = await Promise.all([
+    getManagedProfile(managedProfileId),
+    getAccountProfile(requesterEmail),
+    resolveAssignedRoles(requesterEmail),
+  ]);
+  if (!managedProfile) throw new HttpError(404, 'El perfil gestionado ya no esta disponible');
+  if (!account && assignedRoles.length === 0) throw new HttpError(404, 'La cuenta interna no existe');
+  if (account?.managedAuthor === true) throw new HttpError(409, 'Un perfil gestionado no puede recibir otra vinculacion');
+
+  const existingSnapshot = await claims().where('managedProfileId', '==', managedProfile.id).get();
+  const activeClaims = existingSnapshot.docs
+    .map(serializeDoc)
+    .filter((item) => ACTIVE_STATUSES.includes(item.status));
+  const processingOtherAccount = activeClaims.find((item) => (
+    item.status === 'processing' && item.requesterEmail !== requesterEmail
+  ));
+  if (processingOtherAccount) {
+    throw new HttpError(409, 'Otra vinculacion ya esta procesando este perfil');
+  }
+
+  let claim = activeClaims.find((item) => item.requesterEmail === requesterEmail) || null;
+  if (claim) {
+    claim = await updateClaim(claim.id, {
+      adminInitiated: true,
+      adminInitiatedAt: serverTimestamp(),
+      adminInitiatedBy: actorEmail,
+      updatedAt: serverTimestamp(),
+    });
+  } else {
+    const ref = claims().doc();
+    const affectedPostCount = await countMatchingPosts(managedProfile.fullName);
+    await ref.set({
+      managedProfileId: managedProfile.id,
+      requesterEmail,
+      requesterName: profileFullName(account || {}) || requesterEmail,
+      fullName: managedProfile.fullName,
+      identityKey: identityNameKey(managedProfile.fullName),
+      status: 'pending',
+      affectedPostCount,
+      managedProfileSnapshot: managedProfileSnapshot(managedProfile),
+      adminInitiated: true,
+      adminInitiatedAt: serverTimestamp(),
+      adminInitiatedBy: actorEmail,
+      requestedAt: serverTimestamp(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    claim = serializeDoc(await ref.get());
+    await auditClaim(actorEmail, 'profileClaim.adminLink.request', claim, null, claim);
+  }
+
+  return approveProfileClaim(claim.id, adminUser);
+}
+
 export async function approveProfileClaim(id, adminUser) {
   const actorEmail = requireEmail(adminUser);
   let claim = await getClaim(id);
@@ -135,7 +200,7 @@ export async function approveProfileClaim(id, adminUser) {
 
   const account = await getAccountProfile(claim.requesterEmail);
   const accountName = buildFullName(account?.firstName, account?.lastName);
-  if (identityNameKey(accountName) !== identityNameKey(managedProfile.fullName)) {
+  if (claim.adminInitiated !== true && identityNameKey(accountName) !== identityNameKey(managedProfile.fullName)) {
     throw new HttpError(409, 'El nombre actual del solicitante ya no coincide con el perfil');
   }
   await db().runTransaction(async (transaction) => {
@@ -181,6 +246,8 @@ export async function approveProfileClaim(id, adminUser) {
     managedAuthor: false,
     fullName: managedProfile.fullName,
     authorSlug: managedProfile.authorSlug,
+    identityNameKey: identityNameKey(managedProfile.fullName),
+    identityUpdatedAt: serverTimestamp(),
     publicProfileEnabled: managedClean.publicProfileEnabled,
     publicProfilePreferenceSet: true,
     ownershipClaimId: claim.id,
@@ -379,6 +446,8 @@ function toAdminClaim(item) {
     reviewedAt: item.reviewedAt || '',
     reviewedBy: item.reviewedBy || '',
     transferredPostCount: Number(item.transferredPostCount) || 0,
+    adminInitiated: item.adminInitiated === true,
+    adminInitiatedBy: item.adminInitiatedBy || '',
   };
 }
 
