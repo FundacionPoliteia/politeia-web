@@ -24,7 +24,16 @@ declare global {
 
 export async function authenticateGoogleCredential(credential: string): Promise<SessionUser> {
   if (!config.googleClientId) throw new ApiError(500, 'google_not_configured', 'Google OAuth no está configurado');
-  const ticket = await googleClient.verifyIdToken({ idToken: credential, audience: config.googleClientId });
+  const audience = readUnverifiedAudience(credential);
+  if (audience && audience !== config.googleClientId) {
+    throw new ApiError(401, 'google_audience_mismatch', 'La configuración de Google de esta pestaña quedó desactualizada. Recargá la página e intentá nuevamente');
+  }
+  let ticket;
+  try {
+    ticket = await googleClient.verifyIdToken({ idToken: credential, audience: config.googleClientId });
+  } catch {
+    throw new ApiError(401, 'invalid_google_credential', 'Google no pudo validar el inicio de sesión. Recargá la página e intentá nuevamente');
+  }
   const payload = ticket.getPayload();
   const email = normalizeEmail(payload?.email || '');
   if (!email || payload?.email_verified !== true) throw new ApiError(401, 'invalid_google_identity', 'La cuenta de Google no pudo verificarse');
@@ -134,6 +143,16 @@ function readCookie(req: Request, name: string) {
 }
 
 function normalizeEmail(email: string) { return email.trim().toLowerCase(); }
+function readUnverifiedAudience(credential: string) {
+  try {
+    const [, payload] = credential.split('.');
+    if (!payload) return '';
+    const value = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as { aud?: unknown };
+    return typeof value.aud === 'string' ? value.aud : '';
+  } catch {
+    return '';
+  }
+}
 function safeEqual(left: string, right: string) {
   const a = Buffer.from(left); const b = Buffer.from(right);
   return a.length === b.length && crypto.timingSafeEqual(a, b);
