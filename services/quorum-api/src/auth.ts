@@ -26,6 +26,10 @@ export async function authenticateGoogleCredential(credential: string): Promise<
   if (!config.googleClientId) throw new ApiError(500, 'google_not_configured', 'Google OAuth no está configurado');
   const audience = readUnverifiedAudience(credential);
   if (audience && audience !== config.googleClientId) {
+    console.warn('Google OAuth audience mismatch', {
+      expectedAudience: config.googleClientId,
+      receivedAudience: audience,
+    });
     throw new ApiError(401, 'google_audience_mismatch', 'La configuración de Google de esta pestaña quedó desactualizada. Recargá la página e intentá nuevamente');
   }
   let ticket;
