@@ -24,7 +24,7 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  if (management && !pathname.startsWith('/gestion')) {
+  if (management && !pathname.startsWith('/gestion') && !pathname.startsWith('/api/')) {
     const url = request.nextUrl.clone();
     url.pathname = pathname === '/' ? '/gestion' : `/gestion${pathname}`;
     const response = NextResponse.rewrite(url);
