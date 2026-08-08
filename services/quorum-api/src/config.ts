@@ -31,7 +31,7 @@ export const config = {
   publicAccessRequired: process.env.PUBLIC_ACCESS_REQUIRED === 'true',
   publicAccessAllowedEmails: list(process.env.PUBLIC_ACCESS_ALLOWED_EMAILS || ''),
   publicAccessAllowedDomains: list(process.env.PUBLIC_ACCESS_ALLOWED_DOMAINS || ''),
-  publicAccessGateSecret: process.env.PUBLIC_ACCESS_GATE_SECRET || '',
+  publicAccessGateSecret: (process.env.PUBLIC_ACCESS_GATE_SECRET || '').trim(),
   devAuth: process.env.DEV_AUTH === 'true',
   devAuthEmail: (process.env.DEV_AUTH_EMAIL || 'dev@politeia.ar').toLowerCase(),
   turnstileSecretKey: process.env.TURNSTILE_SECRET_KEY || '',

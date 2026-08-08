@@ -5,7 +5,7 @@ const serverApiBase = process.env.QUORUM_API_BASE_URL || publicApiBase;
 const publicProjectionVersion = 'stage-transitions-v2';
 
 function serverPublicAccessHeaders() {
-  const secret = process.env.PUBLIC_ACCESS_GATE_SECRET;
+  const secret = process.env.PUBLIC_ACCESS_GATE_SECRET?.trim();
   return secret ? { 'x-quorum-public-access-key': secret } : undefined;
 }
 
