@@ -23,6 +23,10 @@ export function middleware(request) {
   const adminOnlyHost = isAdminOnlyHost(hostname);
   const canRenderAdmin = adminOnlyHost || isAllowedPreviewHost(hostname);
 
+  if (pathname.startsWith('/api/')) {
+    return NextResponse.next();
+  }
+
   if (pathname.startsWith('/internal')) {
     if (!canRenderAdmin) {
       return NextResponse.rewrite(new URL('/404', request.url), { status: 404 });

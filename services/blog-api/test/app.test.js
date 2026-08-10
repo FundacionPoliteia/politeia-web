@@ -6,6 +6,7 @@ import { createApp } from '../src/app.js';
 import { buildSessionCookie, expandRoles, resolveBuiltInRoles, verifySessionCookie } from '../src/auth.js';
 import { config, parseEnvValue } from '../src/config.js';
 import { setFirestoreForTests } from '../src/firestore.js';
+import { sanitizeAuditValue } from '../src/repositories/audit.js';
 import { canManageAllPosts, matchesManageStatus, toBlogAuthorView } from '../src/repositories/posts.js';
 import {
   cleanupExpiredNotifications,
@@ -658,6 +659,24 @@ test('user profile public opt-in persists after save and reload', async () => {
   } finally {
     setFirestoreForTests(null);
   }
+});
+
+test('audit snapshots remove undefined values without changing supported Firestore values', () => {
+  const createdAt = new Date('2026-08-10T12:00:00.000Z');
+  const clean = sanitizeAuditValue({
+    fullName: 'Maximo Hoch',
+    postCount: undefined,
+    nested: { enabled: true, optional: undefined },
+    tags: ['Politica', undefined, 'Ciudadania'],
+    createdAt,
+  });
+
+  assert.deepEqual(clean, {
+    fullName: 'Maximo Hoch',
+    nested: { enabled: true },
+    tags: ['Politica', 'Ciudadania'],
+    createdAt,
+  });
 });
 
 test('public author profiles list published author cards with stats', async () => {

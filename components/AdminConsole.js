@@ -14,7 +14,8 @@ import { AdminHelpNavButton, AdminHelpProvider, FieldHelper, HelpTrigger } from 
 import { parseTagsText, sanitizeCategory, sanitizeTags, taxonomyKey } from '../lib/taxonomy';
 import { IMAGE_UPLOAD_ACCEPT, IMAGE_UPLOAD_HELP, validateImageUploadFile } from '../lib/media';
 
-const API_BASE = process.env.NEXT_PUBLIC_BLOG_API_BASE_URL || '';
+const DIRECT_API_BASE = process.env.NEXT_PUBLIC_BLOG_API_BASE_URL || '';
+const API_BASE = process.env.NODE_ENV === 'production' ? '/api/blog' : DIRECT_API_BASE;
 const NewsletterAdminPanel = dynamic(() => import('./NewsletterAdminPanel'));
 const AdminOperationsPanel = dynamic(() => import('./AdminOperationsPanel'));
 const MailingAdminPanel = dynamic(() => import('./MailingAdminPanel'));

@@ -468,7 +468,7 @@ async function toUserProfile(item, user, context = null) {
     authorSlug: slugify(item?.authorSlug || fullName),
     createdAt: item?.createdAt || '',
     updatedAt: item?.updatedAt || '',
-    postCount: context ? Number(context.authorPostCounts?.get(managedKey) || 0) : undefined,
+    ...(context ? { postCount: Number(context.authorPostCounts?.get(managedKey) || 0) } : {}),
   };
 }
 
