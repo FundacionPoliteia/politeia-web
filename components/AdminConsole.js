@@ -3439,7 +3439,13 @@ export default function AdminConsole({ surface = 'editorial' }) {
                               {profile.authorSlug || 'Sin slug'}
                               {profileIsPublic && profile.fullName && (
                                 <small>
-                                  <Link href={`/blog?autor=${encodeURIComponent(profile.fullName)}`} target="_blank">Ver pagina</Link>
+                                  <Link
+                                    href={`${PUBLIC_SITE_URL}/blog?autor=${encodeURIComponent(profile.fullName)}`}
+                                    rel="noopener noreferrer"
+                                    target="_blank"
+                                  >
+                                    Ver página
+                                  </Link>
                                 </small>
                               )}
                             </td>
