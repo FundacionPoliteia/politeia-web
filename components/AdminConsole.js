@@ -2990,21 +2990,21 @@ export default function AdminConsole({ surface = 'editorial' }) {
                           </label>
                         </div>
                         <label>
-                          Descripcion breve de Perfil
+                          Autor · descripción breve
                           <textarea
                             maxLength="500"
                             onChange={(e) => updateProfileDraft('description', e.target.value)}
-                            placeholder="Una bio corta para el perfiles de autor."
+                            placeholder="Presentación editorial breve. Aparece debajo del rótulo “Autor” en tu perfil público."
                             rows="4"
                             value={profileDraft.description}
                           />
                         </label>
                         <label>
-                          Sobre mi
+                          Sobre mí
                           <textarea
                             maxLength="180"
                             onChange={(e) => updateProfileDraft('focusArea', e.target.value)}
-                            placeholder="Conta brevemente quien sos, que mirada aportas y que te interesa compartir con los lectores. Este texto protagoniza tu card en 'Conoce a los autores'."
+                            placeholder="Contá brevemente quién sos, qué mirada aportás y qué te interesa compartir. Aparece debajo del rótulo “Sobre mí”."
                             rows="3"
                             value={profileDraft.focusArea}
                           />
@@ -3256,21 +3256,21 @@ export default function AdminConsole({ surface = 'editorial' }) {
                       </label>
                     </div>
                     <label>
-                      Descripcion breve para Perfil
+                      Autor · descripción breve
                       <textarea
                         maxLength="500"
                         onChange={(event) => updateAdminProfileDraft('description', event.target.value)}
-                        placeholder="Una descripción breve sobre vos, para mostrar en tu perfil público."
+                        placeholder="Presentación editorial breve. Aparece debajo del rótulo “Autor” en el perfil público."
                         rows="3"
                         value={adminProfileDraft.description}
                       />
                     </label>
                     <label>
-                      Sobre mi
+                      Sobre mí
                       <textarea
                         maxLength="180"
                         onChange={(event) => updateAdminProfileDraft('focusArea', event.target.value)}
-                        placeholder="Presentacion personal que protagoniza la card del autor en 'Conoce a los autores'."
+                        placeholder="Presentación personal, mirada e intereses. Aparece debajo del rótulo “Sobre mí”."
                         rows="3"
                         value={adminProfileDraft.focusArea}
                       />

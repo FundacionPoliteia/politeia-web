@@ -173,11 +173,11 @@ export default function BlogIndex({ posts = [], autorFiltro = '', categoriaFiltr
             </h1>
             {filtrandoAutor ? (
               <div className="blog-author-about">
-                <span>Sobre mi</span>
+                <span>Autor</span>
                 <p className="lead">{authorLead}</p>
                 {authorFocusArea && (
                   <div className="blog-author-focus">
-                    <small>Temas y mirada</small>
+                    <small>Sobre mí</small>
                     <p>{authorFocusArea}</p>
                   </div>
                 )}
