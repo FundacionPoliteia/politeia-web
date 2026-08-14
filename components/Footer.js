@@ -20,7 +20,6 @@ export default function Footer() {
             <h5>Entorno</h5>
             <a href="https://politeiatest.vercel.app/" target="_blank" rel="noopener">Promesas</a>
             <span style={{display:'block',color:'var(--gris)',fontSize:'.92rem',marginBottom:'10px',opacity:.6}}>Quorum (próximamente)</span>
-            <Link href="/camino-de-la-ley">Camino de la ley</Link>
             <Link href="/blog">Blog</Link>
           </div>
           <div className="foot-col">

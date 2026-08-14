@@ -1,6 +1,28 @@
 .page {
+  isolation: isolate;
   background: #f8f8f7;
   color: var(--tinta);
+}
+
+.officialLink {
+  color: inherit;
+  text-decoration-line: underline;
+  text-decoration-color: rgba(19, 122, 159, .42);
+  text-decoration-thickness: 1px;
+  text-underline-offset: .18em;
+  transition: color .2s ease, text-decoration-color .2s ease;
+}
+
+.officialLink:hover,
+.officialLink:focus-visible {
+  color: var(--azul);
+  text-decoration-color: currentColor;
+}
+
+.officialLink:focus-visible {
+  border-radius: 2px;
+  outline: 2px solid rgba(19, 122, 159, .28);
+  outline-offset: 3px;
 }
 
 .page :global(.material-symbols-outlined) {

@@ -3,6 +3,75 @@
 import { useEffect, useRef, useState } from 'react';
 import styles from './LegislativePath.module.css';
 
+const OFFICIAL_SOURCES = {
+  bulletin: 'https://www.boletinoficial.gob.ar/',
+  bulletinFirst: 'https://www.boletinoficial.gob.ar/seccion/primera',
+  bulletinSecond: 'https://www.boletinoficial.gob.ar/seccion/segunda',
+  bulletinThird: 'https://www.boletinoficial.gob.ar/seccion/tercera',
+  bulletinFourth: 'https://www.boletinoficial.gob.ar/seccion/cuarta',
+  chambers: 'https://www4.hcdn.gob.ar/dependencias/dip/congreso/diagrama_del_mecanismo_de_sancio.htm',
+  congress: 'https://www.hcdn.gob.ar/congreso_explicado/',
+  constitution: 'https://www.argentina.gob.ar/sites/default/files/constitucion-nacional-argentina.pdf',
+  dictamens: 'https://www.hcdn.gob.ar/secparl/dgral_info_parlamentaria/reglamentos/glosario/D/dictamen-comision.html',
+  labor: 'https://www.hcdn.gob.ar/secparl/dgral_info_parlamentaria/detalle/Plan-de-Labor-y-Orden-del-Dia/',
+};
+
+const OFFICIAL_TERMS = [
+  ['Comisión de Labor Parlamentaria', OFFICIAL_SOURCES.labor],
+  ['plan de labor parlamentaria', OFFICIAL_SOURCES.labor],
+  ['cámara de origen', OFFICIAL_SOURCES.chambers],
+  ['cámara revisora', OFFICIAL_SOURCES.chambers],
+  ['ambas cámaras', OFFICIAL_SOURCES.constitution],
+  ['Poder Ejecutivo', OFFICIAL_SOURCES.constitution],
+  ['Boletín Oficial', OFFICIAL_SOURCES.bulletin],
+  ['comisiones', OFFICIAL_SOURCES.congress],
+  ['dictámenes', OFFICIAL_SOURCES.dictamens],
+  ['dictamen', OFFICIAL_SOURCES.dictamens],
+  ['estado parlamentario', OFFICIAL_SOURCES.congress],
+  ['promulgación', OFFICIAL_SOURCES.constitution],
+  ['veto', OFFICIAL_SOURCES.constitution],
+  ['Congreso', OFFICIAL_SOURCES.congress],
+];
+
+function OfficialLink({ children, href }) {
+  return (
+    <a
+      className={styles.officialLink}
+      href={href}
+      rel="noopener noreferrer"
+      target="_blank"
+      title="Consultar fuente oficial"
+    >
+      {children}
+    </a>
+  );
+}
+
+function OfficialText({ children }) {
+  if (typeof children !== 'string') return children;
+
+  const terms = OFFICIAL_TERMS.map(([term]) => term)
+    .sort((first, second) => second.length - first.length);
+  const escapedTerms = terms.map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const matcher = new RegExp(`(${escapedTerms.join('|')})`, 'gi');
+  const usedTerms = new Set();
+
+  return children.split(matcher).map((part, index) => {
+    const source = OFFICIAL_TERMS.find(([term]) => (
+      term.toLocaleLowerCase('es') === part.toLocaleLowerCase('es')
+    ));
+
+    if (!source || usedTerms.has(source[0])) return part;
+    usedTerms.add(source[0]);
+
+    return (
+      <OfficialLink href={source[1]} key={`${part}-${index}`}>
+        {part}
+      </OfficialLink>
+    );
+  });
+}
+
 const STAGES = [
   {
     number: '01',
@@ -152,20 +221,20 @@ const VETO_SCENARIOS = [
 ];
 
 const BULLETIN_SECTIONS = [
-  ['gavel', 'Legislación y avisos oficiales', 'Promulgación de leyes, decretos, resoluciones.'],
-  ['domain', 'Sociedades y avisos judiciales', 'Notificaciones de sociedades anónimas, etc.'],
-  ['contract', 'Contrataciones', 'Contrataciones del Estado con sus proveedores.'],
-  ['language', 'Dominios de internet', 'Nuevos dominios que se dan de alta.'],
+  ['gavel', 'Legislación y avisos oficiales', 'Promulgación de leyes, decretos, resoluciones.', OFFICIAL_SOURCES.bulletinFirst],
+  ['domain', 'Sociedades y avisos judiciales', 'Notificaciones de sociedades anónimas, etc.', OFFICIAL_SOURCES.bulletinSecond],
+  ['contract', 'Contrataciones', 'Contrataciones del Estado con sus proveedores.', OFFICIAL_SOURCES.bulletinThird],
+  ['language', 'Dominios de internet', 'Nuevos dominios que se dan de alta.', OFFICIAL_SOURCES.bulletinFourth],
 ];
 
 const GLOSSARY = [
-  ['Número de expediente', 'Muestra la cantidad de proyectos presentados en el año.'],
-  ['Estado parlamentario', 'Ahí el proyecto toma estado parlamentario.'],
-  ['Dictamen', 'Cuando se llega a una decisión, hay dictamen. Puede haber más de un dictamen.'],
-  ['Plan de labor parlamentaria', 'Día, hora, temas a tratar. Aquí los miembros de la comisión negocian qué dictamen tratar.'],
-  ['Aprobación tácita', 'Si pasan 10 días sin que el presidente se expida acerca del proyecto.'],
-  ['Vetar ley total', 'Anula la ley completamente.'],
-  ['Vetar ley parcialmente', 'Anula una parte que no afecte el espíritu de la ley. Si se excede es veto total.'],
+  ['Número de expediente', 'Muestra la cantidad de proyectos presentados en el año.', OFFICIAL_SOURCES.congress],
+  ['Estado parlamentario', 'Ahí el proyecto toma estado parlamentario.', OFFICIAL_SOURCES.congress],
+  ['Dictamen', 'Cuando se llega a una decisión, hay dictamen. Puede haber más de un dictamen.', OFFICIAL_SOURCES.dictamens],
+  ['Plan de labor parlamentaria', 'Día, hora, temas a tratar. Aquí los miembros de la comisión negocian qué dictamen tratar.', OFFICIAL_SOURCES.labor],
+  ['Aprobación tácita', 'Si pasan 10 días sin que el presidente se expida acerca del proyecto.', OFFICIAL_SOURCES.constitution],
+  ['Vetar ley total', 'Anula la ley completamente.', OFFICIAL_SOURCES.constitution],
+  ['Vetar ley parcialmente', 'Anula una parte que no afecte el espíritu de la ley. Si se excede es veto total.', OFFICIAL_SOURCES.constitution],
 ];
 
 function StageCard({ stage, isOpen, onToggle, cardRef }) {
@@ -198,15 +267,17 @@ function StageCard({ stage, isOpen, onToggle, cardRef }) {
       {isOpen && (
         <div className={styles.stageBody}>
           <div className={styles.stageCopy}>
-            {stage.body.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+            {stage.body.map((paragraph) => (
+              <p key={paragraph}><OfficialText>{paragraph}</OfficialText></p>
+            ))}
           </div>
 
           {stage.dictamens && (
             <div className={styles.dictamenGrid}>
               {stage.dictamens.map(([title, text]) => (
                 <div key={title}>
-                  <strong>{title}</strong>
-                  <p>{text}</p>
+                  <strong><OfficialLink href={OFFICIAL_SOURCES.dictamens}>{title}</OfficialLink></strong>
+                  <p><OfficialText>{text}</OfficialText></p>
                 </div>
               ))}
             </div>
@@ -217,7 +288,7 @@ function StageCard({ stage, isOpen, onToggle, cardRef }) {
               <span className="material-symbols-outlined" aria-hidden="true">lightbulb</span>
               <div>
                 <strong>{stage.highlight.label}</strong>
-                <p>{stage.highlight.text}</p>
+                <p><OfficialText>{stage.highlight.text}</OfficialText></p>
               </div>
             </aside>
           )}
@@ -266,10 +337,10 @@ function GlossaryModal({ onClose }) {
         </header>
 
         <div className={styles.glossaryList}>
-          {GLOSSARY.map(([term, definition]) => (
+          {GLOSSARY.map(([term, definition, href]) => (
             <article key={term}>
-              <h3>{term}</h3>
-              <p>{definition}</p>
+              <h3><OfficialLink href={href}>{term}</OfficialLink></h3>
+              <p><OfficialText>{definition}</OfficialText></p>
             </article>
           ))}
         </div>
@@ -300,9 +371,9 @@ export default function LegislativePath() {
   };
 
   return (
-    <main className={styles.page}>
+    <main className={styles.page} id="contenido">
       <section className={styles.hero}>
-        <div className={`wrap ${styles.heroGrid}`}>
+        <div className={`shell ${styles.heroGrid}`}>
           <div className={styles.heroCopy}>
             <span className="eyebrow">App Politeia 2026</span>
             <h1>El camino de la ley</h1>
@@ -313,11 +384,11 @@ export default function LegislativePath() {
               aprueba una ley es el primer paso para analizar la política de manera profunda.
             </p>
             <div className={styles.heroActions}>
-              <button className="btn btn-primary" onClick={() => goToStage('01')} type="button">
+              <button className="button primary" onClick={() => goToStage('01')} type="button">
                 Empezar el recorrido
                 <span className="material-symbols-outlined" aria-hidden="true">arrow_downward</span>
               </button>
-              <button className="btn btn-ghost" onClick={() => setGlossaryOpen(true)} type="button">
+              <button className="button ghost" onClick={() => setGlossaryOpen(true)} type="button">
                 <span className="material-symbols-outlined" aria-hidden="true">menu_book</span>
                 Abrir glosario
               </button>
@@ -340,7 +411,7 @@ export default function LegislativePath() {
           </div>
         </div>
 
-        <div className={`wrap ${styles.heroFacts}`}>
+        <div className={`shell ${styles.heroFacts}`}>
           <div><strong>6</strong><span>etapas del proceso inicial</span></div>
           <div><strong>2</strong><span>cámaras</span></div>
           <div><strong>10</strong><span>días sin que el presidente se expida</span></div>
@@ -348,7 +419,7 @@ export default function LegislativePath() {
       </section>
 
       <nav className={styles.stageNav} aria-label="Etapas del proceso legislativo">
-        <div className="wrap">
+        <div className="shell">
           <div className={styles.stageNavInner}>
             {STAGES.map((stage) => (
               <button key={stage.number} onClick={() => goToStage(stage.number)} type="button">
@@ -361,15 +432,16 @@ export default function LegislativePath() {
       </nav>
 
       <section className={styles.processSection}>
-        <div className="wrap">
+        <div className="shell">
           <header className={styles.sectionHead}>
             <div>
               <span className="eyebrow">Proceso inicial</span>
               <h2>Proceso inicial</h2>
             </div>
             <p>
-              En este documento, detallamos cada una de las etapas que atraviesa un
-              proyecto en el Congreso.
+              <OfficialText>
+                En este documento, detallamos cada una de las etapas que atraviesa un proyecto en el Congreso.
+              </OfficialText>
             </p>
           </header>
 
@@ -389,15 +461,16 @@ export default function LegislativePath() {
       </section>
 
       <section className={styles.chambersSection}>
-        <div className="wrap">
+        <div className="shell">
           <header className={styles.sectionHead}>
             <div>
               <span className="eyebrow">Cámara de origen y cámara revisora</span>
               <h2>En el proceso de una ley hay cuatro escenarios posibles</h2>
             </div>
             <p>
-              El resultado depende de lo que decidan la cámara de origen y la cámara
-              revisora. Cada combinación define cómo continúa el proyecto.
+              <OfficialText>
+                El resultado depende de lo que decidan la cámara de origen y la cámara revisora. Cada combinación define cómo continúa el proyecto.
+              </OfficialText>
             </p>
           </header>
 
@@ -414,7 +487,11 @@ export default function LegislativePath() {
                 </div>
                 <div className={styles.scenarioResult}>
                   <small>Resultado</small>
-                  <p>{scenario.result}</p>
+                  <p>
+                    <OfficialLink href={OFFICIAL_SOURCES.chambers}>
+                      {scenario.result}
+                    </OfficialLink>
+                  </p>
                 </div>
               </article>
             ))}
@@ -424,13 +501,14 @@ export default function LegislativePath() {
       </section>
 
       <section className={styles.executiveSection}>
-        <div className={`wrap ${styles.executiveGrid}`}>
+        <div className={`shell ${styles.executiveGrid}`}>
           <div className={styles.executiveIntro}>
             <span className="eyebrow">Poder Ejecutivo</span>
             <h2>Una vez que se aprueba en ambas cámaras, pasa al Poder Ejecutivo</h2>
             <p>
-              El Poder Ejecutivo puede aprobar la ley o vetarla. Estas son las cuatro
-              posibilidades que completan el recorrido.
+              <OfficialText>
+                El Poder Ejecutivo puede aprobar la ley o vetarla. Estas son las cuatro posibilidades que completan el recorrido.
+              </OfficialText>
             </p>
           </div>
 
@@ -443,21 +521,24 @@ export default function LegislativePath() {
                 <span className={`${styles.executiveActionIcon} material-symbols-outlined`} aria-hidden="true">{icon}</span>
                 <div>
                   <small>{index < 2 ? 'Aprobación' : 'Veto'}</small>
-                  <h3>{title}</h3>
-                  {text && <p>{text}</p>}
+                  <h3>
+                    <OfficialLink href={OFFICIAL_SOURCES.constitution}>{title}</OfficialLink>
+                  </h3>
+                  {text && <p><OfficialText>{text}</OfficialText></p>}
                 </div>
               </article>
             ))}
           </div>
         </div>
 
-        <div className={`wrap ${styles.vetoWrap}`}>
+        <div className={`shell ${styles.vetoWrap}`}>
           <header>
             <span>Veto del ejecutivo</span>
             <h3>Hay 3 escenarios en cuanto al veto del ejecutivo</h3>
             <p>
-              La respuesta de ambas cámaras determina si la ley se promulga o si se
-              mantiene el veto.
+              <OfficialText>
+                La respuesta de ambas cámaras determina si la ley se promulga o si se mantiene el veto.
+              </OfficialText>
             </p>
           </header>
           <div className={styles.vetoGrid}>
@@ -469,7 +550,11 @@ export default function LegislativePath() {
                 ))}
                 <div className={styles.vetoResult}>
                   <small>Resultado</small>
-                  <strong>{scenario.result}</strong>
+                  <strong>
+                    <OfficialLink href={OFFICIAL_SOURCES.constitution}>
+                      {scenario.result}
+                    </OfficialLink>
+                  </strong>
                 </div>
               </article>
             ))}
@@ -478,23 +563,26 @@ export default function LegislativePath() {
       </section>
 
       <section className={styles.bulletinSection}>
-        <div className="wrap">
+        <div className="shell">
           <header className={styles.bulletinHeader}>
             <div>
               <span className="eyebrow">Boletín Oficial</span>
-              <h2>El Boletín Oficial</h2>
+              <h2>
+                <OfficialLink href={OFFICIAL_SOURCES.bulletin}>El Boletín Oficial</OfficialLink>
+              </h2>
             </div>
             <p>
-              Es donde se publica todo lo que se presume que tiene que ser conocido
-              por la población. Tiene cuatro partes.
+              <OfficialText>
+                Es donde se publica todo lo que se presume que tiene que ser conocido por la población. Tiene cuatro partes.
+              </OfficialText>
             </p>
           </header>
           <div className={styles.bulletinGrid}>
-            {BULLETIN_SECTIONS.map(([icon, title, text], index) => (
+            {BULLETIN_SECTIONS.map(([icon, title, text, href], index) => (
               <article key={title}>
                 <span className={styles.bulletinNumber}>0{index + 1}</span>
                 <span className="material-symbols-outlined" aria-hidden="true">{icon}</span>
-                <h3>{title}</h3>
+                <h3><OfficialLink href={href}>{title}</OfficialLink></h3>
                 <p>{text}</p>
               </article>
             ))}
@@ -503,13 +591,13 @@ export default function LegislativePath() {
       </section>
 
       <section className={styles.closingSection}>
-        <div className={`wrap ${styles.closingInner}`}>
+        <div className={`shell ${styles.closingInner}`}>
           <span className="material-symbols-outlined" aria-hidden="true">route</span>
           <div>
             <span>El camino de la ley</span>
             <h2>¡Gracias por leer!</h2>
           </div>
-          <button className="btn btn-ghost" onClick={() => setGlossaryOpen(true)} type="button">
+          <button className="button ghost" onClick={() => setGlossaryOpen(true)} type="button">
             Repasar conceptos
           </button>
         </div>
