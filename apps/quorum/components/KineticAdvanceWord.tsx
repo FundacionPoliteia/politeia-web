@@ -44,7 +44,6 @@ export default function KineticAdvanceWord() {
     const context = canvas.getContext('2d');
     if (!context) return;
 
-    const hero = root.closest<HTMLElement>('.hero') ?? root;
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)');
     const particles: Particle[] = [];
@@ -118,7 +117,7 @@ export default function KineticAdvanceWord() {
         return;
       }
 
-      const isPointerDriven = finePointer.matches && window.innerWidth > 700;
+      const isPointerDriven = finePointer.matches && window.innerWidth > 700 && pointer.active;
       const pointerX = pointer.active ? pointer.x : width / 2;
       const pointerY = pointer.active ? pointer.y : height / 2;
       const normalizedX = pointer.active ? Math.max(-1, Math.min(1, (pointerX / width - 0.5) * 2)) : 0;
@@ -184,11 +183,30 @@ export default function KineticAdvanceWord() {
 
     const onPointerMove = (event: PointerEvent) => {
       const bounds = canvas.getBoundingClientRect();
-      pointer.x = event.clientX - bounds.left;
-      pointer.y = event.clientY - bounds.top;
+      const localX = event.clientX - bounds.left;
+      const localY = event.clientY - bounds.top;
+      const fieldX = (localX - bounds.width / 2) / (bounds.width * 0.46);
+      const fieldY = (localY - bounds.height / 2) / (bounds.height * 0.42);
+      const nearNodeCloud = particles.some((particle) => (
+        Math.hypot(particle.x - localX, particle.y - localY) < Math.max(44, width * 0.12)
+      ));
+
+      // Only the visible node cloud is interactive; the rest of the canvas is inert.
+      if (fieldX * fieldX + fieldY * fieldY > 1 || !nearNodeCloud) {
+        pointer.active = false;
+        canvas.classList.remove('is-pointer-active');
+        return;
+      }
+
+      pointer.x = localX;
+      pointer.y = localY;
       pointer.active = true;
+      canvas.classList.add('is-pointer-active');
     };
-    const onPointerLeave = () => { pointer.active = false; };
+    const onPointerLeave = () => {
+      pointer.active = false;
+      canvas.classList.remove('is-pointer-active');
+    };
     const onScroll = () => {
       const currentScrollY = window.scrollY;
       scrollImpulse = Math.max(-48, Math.min(48, currentScrollY - previousScrollY));
@@ -200,8 +218,8 @@ export default function KineticAdvanceWord() {
     const intersectionObserver = new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; }, { rootMargin: '120px' });
     resizeObserver.observe(canvas);
     intersectionObserver.observe(root);
-    hero.addEventListener('pointermove', onPointerMove);
-    hero.addEventListener('pointerleave', onPointerLeave);
+    canvas.addEventListener('pointermove', onPointerMove);
+    canvas.addEventListener('pointerleave', onPointerLeave);
     window.addEventListener('scroll', onScroll, { passive: true });
     resize();
     animationFrame = window.requestAnimationFrame(animate);
@@ -210,8 +228,9 @@ export default function KineticAdvanceWord() {
       window.cancelAnimationFrame(animationFrame);
       resizeObserver.disconnect();
       intersectionObserver.disconnect();
-      hero.removeEventListener('pointermove', onPointerMove);
-      hero.removeEventListener('pointerleave', onPointerLeave);
+      canvas.removeEventListener('pointermove', onPointerMove);
+      canvas.removeEventListener('pointerleave', onPointerLeave);
+      canvas.classList.remove('is-pointer-active');
       window.removeEventListener('scroll', onScroll);
     };
   }, []);
