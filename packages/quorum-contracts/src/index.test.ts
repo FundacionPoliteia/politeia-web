@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { effectiveProjectStageId, glossaryTermAppearsInTexts, hasChronologyChanges, slugify, stageProgress, workflowDefinitionSchema } from './index.js';
+import { effectiveProjectStageId, glossaryTermAppearsInTexts, hasChronologyChanges, projectIconSchema, slugify, stageProgress, workflowDefinitionSchema } from './index.js';
 
 const workflow = workflowDefinitionSchema.parse({
   id: 'legislativo-nacional-v1',
@@ -18,6 +18,13 @@ const workflow = workflowDefinitionSchema.parse({
 describe('slugify', () => {
   it('normaliza títulos en español', () => {
     expect(slugify('Reforma de la Ley de Salud Mental')).toBe('reforma-de-la-ley-de-salud-mental');
+  });
+});
+
+describe('projectIconSchema', () => {
+  it('acepta sólo los íconos disponibles en el selector editorial', () => {
+    expect(projectIconSchema.parse('how_to_vote')).toBe('how_to_vote');
+    expect(projectIconSchema.safeParse('icono_inexistente').success).toBe(false);
   });
 });
 

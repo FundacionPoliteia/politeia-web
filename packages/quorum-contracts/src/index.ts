@@ -75,6 +75,35 @@ export const projectUpdateSchema = z.object({
 });
 export type ProjectUpdate = z.infer<typeof projectUpdateSchema>;
 
+export const projectIconNames = [
+  'account_balance',
+  'accessibility_new',
+  'apartment',
+  'assured_workload',
+  'balance',
+  'campaign',
+  'diversity_3',
+  'eco',
+  'factory',
+  'family_restroom',
+  'forest',
+  'gavel',
+  'health_and_safety',
+  'how_to_vote',
+  'menu_book',
+  'payments',
+  'policy',
+  'psychology',
+  'public',
+  'school',
+  'security',
+  'social_services',
+  'solar_power',
+  'work',
+] as const;
+export const projectIconSchema = z.enum(projectIconNames);
+export type ProjectIconName = z.infer<typeof projectIconSchema>;
+
 export const projectSchema = z.object({
   id: z.string().min(1),
   slug: slugSchema,
@@ -101,6 +130,7 @@ export const projectSchema = z.object({
   documents: z.array(officialDocumentSchema).default([]),
   sources: z.array(sourceSchema).default([]),
   updates: z.array(projectUpdateSchema).default([]),
+  icon: projectIconSchema.default('account_balance'),
   featured: z.boolean().default(false),
   order: z.number().int().min(0).default(0),
   status: z.enum(['draft', 'published', 'unpublished', 'archived']).default('draft'),
@@ -136,6 +166,7 @@ export const projectInputSchema = projectSchema.omit({
   documents: true,
   sources: true,
   updates: true,
+  icon: true,
   featured: true,
   order: true,
 });

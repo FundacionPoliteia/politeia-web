@@ -41,6 +41,15 @@ const initialProjectTitles = [
   'Nuevo Super RIGI',
 ];
 
+const initialProjectIcons = [
+  'how_to_vote',
+  'psychology',
+  'forest',
+  'accessibility_new',
+  'school',
+  'factory',
+] as const;
+
 export function initialProjects(now = new Date().toISOString()): Project[] {
   return initialProjectTitles.map((title, index) => ({
     id: `seed-${slugify(title)}`,
@@ -68,7 +77,8 @@ export function initialProjects(now = new Date().toISOString()): Project[] {
     documents: [],
     sources: [],
     updates: [],
-    featured: index < 3,
+    icon: initialProjectIcons[index],
+    featured: true,
     order: index,
     status: 'draft',
     publishedRevisionId: null,

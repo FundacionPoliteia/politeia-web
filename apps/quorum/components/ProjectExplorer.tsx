@@ -7,6 +7,7 @@ import { effectiveProjectStageId, stageProgress, type PublicProject } from '@pol
 import { publicApiBase, type PublicBootstrap } from '@/lib/api';
 import { richTextExcerpt, richTextPlainText } from '@/lib/richText';
 import { latestProjectStageTransition, projectStageVisualState } from '@/lib/projectStages';
+import { projectIcon } from '@/lib/projectIcons';
 
 export default function ProjectExplorer({ data }: { data: PublicBootstrap }) {
   const router = useRouter();
@@ -84,7 +85,7 @@ function ProjectCard({ project }: { project: PublicProject }) {
     : `Etapa actual: ${current?.label || currentStageId}`;
   return (
     <Link className={`project-card stage-visual-${stageVisual}`} href={`/proyectos/${project.slug}`} onClick={() => metric('project-opened')}>
-      <div className="card-top"><span className="status-pill">{current?.shortLabel || 'En seguimiento'}</span><span className="docket">{project.docketNumber}</span></div>
+      <div className="card-top"><span className="project-card-identity"><span className="project-card-icon material-symbols-outlined" aria-hidden="true">{projectIcon(project)}</span><span className="status-pill">{current?.shortLabel || 'En seguimiento'}</span></span><span className="docket">{project.docketNumber}</span></div>
       <h3>{project.title}</h3><p>{richTextExcerpt(project.summary, project.summaryFormat, 220)}</p>
       <div className="mini-progress" aria-label={stageAria}>{progress.map((stage, index) => <span className={`${stage.state}${showDirectionalPath && index >= transitionStart && index < transitionEnd ? ' transition-path' : ''}${showDirectionalPath && stage.id === previousStageId ? ' transitioned-from' : ''}`} key={stage.id} />)}</div>
       <span className="card-link">Ver ficha <span aria-hidden="true">→</span></span>
