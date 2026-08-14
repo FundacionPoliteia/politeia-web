@@ -5,6 +5,7 @@ import KineticAdvanceWord from '@/components/KineticAdvanceWord';
 import ProjectExplorer from '@/components/ProjectExplorer';
 import { fetchPublicBootstrap } from '@/lib/api';
 import { projectIcon } from '@/lib/projectIcons';
+import { projectStageVisualState } from '@/lib/projectStages';
 
 export default async function HomePage() {
   const data = await fetchPublicBootstrap();
@@ -26,7 +27,8 @@ function FeaturedProjects({ projects }: { projects: PublicProject[] }) {
       {projects.map((project, index) => {
         const stageId = effectiveProjectStageId(project);
         const stage = project.workflow.stages.find((item) => item.id === stageId);
-        return <Link className="featured-project-row" href={`/proyectos/${project.slug}`} key={project.id}>
+        const stageVisual = projectStageVisualState(project);
+        return <Link className={`featured-project-row stage-visual-${stageVisual}`} href={`/proyectos/${project.slug}`} key={project.id}>
           <span className="featured-project-icon material-symbols-outlined" aria-hidden="true">{projectIcon(project, index)}</span>
           <span className="featured-project-copy"><strong>{project.title}</strong><small>{[project.docketNumber, project.chamber?.label, project.initiative?.label].filter(Boolean).join(' · ') || 'Información legislativa'}</small></span>
           <span className="featured-project-stage">{stage?.shortLabel || 'En seguimiento'}</span>
