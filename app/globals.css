@@ -219,7 +219,7 @@ a {
     left: 10px;
     z-index: 80;
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(7, minmax(0, 1fr));
     gap: 1px;
     min-height: 62px;
     padding: 6px;
@@ -256,7 +256,7 @@ a {
     gap: 3px;
     border-radius: 10px;
     color: var(--gris);
-    font-size: .58rem;
+    font-size: .54rem;
     font-weight: 700;
     line-height: 1;
     text-align: center;
@@ -283,6 +283,17 @@ a {
     width: 6px;
     height: 6px;
     box-shadow: 0 0 0 3px rgba(19, 122, 159, .12)
+  }
+}
+
+@media (min-width: 861px) and (max-width: 1180px) {
+  .nav-links {
+    gap: 16px;
+    font-size: .82rem;
+  }
+
+  .nav-cta {
+    padding-inline: 15px;
   }
 }
 

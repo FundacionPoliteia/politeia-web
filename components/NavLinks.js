@@ -71,6 +71,7 @@ export default function NavLinks({ latestPostAt = '', mobile = false }) {
         <MobileLink href="/origen" icon="history_edu" label="Origen" />
         <MobileLink href="/proyectos" icon="workspaces" label="Proyectos" />
         <BlogNavLink compact latestPostAt={latestPostAt} />
+        <MobileLink href="/camino-de-la-ley" icon="account_balance" label="Ley" />
         <MobileLink href="/equipo" icon="groups" label="Equipo" />
         <MobileLink href="/agradecimientos" icon="favorite" label="Legado" />
       </div>
@@ -82,6 +83,7 @@ export default function NavLinks({ latestPostAt = '', mobile = false }) {
       <div className="nav-links">
         <ActiveLink href="/origen">Origen</ActiveLink>
         <ActiveLink href="/proyectos">Proyectos</ActiveLink>
+        <ActiveLink href="/camino-de-la-ley">Camino de la ley</ActiveLink>
 
         <span
           className={`nav-link-shell${blogIsActive ? ' is-active' : ''}`}

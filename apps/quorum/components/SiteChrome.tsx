@@ -4,7 +4,7 @@ export function SiteHeader() {
   return <header className="site-header">
     <div className="shell header-inner">
       <Link className="wordmark" href="/" aria-label="Quórum Politeia, inicio"><strong className="wordmark-quorum" aria-hidden="true"><span className="wordmark-quorum-part wordmark-quorum-part-first">Quó</span><span className="wordmark-quorum-part wordmark-quorum-part-second">rum</span></strong><span>Politeia</span></Link>
-      <nav aria-label="Navegación principal"><Link href="/#proyectos">Proyectos</Link><Link href="/glosario">Glosario</Link><Link href="/privacidad">Privacidad</Link></nav>
+      <nav aria-label="Navegación principal"><Link href="/#proyectos">Proyectos</Link><a href="https://politeia.ar/camino-de-la-ley">Camino de la ley</a><Link href="/glosario">Glosario</Link><Link href="/privacidad">Privacidad</Link></nav>
     </div>
   </header>;
 }
