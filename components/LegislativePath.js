@@ -395,6 +395,10 @@ export default function LegislativePath() {
               <span className="eyebrow">Cámara de origen y cámara revisora</span>
               <h2>En el proceso de una ley hay cuatro escenarios posibles</h2>
             </div>
+            <p>
+              El resultado depende de lo que decidan la cámara de origen y la cámara
+              revisora. Cada combinación define cómo continúa el proyecto.
+            </p>
           </header>
 
           <div className={styles.scenarioGrid}>
@@ -408,7 +412,10 @@ export default function LegislativePath() {
                   <i className="material-symbols-outlined" aria-hidden="true">arrow_forward</i>
                   <span><small>Revisora</small><strong>{scenario.review}</strong></span>
                 </div>
-                <p>{scenario.result}</p>
+                <div className={styles.scenarioResult}>
+                  <small>Resultado</small>
+                  <p>{scenario.result}</p>
+                </div>
               </article>
             ))}
           </div>
@@ -421,13 +428,24 @@ export default function LegislativePath() {
           <div className={styles.executiveIntro}>
             <span className="eyebrow">Poder Ejecutivo</span>
             <h2>Una vez que se aprueba en ambas cámaras, pasa al Poder Ejecutivo</h2>
+            <p>
+              El Poder Ejecutivo puede aprobar la ley o vetarla. Estas son las cuatro
+              posibilidades que completan el recorrido.
+            </p>
           </div>
 
           <div className={styles.executiveActions}>
-            {EXECUTIVE_ACTIONS.map(([icon, title, text]) => (
-              <article key={title}>
-                <span className="material-symbols-outlined" aria-hidden="true">{icon}</span>
-                <div><h3>{title}</h3>{text && <p>{text}</p>}</div>
+            {EXECUTIVE_ACTIONS.map(([icon, title, text], index) => (
+              <article
+                className={index < 2 ? styles.executiveApprove : styles.executiveVeto}
+                key={title}
+              >
+                <span className={`${styles.executiveActionIcon} material-symbols-outlined`} aria-hidden="true">{icon}</span>
+                <div>
+                  <small>{index < 2 ? 'Aprobación' : 'Veto'}</small>
+                  <h3>{title}</h3>
+                  {text && <p>{text}</p>}
+                </div>
               </article>
             ))}
           </div>
@@ -437,6 +455,10 @@ export default function LegislativePath() {
           <header>
             <span>Veto del ejecutivo</span>
             <h3>Hay 3 escenarios en cuanto al veto del ejecutivo</h3>
+            <p>
+              La respuesta de ambas cámaras determina si la ley se promulga o si se
+              mantiene el veto.
+            </p>
           </header>
           <div className={styles.vetoGrid}>
             {VETO_SCENARIOS.map((scenario) => (
@@ -445,7 +467,10 @@ export default function LegislativePath() {
                 {scenario.chambers.map((text, index) => (
                   <span key={text}><small>{index === 0 ? 'Origen' : 'Revisora'}</small>{text}</span>
                 ))}
-                <strong>{scenario.result}</strong>
+                <div className={styles.vetoResult}>
+                  <small>Resultado</small>
+                  <strong>{scenario.result}</strong>
+                </div>
               </article>
             ))}
           </div>
