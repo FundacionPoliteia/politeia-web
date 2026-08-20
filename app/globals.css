@@ -219,7 +219,7 @@ a {
     left: 10px;
     z-index: 80;
     display: grid;
-    grid-template-columns: repeat(7, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 1px;
     min-height: 62px;
     padding: 6px;
