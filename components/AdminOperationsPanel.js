@@ -130,9 +130,9 @@ export default function AdminOperationsPanel({ apiBase, currentEmail }) {
     <section className="admin-manager admin-operations-panel" data-help-id="profile-logs">
       <div className="admin-manager-head admin-operations-head">
         <div>
-          <span>Administracion</span>
-          <h2 className="admin-help-heading">Logs y diagnostico <HelpTrigger topicId="profile-logs" /></h2>
-          <p>Revisa llamadas a la API y el ciclo de entrega de correos sin exponer credenciales ni contenido privado.</p>
+          <span>Administración</span>
+          <h2 className="admin-help-heading">Logs y diagnóstico <HelpTrigger topicId="profile-logs" /></h2>
+          <p>Revisá llamadas a la API y el ciclo de entrega de correos sin exponer credenciales ni contenido privado.</p>
         </div>
         <div className="admin-operations-head-actions">
           <button className="btn btn-ghost" disabled={loading} onClick={() => loadLogs({ targetView: view, reset: true })} type="button">
@@ -168,7 +168,7 @@ export default function AdminOperationsPanel({ apiBase, currentEmail }) {
             />
           </label>
           {view === 'requests' && (
-            <select aria-label="Filtrar por metodo" onChange={(event) => setMethod(event.target.value)} value={method}>
+            <select aria-label="Filtrar por método" onChange={(event) => setMethod(event.target.value)} value={method}>
               {METHOD_OPTIONS.map((value) => <option key={value || 'all'} value={value}>{value || 'Todos los metodos'}</option>)}
             </select>
           )}
@@ -184,7 +184,7 @@ export default function AdminOperationsPanel({ apiBase, currentEmail }) {
 
         <div className="admin-operations-summary">
           <span>{visibleItems.length} registros visibles</span>
-          <small>{view === 'requests' ? 'Cloud Logging conserva el historial completo. Se cargan 50 solicitudes por pagina.' : 'Se cargan 50 entregas por pagina.'}</small>
+          <small>{view === 'requests' ? 'Cloud Logging conserva el historial completo. Se cargan 50 solicitudes por página.' : 'Se cargan 50 entregas por página.'}</small>
         </div>
 
         {loading ? (
@@ -209,7 +209,7 @@ export default function AdminOperationsPanel({ apiBase, currentEmail }) {
         <div className="admin-modal-backdrop" onMouseDown={() => !testBusy && setTestConfirmOpen(false)} role="presentation">
           <div aria-labelledby="resend-test-title" aria-modal="true" className="admin-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog">
             <h3 id="resend-test-title">Enviar prueba real de Resend</h3>
-            <p>Se enviara un correo operativo a <strong>{currentEmail}</strong>. La entrega quedara registrada en la vista Correos.</p>
+            <p>Se enviará un correo operativo a <strong>{currentEmail}</strong>. La entrega quedará registrada en la vista Correos.</p>
             <div className="admin-modal-actions">
               <button className="btn btn-ghost" disabled={testBusy} onClick={() => setTestConfirmOpen(false)} type="button">Cancelar</button>
               <button className="btn btn-primary" disabled={testBusy} onClick={sendResendTest} type="button">
@@ -235,7 +235,7 @@ function RequestLogTable({ items }) {
               <td><time dateTime={item.createdAt || ''}>{formatLogDate(item.createdAt)}</time></td>
               <td><strong className={`admin-method admin-method-${String(item.method || '').toLowerCase()}`}>{item.method}</strong><code>{item.path}</code></td>
               <td><span className={`admin-log-status ${requestStatusClass(item.status)}`}>{item.status}</span><small>{item.durationMs} ms</small></td>
-              <td><span>{item.actorEmail || 'Publico'}</span><small>{item.originHost || 'Sin origen'}</small></td>
+              <td><span>{item.actorEmail || 'Público'}</span><small>{item.originHost || 'Sin origen'}</small></td>
               <td><code>{item.requestId}</code>{item.errorMessage && <small className="admin-log-error">{item.errorMessage}</small>}{item.queryKeys?.length > 0 && <small>Query: {item.queryKeys.join(', ')}</small>}</td>
             </tr>
           ))}

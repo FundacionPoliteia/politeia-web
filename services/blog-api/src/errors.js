@@ -44,7 +44,7 @@ export function errorHandler(err, req, res, _next) {
 
 function errorMessage(err, status, cloudCredentialsError, cloudPermissionError, exposeDetails) {
   if (cloudCredentialsError) {
-    return 'Faltan credenciales locales validas de Google Cloud. Ejecuta npm.cmd run blog-api:cloud:auth, npm.cmd run blog-api:cloud:project y npm.cmd run blog-api:cloud:quota-project para usar Firestore/Cloud Storage reales desde el backend local.';
+    return 'Faltan credenciales locales válidas de Google Cloud. Ejecutá npm.cmd run blog-api:cloud:auth, npm.cmd run blog-api:cloud:project y npm.cmd run blog-api:cloud:quota-project para usar Firestore/Cloud Storage reales desde el backend local.';
   }
 
   if (cloudPermissionError) {

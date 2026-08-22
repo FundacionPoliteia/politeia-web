@@ -1814,7 +1814,18 @@ a {
 
   .author-card-body {
     padding: 22px;
-    grid-template-rows: 94px 64px 34px 1fr
+    grid-template-rows: auto 64px 34px 1fr
+  }
+
+  .author-card-about {
+    overflow: visible
+  }
+
+  .author-card-about p {
+    display: block;
+    overflow: visible;
+    -webkit-box-orient: initial;
+    -webkit-line-clamp: unset
   }
 
   .author-card {
@@ -4867,6 +4878,16 @@ a {
   margin-top: 3px
 }
 
+.admin-profile-share--exception {
+  border-color: rgba(185, 128, 40, .28);
+  background: rgba(252, 196, 72, .1)
+}
+
+.admin-profile-share--exception:has(input:checked) {
+  border-color: rgba(169, 69, 60, .38);
+  background: rgba(169, 69, 60, .08)
+}
+
 .admin-profile-warning {
   border: 1px solid rgba(185, 128, 40, .28);
   border-radius: 12px;
@@ -7192,7 +7213,7 @@ a {
 }
 
 .admin-article-preview .art-body:empty::before {
-  content: "Todavia no hay contenido para previsualizar.";
+  content: "Todavía no hay contenido para previsualizar.";
   color: var(--gris)
 }
 

@@ -3,7 +3,7 @@ import { config } from './config.js';
 import { HttpError } from './errors.js';
 import { hasFirestoreTestOverride } from './firestore.js';
 
-const ADC_HELP = 'Faltan credenciales locales validas de Google Cloud. Ejecuta npm.cmd run blog-api:cloud:auth, npm.cmd run blog-api:cloud:project y npm.cmd run blog-api:cloud:quota-project para usar Firestore/Cloud Storage reales desde el backend local.';
+const ADC_HELP = 'Faltan credenciales locales válidas de Google Cloud. Ejecutá npm.cmd run blog-api:cloud:auth, npm.cmd run blog-api:cloud:project y npm.cmd run blog-api:cloud:quota-project para usar Firestore/Cloud Storage reales desde el backend local.';
 const CACHE_TTL_MS = 30 * 1000;
 
 let cachedCheck = {

@@ -8,10 +8,10 @@ if (!process.env.MAIL_TEST_TO) {
 }
 
 const rendered = renderMailLayout({
-  preheader: 'Prueba de configuracion de correo.',
+  preheader: 'Prueba de configuración de correo.',
   heading: 'Correo de prueba',
-  bodyHtml: '<p>La integracion de correo de Politeia esta respondiendo correctamente.</p>',
-  bodyText: 'La integracion de correo de Politeia esta respondiendo correctamente.',
+  bodyHtml: '<p>La integración de correo de Politeia está respondiendo correctamente.</p>',
+  bodyText: 'La integración de correo de Politeia está respondiendo correctamente.',
   actionUrl: config.appBaseUrl,
   actionLabel: 'Abrir panel',
 });

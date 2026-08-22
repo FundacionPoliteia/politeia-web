@@ -2,7 +2,7 @@ import Link from 'next/link';
 
 const DEFAULT_PROFILE_PHOTO = '/default_profile.png';
 
-export default function AuthorEnd({ fullName = '', photoUrl = '', closingPhrase = '', preview = false }) {
+export default function AuthorEnd({ fullName = '', photoUrl = '', closingPhrase = '', preview = false, linkEnabled = true }) {
   if (!fullName && !closingPhrase) return null;
 
   const name = fullName || 'Autor de Politeia';
@@ -10,7 +10,7 @@ export default function AuthorEnd({ fullName = '', photoUrl = '', closingPhrase 
     <>
       <span>Sobre el autor</span>
       <h2>
-        {preview ? name : (
+        {preview || !linkEnabled ? name : (
           <Link href={`/blog?autor=${encodeURIComponent(name)}`} className="art-author">
             {name}
           </Link>

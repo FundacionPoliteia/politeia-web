@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 const STATUSES = [
   { value: '', label: 'Todas' },
   { value: 'new', label: 'Nuevas' },
-  { value: 'reviewing', label: 'En revision' },
+  { value: 'reviewing', label: 'En revisión' },
   { value: 'contacted', label: 'Contactadas' },
   { value: 'archived', label: 'Archivadas' },
 ];
@@ -74,7 +74,7 @@ export default function ApplicationsAdminPanel({ apiBase }) {
         body: JSON.stringify(patch),
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data?.error?.message || 'No pudimos guardar la postulacion');
+      if (!response.ok) throw new Error(data?.error?.message || 'No pudimos guardar la postulación');
       setSelected(data.item);
       setItems((current) => current.map((item) => item.id === data.item.id ? data.item : item));
     } catch (updateError) {
@@ -90,7 +90,7 @@ export default function ApplicationsAdminPanel({ apiBase }) {
     try {
       const response = await fetch(`${apiBase}/v1/applications/manage/${id}`, { credentials: 'include' });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data?.error?.message || 'No pudimos abrir la postulacion');
+      if (!response.ok) throw new Error(data?.error?.message || 'No pudimos abrir la postulación');
       setSelected(data.item);
     } catch (detailError) {
       setError(detailError.message);
@@ -120,7 +120,7 @@ export default function ApplicationsAdminPanel({ apiBase }) {
   }
 
   async function removeSelected() {
-    if (!selected || !window.confirm('Eliminar definitivamente la postulacion y su CV? Esta accion no se puede deshacer.')) return;
+    if (!selected || !window.confirm('¿Eliminar definitivamente la postulación y su CV? Esta acción no se puede deshacer.')) return;
     setBusy(`delete:${selected.id}`);
     try {
       const response = await fetch(`${apiBase}/v1/applications/manage/${selected.id}`, {
@@ -129,7 +129,7 @@ export default function ApplicationsAdminPanel({ apiBase }) {
       });
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
-        throw new Error(data?.error?.message || 'No pudimos eliminar la postulacion');
+        throw new Error(data?.error?.message || 'No pudimos eliminar la postulación');
       }
       setItems((current) => current.filter((item) => item.id !== selected.id));
       setSelected(null);
@@ -184,7 +184,7 @@ export default function ApplicationsAdminPanel({ apiBase }) {
         <div>
           <span>Equipo</span>
           <h2>Postulaciones</h2>
-          <p>Revisa perfiles recibidos, descarga el CV privado y registra el avance de cada contacto.</p>
+          <p>Revisá perfiles recibidos, descargá el CV privado y registrá el avance de cada contacto.</p>
         </div>
         <button className="btn btn-ghost" disabled={loading} onClick={() => load({ reset: true })} type="button">
           {loading ? 'Actualizando...' : 'Actualizar'}
@@ -205,9 +205,9 @@ export default function ApplicationsAdminPanel({ apiBase }) {
           ))}
         </div>
         <input
-          aria-label="Buscar en esta pagina"
+          aria-label="Buscar en esta página"
           onChange={(event) => setSearch(event.target.value)}
-          placeholder="Buscar por nombre, email o area"
+          placeholder="Buscar por nombre, email o área"
           type="search"
           value={search}
         />
@@ -250,7 +250,7 @@ export default function ApplicationsAdminPanel({ apiBase }) {
 
       {nextCursor && (
         <button className="btn btn-ghost applications-more" disabled={loading} onClick={() => load()} type="button">
-          Cargar 30 mas
+          Cargar 30 más
         </button>
       )}
 

@@ -169,7 +169,7 @@ export default function BlogIndex({ posts = [], autorFiltro = '', categoriaFiltr
                 ? `Notas escritas por ${authorName}.`
                 : filtrandoCategoria
                   ? `Notas sobre ${categoriaFiltro}.`
-                  : 'Ideas para entender mejor lo publico.'}
+                  : 'Ideas para entender mejor lo público.'}
             </h1>
             {filtrandoAutor ? (
               <div className="blog-author-about">
@@ -183,9 +183,9 @@ export default function BlogIndex({ posts = [], autorFiltro = '', categoriaFiltr
                 )}
               </div>
             ) : filtrandoCategoria ? (
-              <p className="lead">Articulos publicados dentro de esta categoria.</p>
+              <p className="lead">Artículos publicados dentro de esta categoría.</p>
             ) : (
-              <p className="lead">Investigacion, analisis y opinion sobre politica, instituciones y participacion ciudadana.</p>
+              <p className="lead">Investigación, análisis y opinión sobre política, instituciones y participación ciudadana.</p>
             )}
             {filtrandoAutor && authorPhoto && (
               <div className="blog-author-mobile-card" aria-hidden="true">
@@ -260,12 +260,12 @@ export default function BlogIndex({ posts = [], autorFiltro = '', categoriaFiltr
             <div className="empty">
               {filtrandoAutor
                 ? 'No encontramos notas publicadas para este autor.'
-                : 'No pudimos cargar las notas en este momento. Proba recargar la pagina.'}
+                : 'No pudimos cargar las notas en este momento. Probá recargar la página.'}
             </div>
           )}
 
           {postsPorAutor.length > 0 && postsFiltrados.length === 0 && (
-            <div className="empty">No encontramos notas que coincidan con esa busqueda.</div>
+            <div className="empty">No encontramos notas que coincidan con esa búsqueda.</div>
           )}
 
           {postsFiltrados.length > 0 && (
@@ -313,7 +313,7 @@ export default function BlogIndex({ posts = [], autorFiltro = '', categoriaFiltr
           <div>
             <span className="eyebrow">Newsletter</span>
             <h2>Ideas y novedades, directo en tu correo.</h2>
-            <p>Recibi nuevas notas y actualizaciones de Politeia. Primero te enviaremos un email para confirmar tu suscripcion.</p>
+            <p>Recibí nuevas notas y actualizaciones de Politeia. Primero te enviaremos un email para confirmar tu suscripción.</p>
           </div>
           <NewsletterForm initialStatus={newsletterStatus} initialEmail={newsletterEmail} initialToken={newsletterToken} />
         </div>

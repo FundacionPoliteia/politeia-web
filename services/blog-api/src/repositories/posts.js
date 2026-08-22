@@ -239,7 +239,7 @@ export async function transitionPost(id, status, actorUser, action, { reviewAssi
   if (before.deletedAt) throw new HttpError(404, 'Post not found');
   assertCanAccessPost(before, actorUser);
   if (!canManageAllPosts(actorUser) && status === 'review' && !['draft', 'published-edition'].includes(before.status)) {
-    throw new HttpError(403, 'Solicita edicion para modificar un post publicado');
+    throw new HttpError(403, 'Solicitá edición para modificar un post publicado');
   }
 
   const patch = {
@@ -288,7 +288,7 @@ export async function requestPostEdit(id, actorUser) {
   if (before.deletedAt) throw new HttpError(404, 'Post not found');
   assertPostOwner(before, actorUser);
   if (!['published', 'published-edition', 'archived'].includes(before.status)) {
-    throw new HttpError(400, 'Solo se puede solicitar edicion sobre posts publicados');
+    throw new HttpError(400, 'Solo se puede solicitar edición sobre posts publicados');
   }
 
   await ref.update({
@@ -376,7 +376,7 @@ function assertCanAccessPost(post, user) {
 function assertCanEditPost(post, user) {
   if (canManageAllPosts(user)) return;
   if (['published', 'archived'].includes(post.status)) {
-    throw new HttpError(403, 'Solicita edicion para modificar un post publicado');
+    throw new HttpError(403, 'Solicitá edición para modificar un post publicado');
   }
 }
 

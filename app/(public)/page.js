@@ -4,8 +4,9 @@ import CardMotionBackdrop from '../../components/CardMotionBackdrop';
 import NewsletterForm from '../../components/NewsletterForm';
 import ProceduralNewsletterBackdrop from '../../components/ProceduralNewsletterBackdrop';
 import ProjectCard from '../../components/ProjectCard';
-import { getPosts, formatearFecha, etiquetasPost, hrefAutorBlog } from '../../lib/blogApi';
+import { getPosts, getPublicAuthorProfiles, formatearFecha, etiquetasPost, hrefAutorBlog } from '../../lib/blogApi';
 import { PUBLIC_PROJECTS } from '../../lib/publicProjects';
+import { taxonomyKey } from '../../lib/taxonomy';
 
 const direccion = [
   {
@@ -54,8 +55,12 @@ function TeamAvatar({ nombre, foto }) {
 }
 
 export default async function Home() {
-  const posts = await getPosts(6);
+  const [posts, publicAuthors] = await Promise.all([
+    getPosts(6),
+    getPublicAuthorProfiles(100),
+  ]);
   const ultimas = posts.slice(0, 3);
+  const publicAuthorKeys = new Set(publicAuthors.map((author) => taxonomyKey(author.fullName)));
 
   return (
     <main>
@@ -182,7 +187,11 @@ export default async function Home() {
                     <div className="meta">
                       {p.autor && (
                         <>
-                          <Link href={hrefAutorBlog(p.autor)} className="post-author">{p.autor}</Link>
+                          {publicAuthorKeys.has(taxonomyKey(p.autor)) ? (
+                            <Link href={hrefAutorBlog(p.autor)} className="post-author">{p.autor}</Link>
+                          ) : (
+                            <span>{p.autor}</span>
+                          )}
                           {' - '}
                         </>
                       )}

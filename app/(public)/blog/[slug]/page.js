@@ -6,8 +6,8 @@ import PostReferences from '../../../../components/PostReferences';
 
 export const dynamic = 'force-dynamic';
 
-// Genera una pagina por cada nota existente.
-// Permite que notas nuevas tambien funcionen si no existian al compilar.
+// Genera una página por cada nota existente.
+// Permite que notas nuevas también funcionen si no existían al compilar.
 export const dynamicParams = true;
 
 export async function generateMetadata({ params }) {
@@ -50,6 +50,7 @@ export default async function NotaPage({ params }) {
   const autorNombre = post.autorPerfil?.fullName || post.autor || '';
   const autorFoto = post.autorPerfil?.photoUrl || '';
   const cierreAutor = post.mostrarCierreAutor ? post.cierreAutor || post.autorPerfil?.closingPhrase || '' : '';
+  const autorTienePerfilPublico = Boolean(post.autorPerfil);
 
   return (
     <article className="article">
@@ -63,7 +64,11 @@ export default async function NotaPage({ params }) {
       <div className="art-meta">
         {post.autor && (
           <>
-            Por <Link href={hrefAutorBlog(post.autor)} className="art-author">{post.autor}</Link>
+            Por {autorTienePerfilPublico ? (
+              <Link href={hrefAutorBlog(post.autor)} className="art-author">{post.autor}</Link>
+            ) : (
+              <span>{post.autor}</span>
+            )}
             {' - '}
           </>
         )}
@@ -79,7 +84,12 @@ export default async function NotaPage({ params }) {
       />
       <PostReferences references={post.references} />
       {post.mostrarCierreAutor && (
-        <AuthorEnd fullName={autorNombre} photoUrl={autorFoto} closingPhrase={cierreAutor} />
+        <AuthorEnd
+          fullName={autorNombre}
+          photoUrl={autorFoto}
+          closingPhrase={cierreAutor}
+          linkEnabled={autorTienePerfilPublico}
+        />
       )}
     </article>
   );
@@ -94,6 +104,6 @@ function buildShareDescription(value = '') {
     .replace(/<[^>]*>/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-  if (!plain) return 'Investigacion, analisis y opinion de Politeia.';
+  if (!plain) return 'Investigación, análisis y opinión de Politeia.';
   return plain.length > 170 ? `${plain.slice(0, 167).trim()}...` : plain;
 }

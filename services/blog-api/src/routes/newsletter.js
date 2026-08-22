@@ -29,7 +29,7 @@ export function newsletterRouter({ writeLimiter }) {
         locale: req.body?.locale || 'es-AR',
         topics: req.body?.topics,
       });
-      res.status(202).json({ accepted: true, message: 'Revisa tu email para confirmar la suscripcion.' });
+      res.status(202).json({ accepted: true, message: 'Revisá tu email para confirmar la suscripción.' });
     } catch (err) {
       next(err);
     }
@@ -67,7 +67,7 @@ export function newsletterRouter({ writeLimiter }) {
   router.post('/preferences/request', writeLimiter, async (req, res, next) => {
     try {
       await requestNewsletterPreferences(req.body?.email);
-      res.status(202).json({ accepted: true, message: 'Revisa tu email para administrar tus preferencias.' });
+      res.status(202).json({ accepted: true, message: 'Revisá tu email para administrar tus preferencias.' });
     } catch (err) {
       next(err);
     }

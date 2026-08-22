@@ -130,7 +130,7 @@ const ROLE_LABELS = Object.fromEntries(ASSIGNABLE_ROLES.map((role) => [role.valu
 
 const NOTIFICATION_EVENT_LABELS = [
   { value: 'roleChanged', label: 'Cambios en mis permisos', roles: [], always: true },
-  { value: 'postSubmittedReview', label: 'Posts enviados a revision', roles: ['admin', 'reviewer'] },
+  { value: 'postSubmittedReview', label: 'Posts enviados a revisión', roles: ['admin', 'reviewer'] },
   { value: 'commentCreated', label: 'Comentarios nuevos en mis posts', roles: ['blog'] },
   { value: 'commentResolved', label: 'Comentarios resueltos', roles: ['blog'] },
   { value: 'commentReopened', label: 'Comentarios reabiertos', roles: ['blog'] },
@@ -144,7 +144,7 @@ const DEFAULT_NOTIFICATION_EVENTS = Object.fromEntries(
 );
 
 const CLAIM_NOTIFICATION_EVENT_LABELS = [
-  { value: 'profileClaimRequested', label: 'Solicitudes de vinculacion de perfiles', roles: ['admin'] },
+  { value: 'profileClaimRequested', label: 'Solicitudes de vinculación de perfiles', roles: ['admin'] },
   { value: 'profileClaimApproved', label: 'Vinculaciones de perfil aprobadas', roles: ['blog'] },
   { value: 'profileClaimBlocked', label: 'Vinculaciones de perfil bloqueadas', roles: ['blog'] },
   { value: 'profileClaimReleased', label: 'Vinculaciones de perfil desbloqueadas', roles: ['blog'] },
@@ -191,23 +191,24 @@ const EMPTY_MANAGED_AUTHOR_PROFILE = {
   closingPhrase: '',
   photoUrl: '',
   publicProfileEnabled: true,
+  publicAuthorProfileSuppressed: false,
 };
 
 const PROFILE_PREVIEW_AUTHORS = [
   {
     fullName: 'Autora de ejemplo',
-    description: 'Investiga como las instituciones transforman la vida cotidiana y las formas de participacion.',
-    focusArea: 'Instituciones y ciudadania',
+    description: 'Investigá cómo las instituciones transforman la vida cotidiana y las formas de participación.',
+    focusArea: 'Instituciones y ciudadanía',
     postCount: 6,
     latestPostTitle: 'Nuevas formas de participar',
-    categories: ['Democracia', 'Ciudadania'],
+    categories: ['Democracia', 'Ciudadanía'],
   },
   {
     fullName: 'Autor de ejemplo',
-    description: 'Escribe sobre los debates publicos que conectan tecnologia, derechos y democracia.',
-    focusArea: 'Tecnologia y derechos',
+    description: 'Escribí sobre los debates públicos que conectan tecnología, derechos y democracia.',
+    focusArea: 'Tecnología y derechos',
     postCount: 4,
-    latestPostTitle: 'Tecnologia para lo publico',
+    latestPostTitle: 'Tecnología para lo público',
     categories: ['Innovacion', 'Derechos'],
   },
 ];
@@ -426,7 +427,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
   const editingLivePost = form.status === 'published-edition';
   const editRequestPending = Boolean(form.editRequestedAt);
   const editorBusy = busy || publishedAuthorLocked;
-  const roleLabel = isAdmin ? 'Panel' : isReviewer ? 'Panel de revision' : isNewsletterManager && !isBlogAuthor ? 'Panel de newsletter' : isBlogAuthor ? 'Panel de blog' : 'Perfil';
+  const roleLabel = isAdmin ? 'Panel' : isReviewer ? 'Panel de revisión' : isNewsletterManager && !isBlogAuthor ? 'Panel de newsletter' : isBlogAuthor ? 'Panel de blog' : 'Perfil';
   const isLocalApiBase = isLocalApiUrl(API_BASE);
   const hasUnsavedChanges = useMemo(
     () => serializeForm(form) !== serializeForm(savedForm),
@@ -992,14 +993,14 @@ export default function AdminConsole({ surface = 'editorial' }) {
         body: JSON.stringify({ credential }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error?.message || 'No pudimos iniciar sesion');
+      if (!res.ok) throw new Error(data?.error?.message || 'No pudimos iniciar sesión');
       if (!isAllowedEmail(data.user?.email)) {
         throw new Error(`Solo pueden ingresar cuentas habilitadas.`);
       }
       setUser(data.user);
     } catch (_err) {
       setUser(null);
-      setMessage('No pudimos autorizar esta cuenta. Verifica que este habilitada e intenta nuevamente.');
+      setMessage('No pudimos autorizar esta cuenta. Verificá que esté habilitada e intentá nuevamente.');
     }
   }
 
@@ -1217,8 +1218,8 @@ export default function AdminConsole({ surface = 'editorial' }) {
           setMessage('Abrimos la bandeja de postulaciones.');
         } else {
           setNotificationActionDialog({
-            title: 'Nueva postulacion',
-            message: 'La postulacion esta disponible en el area administrativa.',
+            title: 'Nueva postulación',
+            message: 'La postulación está disponible en el área administrativa.',
             actionLabel: 'Abrir postulaciones',
             href: '/admin?tab=applications',
           });
@@ -1238,11 +1239,11 @@ export default function AdminConsole({ surface = 'editorial' }) {
           const claims = await loadAdminProfileClaims();
           const claim = claims.map(normalizeProfileClaim).find((item) => item.id === notification.profileClaimId);
           if (claim) setAdminProfileClaimDialog({ claim, action: 'review' });
-          else setMessage('La solicitud asociada ya no esta disponible.');
+          else setMessage('La solicitud asociada ya no está disponible.');
         } else {
           setActivePanelTab('profile');
           await Promise.all([loadMe({ silent: true }), loadUserProfile()]);
-          setMessage(notification.subject || 'Abrimos el estado de tu vinculacion de perfil.');
+          setMessage(notification.subject || 'Abrimos el estado de tu vinculación de perfil.');
           if (notification.type === 'profile.claim.approved') {
             setStatusFilter('');
             await loadPosts();
@@ -1258,7 +1259,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
       setPosts(items);
       const post = items.find((item) => item.id === notification.postId);
       if (!post) {
-        setMessage('No pudimos encontrar el post asociado a la notificacion.');
+        setMessage('No pudimos encontrar el post asociado a la notificación.');
         return;
       }
       selectPostForEdit(post);
@@ -1270,7 +1271,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
         if (comment) {
           openReviewCommentDialog(comment, 'reply');
         } else {
-          setMessage('El comentario asociado ya no esta disponible.');
+          setMessage('El comentario asociado ya no está disponible.');
         }
         return;
       }
@@ -1287,7 +1288,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
     if (notification.type === 'post.published') {
       setNotificationActionDialog({
         title: 'Post publicado',
-        message: `“${postTitle}” ya esta disponible en el blog publico.`,
+        message: `“${postTitle}” ya está disponible en el blog público.`,
         actionLabel: 'Ir al blog publicado',
         href: postSlug ? `${PUBLIC_SITE_URL}/blog/${encodeURIComponent(postSlug)}` : `${PUBLIC_SITE_URL}/blog`,
       });
@@ -1296,18 +1297,18 @@ export default function AdminConsole({ surface = 'editorial' }) {
 
     const contexts = {
       'post.submittedReview': {
-        title: 'Post enviado a revision',
-        message: `Abrimos “${postTitle}” para que puedas continuar con la revision.`,
+        title: 'Post enviado a revisión',
+        message: `Abrimos “${postTitle}” para que puedas continuar con la revisión.`,
         actionLabel: 'Continuar revisando',
       },
       'post.editRequested': {
-        title: 'Solicitud de edicion',
-        message: `Abrimos “${postTitle}” y su solicitud de edicion para que puedas evaluarla.`,
+        title: 'Solicitud de edición',
+        message: `Abrimos “${postTitle}” y su solicitud de edición para que puedas evaluarla.`,
         actionLabel: 'Revisar solicitud',
       },
       'post.editEnabled': {
-        title: 'Edicion habilitada',
-        message: `“${postTitle}” ya esta abierto para realizar cambios.`,
+        title: 'Edición habilitada',
+        message: `“${postTitle}” ya está abierto para realizar cambios.`,
         actionLabel: 'Continuar editando',
       },
     };
@@ -1445,7 +1446,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
       }));
       setProfileClaimConfirmOpen(false);
       await loadProfileClaimMatch();
-      setMessage('Solicitud de vinculacion enviada. Te avisaremos cuando un administrador la revise.');
+      setMessage('Solicitud de vinculación enviada. Te avisaremos cuando un administrador la revise.');
     } catch (err) {
       setMessage(err.message);
     }
@@ -1517,6 +1518,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
       closingPhrase: profile.closingPhrase,
       photoUrl: profile.photoUrl,
       publicProfileEnabled: profile.publicProfileEnabled,
+      publicAuthorProfileSuppressed: profile.publicAuthorProfileSuppressed,
     });
     setAdminProfilePhotoMode(profile.photoUrl ? 'url' : 'upload');
     if (adminProfilePhotoInputRef.current) {
@@ -1536,6 +1538,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
         closingPhrase: adminProfileDraft.closingPhrase,
         photoUrl: adminProfileDraft.photoUrl,
         publicProfileEnabled: adminProfileDraft.publicProfileEnabled,
+        publicAuthorProfileSuppressed: adminProfileDraft.publicAuthorProfileSuppressed,
       };
       const isEditing = Boolean(adminProfileEditingId);
       const path = isEditing ? `/v1/profile/manage/${encodeURIComponent(adminProfileEditingId)}` : '/v1/profile/manage';
@@ -1557,7 +1560,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
       setMessage('');
       const media = await withActionLoading('admin-profile-photo', () => uploadMedia(file));
       updateAdminProfileDraft('photoUrl', media?.url || '');
-      setMessage('Foto de autor cargada. Guarda el perfil para conservar el cambio.');
+      setMessage('Foto de autor cargada. Guardá el perfil para conservar el cambio.');
     } catch (err) {
       setMessage(imageLoadErrorMessage(err));
     } finally {
@@ -1667,7 +1670,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
       setMessage('');
       const media = await withActionLoading('profile-photo', () => uploadMedia(file));
       updateProfileDraft('photoUrl', media?.url || '');
-      setMessage('Foto de perfil cargada. Guarda el perfil para conservar el cambio.');
+      setMessage('Foto de perfil cargada. Guardá el perfil para conservar el cambio.');
     } catch (err) {
       setMessage(imageLoadErrorMessage(err));
     } finally {
@@ -1696,7 +1699,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
       throw new Error('Tu rol no permite crear nuevos posts.');
     }
     if (publishedAuthorLocked) {
-      throw new Error('Solicita edicion para modificar un post publicado.');
+      throw new Error('Solicitá edición para modificar un post publicado.');
     }
 
     const invalidReferenceIndex = form.references.findIndex((reference) => (
@@ -1706,7 +1709,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
     ));
     if (invalidReferenceIndex >= 0) {
       document.getElementById(`reference-url-${invalidReferenceIndex}`)?.focus();
-      throw new Error('Revisa el enlace de la referencia: debe ser una URL HTTPS valida.');
+      throw new Error('Revisá el enlace de la referencia: debe ser una URL HTTPS válida.');
     }
 
     const payload = buildPayload(form, canChooseSlug);
@@ -1801,11 +1804,11 @@ export default function AdminConsole({ surface = 'editorial' }) {
 
   async function createReviewComment({ body, selectedText, commentId, contentMarkdown }) {
     if (!form.id) {
-      setMessage('Guarda el post antes de agregar comentarios de revision.');
+      setMessage('Guardá el post antes de agregar comentarios de revisión.');
       return null;
     }
     if (!canPublishPosts) {
-      setMessage('Solo los reviewer pueden crear comentarios de revision.');
+      setMessage('Solo los reviewer pueden crear comentarios de revisión.');
       return null;
     }
 
@@ -1823,7 +1826,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
       if (data.post) upsertPost(data.post);
       focusReviewComment(data.item.id);
       setReviewCommentFilter('open');
-      setMessage('Comentario de revision agregado.');
+      setMessage('Comentario de revisión agregado.');
       return data.item;
     } catch (err) {
       setMessage(err.message);
@@ -1891,7 +1894,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
     if (!form.id) return;
     const body = normalizeInlineInput(replyBody);
     if (!body) {
-      setMessage('Escribi una respuesta para enviar.');
+      setMessage('Escribí una respuesta para enviar.');
       return;
     }
     const selectedTextCurrent = extractReviewCommentTextById(form.contentMarkdown, commentId)
@@ -1925,7 +1928,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
     if (!form.id || !editingReviewComment) return;
     const body = normalizeInlineInput(editingReviewComment.body);
     if (!body) {
-      setMessage('Escribi un comentario para guardar.');
+      setMessage('Escribí un comentario para guardar.');
       return;
     }
     try {
@@ -1950,7 +1953,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
   }
 
   async function deleteReviewComment(commentId) {
-    if (!form.id || !confirm('Eliminar este comentario de revision?')) return;
+    if (!form.id || !confirm('¿Eliminar este comentario de revisión?')) return;
     const nextMarkdown = stripReviewCommentMarkupById(form.contentMarkdown, commentId);
     try {
       setBusy(true);
@@ -2258,7 +2261,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
   async function createCategoryFromForm() {
     const name = sanitizeCategory(form.category);
     if (!name) {
-      setMessage('La categoria no existe, presiona ENTER para agregarla a la lista.');
+      setMessage('La categoría no existe, presioná ENTER para agregarla a la lista.');
       return;
     }
 
@@ -2273,7 +2276,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
       upsertCategory(data.item || { name });
       setCategoryDropdownOpen(false);
       setCategorySearchTerm('');
-      setMessage('Categoria agregada a la lista.');
+      setMessage('Categoría agregada a la lista.');
     } catch (err) {
       setMessage(err.message);
     } finally {
@@ -2287,7 +2290,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
       setBusy(true);
       setMessage('');
       await withActionLoading(`category-delete:${target.id}`, () => api(`/v1/categories/${encodeURIComponent(target.id)}`, { method: 'DELETE' }));
-      setMessage('Categoria eliminada de la lista.');
+      setMessage('Categoría eliminada de la lista.');
       setCategoryDeleteTarget(null);
       setCategories((current) => current.filter((category) => category.id !== target.id));
     } catch (err) {
@@ -2526,8 +2529,8 @@ export default function AdminConsole({ surface = 'editorial' }) {
   const profilePreviewPosts = posts.filter((post) => taxonomyKey(post.authorName) === taxonomyKey(profilePreviewName));
   const profilePreviewAuthor = {
     fullName: profilePreviewName,
-    description: profileDraft.description || 'Tu presentacion personal aparecera aca para que los lectores conozcan tu recorrido y tu mirada.',
-    focusArea: profileDraft.focusArea || 'Tus temas y areas de interes',
+    description: profileDraft.description || 'Tu presentación personal aparecerá acá para que los lectores conozcan tu recorrido y tu mirada.',
+    focusArea: profileDraft.focusArea || 'Tus temas y áreas de interés',
     closingPhrase: profileDraft.closingPhrase || '',
     photoUrl: profileDraft.photoUrl || DEFAULT_PROFILE_PHOTO,
     postCount: profilePreviewPosts.length || 3,
@@ -2551,18 +2554,18 @@ export default function AdminConsole({ surface = 'editorial' }) {
           id: 'profile-preview-post-1',
           slug: 'una-mirada-sobre-los-debates',
           titulo: profilePreviewAuthor.latestPostTitle,
-          extracto: 'Una introduccion breve que ayuda a comprender el enfoque y las preguntas principales de la nota.',
+          extracto: 'Una introducción breve que ayuda a comprender el enfoque y las preguntas principales de la nota.',
           fecha: new Date().toISOString(),
           imagen: null,
           autor: profilePreviewName,
-          categoria: profilePreviewAuthor.categories[0] || 'Analisis',
-          tags: [profilePreviewAuthor.categories[0] || 'Analisis'],
+          categoria: profilePreviewAuthor.categories[0] || 'Análisis',
+          tags: [profilePreviewAuthor.categories[0] || 'Análisis'],
         },
         {
           id: 'profile-preview-post-2',
           slug: 'ideas-para-comprender-una-conversacion',
-          titulo: 'Ideas para comprender una conversacion publica en movimiento',
-          extracto: 'Otra nota de ejemplo para mostrar como se organiza la produccion del autor.',
+          titulo: 'Ideas para comprender una conversación pública en movimiento',
+          extracto: 'Otra nota de ejemplo para mostrar cómo se organiza la producción del autor.',
           fecha: new Date().toISOString(),
           imagen: null,
           autor: profilePreviewName,
@@ -2627,7 +2630,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
                 <small>v{APP_VERSION}</small>
               </span>
               <h1>Gestor de contenido</h1>
-              <p>Crea borradores, prepara notas para revision y publica contenido editorial. Ante cambios de acceso o dudas del flujo, contacta al equipo responsable del panel.</p>
+              <p>Creá borradores, prepará notas para revisión y publicá contenido editorial. Ante cambios de acceso o dudas del flujo, contactá al equipo responsable del panel.</p>
             </div>
             <Link
               href="https://www.politeia.ar/blog"
@@ -2635,7 +2638,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
               target="_blank"
               rel="noopener noreferrer"
             >
-              Ver blog publico
+              Ver blog público
             </Link>
           </div>
         </section>
@@ -2658,8 +2661,8 @@ export default function AdminConsole({ surface = 'editorial' }) {
                 <span>Notificaciones</span>
                 <h2 className="admin-help-heading">Actividad editorial <HelpTrigger topicId="notifications-inbox" /></h2>
                 <p>
-                  {unreadNotificationCount ? `${unreadNotificationCount} sin leer` : 'Todo al dia'}
-                  {' · '}Historial de {notificationPolicy.retentionDays} dias
+                  {unreadNotificationCount ? `${unreadNotificationCount} sin leer` : 'Todo al día'}
+                  {' · '}Historial de {notificationPolicy.retentionDays} días
                 </p>
               </div>
               <button aria-label="Cerrar notificaciones" className="admin-icon-button" onClick={() => {
@@ -2674,17 +2677,17 @@ export default function AdminConsole({ surface = 'editorial' }) {
                 Actualizar
               </button>
               <button className="btn btn-ghost" disabled={loadingNotifications || unreadNotificationCount === 0} onClick={markAllNotificationsRead} type="button">
-                Marcar todas como leidas
+                Marcar todas como leídas
               </button>
             </div>
             <div className="admin-inbox-policy">
               <span aria-hidden="true" className="material-symbols-outlined">schedule</span>
-              <p>Las notificaciones leidas se agrupan en Anteriores despues de {notificationPolicy.recentDays} dias.</p>
+              <p>Las notificaciones leídas se agrupan en Anteriores después de {notificationPolicy.recentDays} días.</p>
             </div>
             {loadingNotifications ? (
               <p className="admin-muted">Cargando notificaciones...</p>
             ) : inAppNotifications.length === 0 ? (
-              <p className="admin-muted">No hay notificaciones en los ultimos {notificationPolicy.retentionDays} dias.</p>
+              <p className="admin-muted">No hay notificaciones en los últimos {notificationPolicy.retentionDays} días.</p>
             ) : (
               <div className="admin-inbox-list">
                 {notificationDayGroups.length ? (
@@ -2703,7 +2706,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
                       <span aria-hidden="true" className="material-symbols-outlined">history</span>
                       <span>
                         <strong>{showPreviousNotifications ? 'Ocultar anteriores' : 'Ver anteriores'}</strong>
-                        <small>{notificationBuckets.previous.length} {notificationBuckets.previous.length === 1 ? 'notificacion leida' : 'notificaciones leidas'}</small>
+                        <small>{notificationBuckets.previous.length} {notificationBuckets.previous.length === 1 ? 'notificación leída' : 'notificaciones leídas'}</small>
                       </span>
                       <span aria-hidden="true" className="material-symbols-outlined admin-inbox-previous-chevron">
                         {showPreviousNotifications ? 'expand_less' : 'expand_more'}
@@ -2769,23 +2772,23 @@ export default function AdminConsole({ surface = 'editorial' }) {
         <div className={user && canAccessPanel ? 'wrap' : 'admin-access-wrap'}>
           {!API_BASE || !GOOGLE_CLIENT_ID ? (
             <div className="admin-access-error" role="alert">
-              <h1>No pudimos iniciar sesion</h1>
-              <p>El acceso no esta disponible en este momento. Intenta nuevamente mas tarde.</p>
+              <h1>No pudimos iniciar sesión</h1>
+              <p>El acceso no está disponible en este momento. Intentá nuevamente más tarde.</p>
             </div>
           ) : checkingSession ? (
-            <div className="admin-access-loading" aria-label="Comprobando sesion" role="status">
+            <div className="admin-access-loading" aria-label="Comprobando sesión" role="status">
               <span className="admin-spinner" aria-hidden="true" />
             </div>
           ) : !user ? (
-            <div className="admin-access-login" aria-label="Iniciar sesion con Google">
+            <div className="admin-access-login" aria-label="Iniciar sesión con Google">
               <div className="admin-google-signin" ref={signInRef}></div>
               {googleButtonStatus === 'failed' && (
-                <p className="admin-access-message" role="alert">No pudimos iniciar sesion. Intenta nuevamente.</p>
+                <p className="admin-access-message" role="alert">No pudimos iniciar sesión. Intentá nuevamente.</p>
               )}
               {isLocalPanelHost && isLocalApiBase && (
                 <div className="admin-login-actions">
                   <button className="btn btn-primary" onClick={() => loadMe()} type="button">
-                    Usar sesion local
+                    Usar sesión local
                   </button>
                 </div>
               )}
@@ -2793,7 +2796,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
           ) : !canAccessPanel ? (
             <div className="admin-access-error">
               <h1>Acceso no autorizado</h1>
-              <p>No tenes permisos para ingresar. Si crees que se trata de un error, escribi a dev@politeia.ar.</p>
+              <p>No tenés permisos para ingresar. Si creés que se trata de un error, escribí a dev@politeia.ar.</p>
               <div className="admin-login-actions">
                 <button className="btn btn-ghost" onClick={logout} type="button">
                   Salir
@@ -2868,7 +2871,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
                 <div className="admin-tabs-secondary">
                   {isAdmin && isEditorialSurface && (
                     <Link className="admin-surface-link" href="/admin">
-                      Administracion
+                      Administración
                     </Link>
                   )}
                   {isAdmin && isAdministrativeSurface && (
@@ -3014,12 +3017,17 @@ export default function AdminConsole({ surface = 'editorial' }) {
                           <textarea
                             maxLength="220"
                             onChange={(e) => updateProfileDraft('closingPhrase', e.target.value)}
-                            placeholder="Una frase corta para cerrar tus notas, por ejemplo una linea de presentacion o criterio editorial."
+                            placeholder="Una frase corta para cerrar tus notas, por ejemplo una línea de presentación o criterio editorial."
                             rows="2"
                             value={profileDraft.closingPhrase}
                           />
                         </label>
-                        {canShowProfileOptIn ? (
+                        {profileDraft.publicAuthorProfileSuppressed ? (
+                          <div className="admin-profile-warning" data-help-id="profile-public">
+                            <strong>Perfil público deshabilitado</strong>
+                            <span>El equipo administrador configuró este autor para conservar sus notas sin mostrar una página ni enlaces públicos.</span>
+                          </div>
+                        ) : canShowProfileOptIn ? (
                           <label className="admin-profile-share" data-help-id="profile-public">
                             <input
                               checked={profileDraft.publicProfileEnabled}
@@ -3033,7 +3041,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
                           </label>
                         ) : (
                           <div className="admin-profile-warning" data-help-id="profile-public">
-                            <strong>Perfil publico no disponible todavia</strong>
+                            <strong>Perfil público no disponible todavía</strong>
                             <span>Para mostrarlo en el blog, el nombre y apellido deben coincidir con el autor usado en alguna nota existente.</span>
                           </div>
                         )}
@@ -3051,7 +3059,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
                           </label>
                         )}
                         <div className="admin-manager-actions">
-                          <span>{profileDraft.fullName ? `Nombre visible: ${profileDraft.fullName}` : 'Si no cargas nombre, se usa tu cuenta.'}</span>
+                          <span>{profileDraft.fullName ? `Nombre visible: ${profileDraft.fullName}` : 'Si no cargás nombre, se usa tu cuenta.'}</span>
                           <button className="btn btn-primary" disabled={savingProfile || profilePhotoUploading || isActionLoading('profile-save')} onClick={requestUserProfileSave} type="button">
                             {isActionLoading('profile-save') ? 'Guardando perfil...' : 'Guardar perfil'}
                             <ActionSpinner active={isActionLoading('profile-save')} />
@@ -3065,15 +3073,15 @@ export default function AdminConsole({ surface = 'editorial' }) {
                           <span className="admin-field-label">Identidad editorial <HelpTrigger topicId="profile-claim" /></span>
                           {profileClaimMatch.claim ? (
                             <>
-                              <h3>{PROFILE_CLAIM_STATUS_LABELS[profileClaimMatch.claim.status] || 'Solicitud de vinculacion'}</h3>
+                              <h3>{PROFILE_CLAIM_STATUS_LABELS[profileClaimMatch.claim.status] || 'Solicitud de vinculación'}</h3>
                               <p>
                                 Perfil: <strong>{profileClaimMatch.claim.fullName}</strong>.{' '}
                                 {profileClaimMatch.claim.status === 'pending' && 'Un administrador debe revisar la solicitud.'}
                                 {profileClaimMatch.claim.status === 'processing' && 'Estamos transfiriendo el perfil y sus notas.'}
-                                {profileClaimMatch.claim.status === 'approved' && `Tu cuenta heredo ${profileClaimMatch.claim.affectedPostCount} notas.`}
-                                {profileClaimMatch.claim.status === 'blocked' && (profileClaimMatch.claim.blockReason || 'Contacta a un administrador para revisar el bloqueo.')}
+                                {profileClaimMatch.claim.status === 'approved' && `Tu cuenta heredó ${profileClaimMatch.claim.affectedPostCount} notas.`}
+                                {profileClaimMatch.claim.status === 'blocked' && (profileClaimMatch.claim.blockReason || 'Contactá a un administrador para revisar el bloqueo.')}
                                 {profileClaimMatch.claim.status === 'superseded' && 'El perfil fue vinculado con otra cuenta.'}
-                                {profileClaimMatch.claim.status === 'released' && 'Podes volver a solicitar la vinculacion.'}
+                                {profileClaimMatch.claim.status === 'released' && 'Podés volver a solicitar la vinculación.'}
                               </p>
                             </>
                           ) : (
@@ -3092,7 +3100,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
                           )}
                           {profileClaimMatch.candidate && !['pending', 'processing', 'blocked', 'approved'].includes(profileClaimMatch.claim?.status || '') && (
                             <button className="btn btn-primary" onClick={() => setProfileClaimConfirmOpen(true)} type="button">
-                              Solicitar vinculacion
+                              Solicitar vinculación
                             </button>
                           )}
                         </div>
@@ -3105,7 +3113,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
                         <div>
                           <span>Email</span>
                           <h2 className="admin-help-heading">Avisos del flujo editorial <HelpTrigger topicId="profile-email" /></h2>
-                          <p>Elegis si queres recibir por email los movimientos internos que tambien aparecen en notificaciones.</p>
+                          <p>Elegís si querés recibir por email los movimientos internos que también aparecen en notificaciones.</p>
                         </div>
                         <button aria-expanded={notificationPreferencesOpen} className="btn btn-ghost" onClick={() => setNotificationPreferencesOpen((open) => !open)} type="button">
                           {notificationPreferencesOpen ? 'Ocultar opciones' : 'Configurar avisos'}
@@ -3147,22 +3155,22 @@ export default function AdminConsole({ surface = 'editorial' }) {
                   <div className="admin-manager-head">
                     <div>
                       <span>Perfiles</span>
-                      <h2>Revision de perfiles publicos</h2>
-                      <p>Revisa los datos que los usuarios cargan para las paginas de autor.</p>
+                      <h2>Revisión de perfiles públicos</h2>
+                      <p>Revisá los datos que los usuarios cargan para las páginas de autor.</p>
                     </div>
                     <button className="btn btn-ghost" onClick={loadAdminProfiles} type="button">
                       Actualizar
                     </button>
                   </div>
                   <div className="admin-profile-notice">
-                    Si el nombre visible no coincide con el autor usado en una nota, el perfil no se va a mostrar correctamente y el usuario no podra activar la publicacion del perfil.
+                    Si el nombre visible no coincide con el autor usado en una nota, el perfil no se va a mostrar correctamente y el usuario no podrá activar la publicación del perfil.
                   </div>
                   <section className={`admin-profile-claims admin-collapsible-section ${adminProfileClaimsOpen ? 'is-open' : 'is-collapsed'} ${pendingAdminProfileClaimCount > 0 ? 'has-pending' : ''}`} data-help-id="profiles-claims">
                     <div className="admin-manager-head compact">
                       <div>
                         <span>Solicitudes</span>
-                        <h3 className="admin-help-heading">Vinculacion de perfiles <HelpTrigger topicId="profiles-claims" /></h3>
-                        <p>Revisa quien solicita heredar un perfil gestionado y sus notas.</p>
+                        <h3 className="admin-help-heading">Vinculación de perfiles <HelpTrigger topicId="profiles-claims" /></h3>
+                        <p>Revisá quién solicita heredar un perfil gestionado y sus notas.</p>
                       </div>
                       <div className="admin-collapsible-head-actions">
                         <span className="admin-claim-count">
@@ -3170,7 +3178,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
                         </span>
                         <button
                           aria-expanded={adminProfileClaimsOpen}
-                          aria-label={adminProfileClaimsOpen ? 'Cerrar vinculacion de perfiles' : 'Abrir vinculacion de perfiles'}
+                          aria-label={adminProfileClaimsOpen ? 'Cerrar vinculación de perfiles' : 'Abrir vinculación de perfiles'}
                           className="admin-icon-button admin-collapse-button"
                           onClick={() => setAdminProfileClaimsOpen((open) => !open)}
                           type="button"
@@ -3221,7 +3229,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
                         <h3 className="admin-help-heading">{adminProfileEditingId ? 'Editar perfil' : 'Crear perfil sin cuenta'} <HelpTrigger topicId="profiles-manager" /></h3>
                         <p>{adminProfileEditingId
                           ? adminProfileBeingEdited?.managedAuthor
-                            ? 'Actualiza los datos publicos del perfil gestionado.'
+                            ? 'Actualizá los datos públicos del perfil gestionado.'
                             : `Corrige los datos del perfil de ${adminProfileBeingEdited?.email || 'esta cuenta'}. El email y sus permisos no se modifican.`
                           : 'Usalo para autores que no ingresan al panel, pero necesitan tener perfil en el blog.'}</p>
                       </div>
@@ -3358,8 +3366,19 @@ export default function AdminConsole({ surface = 'editorial' }) {
                         type="checkbox"
                       />
                       <span>
-                        <strong>Publicar perfil si coincide con un autor existente</strong>
-                        <small>Si todavia no hay una nota con este autor exacto, el perfil se crea pero queda sin publicar.</small>
+                        <strong>Mostrar perfil público y habilitar enlaces al autor</strong>
+                        <small>Si lo desactivás, sus notas siguen publicadas, pero el autor no aparece en el directorio y su nombre deja de ser clickeable. Si está activo, se muestra cuando coincide con una nota.</small>
+                      </span>
+                    </label>
+                    <label className="admin-profile-share admin-profile-share--exception">
+                      <input
+                        checked={adminProfileDraft.publicAuthorProfileSuppressed}
+                        onChange={(event) => updateAdminProfileDraft('publicAuthorProfileSuppressed', event.target.checked)}
+                        type="checkbox"
+                      />
+                      <span>
+                        <strong>Ocultar perfil por excepción editorial</strong>
+                        <small>Las notas permanecen publicadas, pero el autor no figura en el directorio, no tiene página pública y su nombre se muestra sin enlaces. Esta decisión prevalece sobre la preferencia del autor.</small>
                       </span>
                     </label>
                     <div className="admin-manager-actions">
@@ -3370,7 +3389,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
                           onClick={resetAdminAuthorProfileForm}
                           type="button"
                         >
-                          Cancelar edicion
+                          Cancelar edición
                         </button>
                       )}
                       <button
@@ -3391,7 +3410,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
                         <tr>
                           <th>Perfil</th>
                           <th>Estado</th>
-                          <th>Descripcion</th>
+                          <th>Descripción</th>
                           <th>Sobre mi</th>
                           <th>Slug</th>
                           <th>Actualizado</th>
@@ -3401,18 +3420,23 @@ export default function AdminConsole({ surface = 'editorial' }) {
                       <tbody>
                         {adminProfiles.length === 0 ? (
                           <tr>
-                            <td colSpan="7">Todavia no hay perfiles cargados.</td>
+                            <td colSpan="7">Todavía no hay perfiles cargados.</td>
                           </tr>
                         ) : adminProfiles.map((profile) => {
-                          const profileIsPublic = profile.publicProfileEnabled && profile.canSharePublicProfile;
+                          const profileIsSuppressed = profile.publicAuthorProfileSuppressed;
+                          const profileIsPublic = !profileIsSuppressed && profile.publicProfileEnabled && profile.canSharePublicProfile;
                           const profileStatus = profileIsPublic
-                            ? 'Publico'
-                            : profile.publicProfileEnabled
+                            ? 'Público'
+                            : profileIsSuppressed
+                              ? 'Oculto por excepción'
+                              : profile.publicProfileEnabled
                               ? 'Esperando coincidencia'
-                              : 'Publicacion desactivada';
+                              : 'Publicación desactivada';
                           const profileStatusClass = profileIsPublic
                             ? 'published'
-                            : profile.publicProfileEnabled
+                            : profileIsSuppressed
+                              ? 'archived'
+                              : profile.publicProfileEnabled
                               ? 'draft'
                               : 'archived';
 
@@ -3433,8 +3457,8 @@ export default function AdminConsole({ surface = 'editorial' }) {
                                 {profileStatus}
                               </span>
                             </td>
-                            <td>{profile.description || 'Sin descripcion'}</td>
-                            <td>{profile.focusArea || 'Sin area definida'}</td>
+                            <td>{profile.description || 'Sin descripción'}</td>
+                            <td>{profile.focusArea || 'Sin área definida'}</td>
                             <td>
                               {profile.authorSlug || 'Sin slug'}
                               {profileIsPublic && profile.fullName && (
@@ -3516,7 +3540,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
                     <div>
                       <span>Usuarios</span>
                       <h2 className="admin-help-heading">Roles y accesos <HelpTrigger topicId="access-roles" /></h2>
-                      <p>Agrega emails @{ALLOWED_EMAIL_DOMAIN} o @{ASSIGNED_EMAIL_DOMAIN}, asigna roles y guarda los cambios. Solo admins @{ALLOWED_EMAIL_DOMAIN} pueden habilitar usuarios.</p>
+                      <p>Agregá emails @{ALLOWED_EMAIL_DOMAIN} o @{ASSIGNED_EMAIL_DOMAIN}, asigná roles y guardá los cambios. Solo admins @{ALLOWED_EMAIL_DOMAIN} pueden habilitar usuarios.</p>
                     </div>
                     <button
                       aria-expanded={adminUsersOpen}
@@ -3592,7 +3616,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
                           <tbody>
                             {filteredAdminUsers.length === 0 ? (
                               <tr>
-                                <td colSpan="4">No hay usuarios para esta busqueda.</td>
+                                <td colSpan="4">No hay usuarios para esta búsqueda.</td>
                               </tr>
                             ) : filteredAdminUsers.map((item) => {
                               const draftRoles = adminUserDrafts[item.email] || item.roles || [];
@@ -3601,7 +3625,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
                                 <tr className={changed ? 'selected' : ''} key={item.email}>
                                   <td>
                                     <strong>{item.email}</strong>
-                                    {item.updatedBy && <small>Ultimo cambio: {item.updatedBy}</small>}
+                                    {item.updatedBy && <small>Último cambio: {item.updatedBy}</small>}
                                   </td>
                                   <td>
                                     <div className="admin-role-checks">
@@ -3660,9 +3684,9 @@ export default function AdminConsole({ surface = 'editorial' }) {
                 <section className="admin-manager">
                   <div className="admin-manager-head">
                     <div>
-                      <span>Gestion admin</span>
+                      <span>Gestión admin</span>
                       <h2>Tabla de blogs y acciones masivas</h2>
-                      <p>Usa los filtros de posts para acotar la vista antes de seleccionar publicaciones.</p>
+                      <p>Usá los filtros de posts para acotar la vista antes de seleccionar publicaciones.</p>
                     </div>
                     <button
                       aria-expanded={adminManagerOpen}
@@ -3711,7 +3735,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
                           onClick={() => setSelectedAdminPostIds([])}
                           type="button"
                         >
-                          Limpiar seleccion
+                          Limpiar selección
                         </button>
                       </div>
 
@@ -3729,9 +3753,9 @@ export default function AdminConsole({ surface = 'editorial' }) {
                                 />
                               </th>
                               <th>Estado</th>
-                              <th>Titulo</th>
+                              <th>Título</th>
                               <th>Autor</th>
-                              <th>Categoria y tags</th>
+                              <th>Categoría y tags</th>
                               <th>Fecha</th>
                               <th>Acciones</th>
                             </tr>
@@ -3755,12 +3779,12 @@ export default function AdminConsole({ surface = 'editorial' }) {
                                   <span className={`admin-status status-${post.status || 'draft'}`}>
                                     {STATUS_LABELS[post.status] || post.status || 'Borrador'}
                                   </span>
-                                  {post.editRequestedAt && <small>Solicitud de edicion</small>}
+                                  {post.editRequestedAt && <small>Solicitud de edición</small>}
                                   {post.assignedReviewerEmail && <small>Asignado a {post.assignedReviewerName || post.assignedReviewerEmail}</small>}
                                 </td>
                                 <td>
                                   <button className="admin-table-title" onClick={() => selectPostForEdit(post)} type="button">
-                                    {post.title || 'Sin titulo'}
+                                    {post.title || 'Sin título'}
                                   </button>
                                   <small>{post.excerpt || 'Sin extracto'}</small>
                                 </td>
@@ -3769,7 +3793,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
                                   {post.authorName && post.authorEmail && <small>{post.authorEmail}</small>}
                                 </td>
                                 <td>
-                                  {post.category || 'Sin categoria'}
+                                  {post.category || 'Sin categoría'}
                                   {Array.isArray(post.tags) && post.tags.length > 0 && <small>{post.tags.join(', ')}</small>}
                                 </td>
                                 <td>{formatAdminDate(post.updatedAt || post.publishedAt || post.createdAt)}</td>
@@ -3800,10 +3824,10 @@ export default function AdminConsole({ surface = 'editorial' }) {
                                       <button
                                         className="btn btn-workflow"
                                         disabled={busy || isActionLoading(`workflow:enable-edit:${post.id}`)}
-                                        onClick={() => requestAction(`/v1/posts/${post.id}/enable-edit`, 'Edicion habilitada sobre el post publicado.', 'habilitar edicion', `workflow:enable-edit:${post.id}`)}
+                                        onClick={() => requestAction(`/v1/posts/${post.id}/enable-edit`, 'Edición habilitada sobre el post publicado.', 'habilitar edición', `workflow:enable-edit:${post.id}`)}
                                         type="button"
                                       >
-                                        {isActionLoading(`workflow:enable-edit:${post.id}`) ? 'Habilitando...' : 'Habilitar edicion'}
+                                        {isActionLoading(`workflow:enable-edit:${post.id}`) ? 'Habilitando...' : 'Habilitar edición'}
                                         <ActionSpinner active={isActionLoading(`workflow:enable-edit:${post.id}`)} />
                                       </button>
                                     )}
@@ -3947,7 +3971,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
                         <span aria-hidden="true" className="material-symbols-outlined">hourglass_top</span>
                         <div>
                           <strong>Solicitud de ediciín pendiente</strong>
-                          <span>Un reviewer o admin debe habilitar una nueva versiín antes de que puedas modificar este post.</span>
+                          <span>Un reviewer o admin debe habilitar una nueva versión antes de que puedas modificar este post.</span>
                         </div>
                       </div>
                     ) : (
@@ -3961,8 +3985,8 @@ export default function AdminConsole({ surface = 'editorial' }) {
                           {isActionLoading(`workflow:request-edit:${form.id}`) ? 'hourglass_top' : 'edit_note'}
                         </span>
                         <div>
-                          <strong>Solicitar edicion</strong>
-                          <span>Este post esta publicado. Pedile a revisión que lo habilite como nueva versión editable.</span>
+                          <strong>Solicitar edición</strong>
+                          <span>Este post está publicado. Pedile a revisión que lo habilite como nueva versión editable.</span>
                         </div>
                         <em>{isActionLoading(`workflow:request-edit:${form.id}`) ? 'Enviando...' : 'Pedir acceso'}</em>
                       </button>
@@ -3974,8 +3998,8 @@ export default function AdminConsole({ surface = 'editorial' }) {
                   </div>
                   {editingLivePost && (
                     <div className="admin-editor-lock">
-                      <strong>Edicion sobre publicado</strong>
-                      <span>El articulo sigue publicado afuera. Estos cambios quedan como nueva version hasta que los envies a revision y se vuelvan a publicar.</span>
+                      <strong>Edición sobre publicado</strong>
+                      <span>El artículo sigue publicado afuera. Estos cambios quedan como nueva versión hasta que los envíes a revisión y se vuelvan a publicar.</span>
                     </div>
                   )}
 
@@ -4069,7 +4093,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
                                 }}
                                 type="button"
                               >
-                                {isActionLoading('category-create') ? 'Agregando categoria...' : `Agregar "${sanitizeCategory(form.category)}"`}
+                                {isActionLoading('category-create') ? 'Agregando categoría...' : `Agregar "${sanitizeCategory(form.category)}"`}
                                 <ActionSpinner active={isActionLoading('category-create')} />
                               </button>
                             )}
@@ -4377,7 +4401,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
                                 />
                                 {urlError && (
                                   <span className="admin-field-error" id={`reference-url-error-${index}`}>
-                                    Usa un enlace completo que comience con https://
+                                    Usá un enlace completo que comience con https://
                                   </span>
                                 )}
                               </label>
@@ -4484,7 +4508,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
                           disabled={publishedAuthorLocked}
                           maxLength="500"
                           onChange={(e) => updateForm('authorNote', e.target.value)}
-                          placeholder="Escribe una frase breve para el final de esta nota."
+                          placeholder="Escribí una frase breve para el final de esta nota."
                           rows="3"
                           value={form.authorNote}
                         />
@@ -4515,7 +4539,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
                       </label>
                       {canChooseSlug && (
                         <label>
-                          Fecha de publicacion
+                          Fecha de publicación
                           <input
                             disabled={publishedAuthorLocked}
                             max={todayDateInputValue()}
@@ -4524,7 +4548,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
                             value={form.publicationDate}
                           />
                           <FieldHelper
-                            description="Usala para migrar notas antiguas. Si queda vacia, se usa la fecha del momento de publicacion."
+                            description="Usala para migrar notas antiguas. Si queda vacía, se usa la fecha del momento de publicación."
                             topicId="blogs-advanced"
                           />
                         </label>
@@ -4550,8 +4574,8 @@ export default function AdminConsole({ surface = 'editorial' }) {
                         {canPublishPosts && (
                           <>
                             {form.editRequestedAt && (
-                              <button className="btn btn-workflow" disabled={busy || isActionLoading('workflow:enable-edit')} type="button" onClick={() => requestAction(`/v1/posts/${form.id}/enable-edit`, 'Edicion habilitada sobre el post publicado.', 'habilitar edicion')}>
-                                {isActionLoading('workflow:enable-edit') ? 'Habilitando...' : 'Habilitar edicion'}
+                              <button className="btn btn-workflow" disabled={busy || isActionLoading('workflow:enable-edit')} type="button" onClick={() => requestAction(`/v1/posts/${form.id}/enable-edit`, 'Edición habilitada sobre el post publicado.', 'habilitar edición')}>
+                                {isActionLoading('workflow:enable-edit') ? 'Habilitando...' : 'Habilitar edición'}
                                 <ActionSpinner active={isActionLoading('workflow:enable-edit')} />
                               </button>
                             )}
@@ -4702,12 +4726,12 @@ export default function AdminConsole({ surface = 'editorial' }) {
                   <div aria-labelledby="profile-claim-confirm-title" aria-modal="true" className="admin-modal admin-profile-claim-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog">
                     <span className="eyebrow">Vincular identidad editorial</span>
                     <h3 id="profile-claim-confirm-title">Solicitar el perfil de {profileClaimMatch.candidate.fullName}</h3>
-                    <p>Un administrador revisara que esta cuenta corresponda al autor. Si se aprueba, vas a heredar los datos del perfil y el acceso a {profileClaimMatch.candidate.postCount} {profileClaimMatch.candidate.postCount === 1 ? 'nota' : 'notas'}.</p>
+                    <p>Un administrador revisará que esta cuenta corresponda al autor. Si se aprueba, vas a heredar los datos del perfil y el acceso a {profileClaimMatch.candidate.postCount} {profileClaimMatch.candidate.postCount === 1 ? 'nota' : 'notas'}.</p>
                     <p>La solicitud no modifica nada hasta ser aprobada.</p>
                     <div className="admin-modal-actions">
                       <button className="btn btn-ghost" disabled={isActionLoading('profile-claim-request')} onClick={() => setProfileClaimConfirmOpen(false)} type="button">Cancelar</button>
                       <button className="btn btn-primary" disabled={isActionLoading('profile-claim-request')} onClick={requestProfileClaim} type="button">
-                        {isActionLoading('profile-claim-request') ? 'Enviando solicitud...' : 'Solicitar vinculacion'}
+                        {isActionLoading('profile-claim-request') ? 'Enviando solicitud...' : 'Solicitar vinculación'}
                         <ActionSpinner active={isActionLoading('profile-claim-request')} />
                       </button>
                     </div>
@@ -4717,7 +4741,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
               {adminProfileClaimDialog && (
                 <div className="admin-modal-backdrop" onMouseDown={() => !isActionLoading('profile-claim-approve') && !isActionLoading('profile-claim-block') && !isActionLoading('profile-claim-release') && setAdminProfileClaimDialog(null)} role="presentation">
                   <div aria-labelledby="admin-profile-claim-title" aria-modal="true" className="admin-modal admin-profile-claim-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog">
-                    <span className="eyebrow">Solicitud de vinculacion</span>
+                    <span className="eyebrow">Solicitud de vinculación</span>
                     <h3 id="admin-profile-claim-title">{adminProfileClaimDialog.claim.fullName}</h3>
                     <dl className="admin-claim-details">
                       <div><dt>Cuenta solicitante</dt><dd>{adminProfileClaimDialog.claim.requesterEmail}</dd></div>
@@ -4727,12 +4751,12 @@ export default function AdminConsole({ surface = 'editorial' }) {
                     </dl>
                     {adminProfileClaimDialog.claim.blockReason && <p className="admin-profile-warning"><strong>Motivo del bloqueo</strong><span>{adminProfileClaimDialog.claim.blockReason}</span></p>}
                     {adminProfileClaimDialog.action === 'approve' && (
-                      <div className="admin-profile-notice">Al aprobar, se copiara el perfil gestionado, se concedera el rol blog y se transferira la propiedad de las notas sin cambiar comentarios historicos.</div>
+                      <div className="admin-profile-notice">Al aprobar, se copiará el perfil gestionado, se concederá el rol blog y se transferirá la propiedad de las notas sin cambiar comentarios históricos.</div>
                     )}
                     {adminProfileClaimDialog.action === 'block' && (
                       <label className="admin-claim-reason">
                         Motivo opcional
-                        <textarea maxLength="300" onChange={(event) => setAdminProfileClaimReason(event.target.value)} placeholder="Explica por que se bloquea la solicitud." rows="3" value={adminProfileClaimReason} />
+                        <textarea maxLength="300" onChange={(event) => setAdminProfileClaimReason(event.target.value)} placeholder="Explicá por qué se bloquea la solicitud." rows="3" value={adminProfileClaimReason} />
                       </label>
                     )}
                     <div className="admin-modal-actions admin-claim-actions">
@@ -4740,7 +4764,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
                       {adminProfileClaimDialog.action === 'review' && ['pending', 'processing'].includes(adminProfileClaimDialog.claim.status) && (
                         <>
                           {adminProfileClaimDialog.claim.status === 'pending' && <button className="btn btn-ghost danger" onClick={() => setAdminProfileClaimDialog((current) => ({ ...current, action: 'block' }))} type="button">Bloquear</button>}
-                          <button className="btn btn-primary" onClick={() => setAdminProfileClaimDialog((current) => ({ ...current, action: 'approve' }))} type="button">Aprobar vinculacion</button>
+                          <button className="btn btn-primary" onClick={() => setAdminProfileClaimDialog((current) => ({ ...current, action: 'approve' }))} type="button">Aprobar vinculación</button>
                         </>
                       )}
                       {adminProfileClaimDialog.action === 'review' && adminProfileClaimDialog.claim.status === 'blocked' && (
@@ -4751,7 +4775,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
                           {isActionLoading(`profile-claim-${adminProfileClaimDialog.action}:${adminProfileClaimDialog.claim.id}`)
                             ? 'Procesando...'
                             : adminProfileClaimDialog.action === 'approve'
-                              ? 'Confirmar aprobacion'
+                              ? 'Confirmar aprobación'
                               : adminProfileClaimDialog.action === 'block'
                                 ? 'Confirmar bloqueo'
                                 : 'Confirmar desbloqueo'}
@@ -4773,7 +4797,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
                   role="presentation"
                 >
                   <div aria-labelledby="admin-profile-link-title" aria-modal="true" className="admin-modal admin-profile-claim-modal" onMouseDown={(event) => event.stopPropagation()} role="dialog">
-                    <span className="eyebrow">Vinculacion administrativa</span>
+                    <span className="eyebrow">Vinculación administrativa</span>
                     <h3 id="admin-profile-link-title">Vincular una cuenta con un autor</h3>
                     <dl className="admin-claim-details">
                       <div><dt>Cuenta</dt><dd>{adminProfileLinkTarget.email}</dd></div>
@@ -4793,12 +4817,12 @@ export default function AdminConsole({ surface = 'editorial' }) {
                     {selectedManagedAdminProfile && (
                       <div className="admin-profile-link-summary">
                         <strong>{selectedManagedAdminProfile.fullName}</strong>
-                        <span>{selectedManagedAdminProfile.postCount} {selectedManagedAdminProfile.postCount === 1 ? 'nota sera transferida' : 'notas seran transferidas'}</span>
+                        <span>{selectedManagedAdminProfile.postCount} {selectedManagedAdminProfile.postCount === 1 ? 'nota será transferida' : 'notas serán transferidas'}</span>
                       </div>
                     )}
                     <div className="admin-profile-warning">
-                      <strong>Esta accion cambia la identidad editorial de la cuenta.</strong>
-                      <span>Los datos del perfil gestionado reemplazaran nombre, foto, descripcion, Sobre mi, cierre y preferencia publica. La cuenta recibira el rol Blog y heredara las notas del autor. Los comentarios historicos no cambian de autoria.</span>
+                      <strong>Esta acción cambia la identidad editorial de la cuenta.</strong>
+                      <span>Los datos del perfil gestionado reemplazarán nombre, foto, descripción, Sobre mí, cierre y preferencia pública. La cuenta recibirá el rol Blog y heredará las notas del autor. Los comentarios históricos no cambian de autoría.</span>
                     </div>
                     <div className="admin-modal-actions">
                       <button
@@ -4818,7 +4842,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
                         onClick={linkAdminProfile}
                         type="button"
                       >
-                        {isActionLoading(`admin-profile-link:${adminProfileLinkTarget.email}`) ? 'Vinculando...' : 'Confirmar vinculacion'}
+                        {isActionLoading(`admin-profile-link:${adminProfileLinkTarget.email}`) ? 'Vinculando...' : 'Confirmar vinculación'}
                         <ActionSpinner active={isActionLoading(`admin-profile-link:${adminProfileLinkTarget.email}`)} />
                       </button>
                     </div>
@@ -4850,9 +4874,9 @@ export default function AdminConsole({ surface = 'editorial' }) {
 
                     <div className="profile-preview-content">
                       <header className="profile-preview-intro">
-                        <span>Perfil publico</span>
+                        <span>Perfil público</span>
                         <h2>Tu voz, dentro del universo editorial de Politeia.</h2>
-                        <p>Esta simulacion usa los datos que estas editando. Los otros perfiles y notas son ejemplos para mostrar el contexto final.</p>
+                        <p>Esta simulación usa los datos que estás editando. Los otros perfiles y notas son ejemplos para mostrar el contexto final.</p>
                       </header>
 
                       <section className="profile-preview-section" aria-labelledby="profile-preview-card-title">
@@ -4875,17 +4899,17 @@ export default function AdminConsole({ surface = 'editorial' }) {
                         <div className="profile-preview-section-head">
                           <div>
                             <span>Cierre de nota</span>
-                            <h3 id="profile-preview-ending-title">Tu firma al terminar un articulo</h3>
+                            <h3 id="profile-preview-ending-title">Tu firma al terminar un artículo</h3>
                           </div>
                           <small>La frase solo aparece cuando existe en el perfil o fue escrita manualmente en la nota.</small>
                         </div>
                         <article className="profile-preview-article-tail">
-                          <h4>Una democracia que tambien se construye en lo cotidiano</h4>
+                          <h4>Una democracia que también se construye en lo cotidiano</h4>
                           <p>
-                            Comprender lo publico exige mirar mas alla de las instituciones y reconocer las decisiones, conversaciones y acuerdos que sostienen la vida en comun.
+                            Comprender lo público exige mirar más allá de las instituciones y reconocer las decisiones, conversaciones y acuerdos que sostienen la vida en común.
                           </p>
                           <p>
-                            Esa tarea no termina con una respuesta definitiva: abre nuevas preguntas y nos invita a participar con informacion, criterio y responsabilidad.
+                            Esa tarea no termina con una respuesta definitiva: abre nuevas preguntas y nos invita a participar con información, criterio y responsabilidad.
                           </p>
                           <AuthorEnd
                             fullName={profilePreviewAuthor.fullName}
@@ -4900,7 +4924,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
                         <div className="profile-preview-section-head">
                           <div>
                             <span>Blog por autor</span>
-                            <h3 id="profile-preview-page-title">Tu pagina de notas filtradas</h3>
+                            <h3 id="profile-preview-page-title">Tu página de notas filtradas</h3>
                           </div>
                           <small>Es la vista que abre el lector al elegir tu nombre.</small>
                         </div>
@@ -4922,8 +4946,8 @@ export default function AdminConsole({ surface = 'editorial' }) {
                   <div aria-modal="true" className="admin-preview-modal" role="dialog">
                     <div className="admin-preview-modal-bar">
                       <div>
-                        <span>Previsualizacion</span>
-                        <p>Simulacion de pagina publica.</p>
+                        <span>Previsualización</span>
+                        <p>Simulación de página pública.</p>
                       </div>
                       <button className="btn btn-ghost" onClick={() => setPreviewOpen(false)} type="button">
                         Cerrar
@@ -4957,10 +4981,10 @@ export default function AdminConsole({ surface = 'editorial' }) {
                   >
                     <h3 id="profile-consent-title">Publicar perfil de autor</h3>
                     <p>
-                      Al aceptar, tu nombre, foto, descripcion breve, texto "Sobre mi" y frase de cierre podran ser accesibles publicamente en el blog. Tu email no se publica.
+                      Al aceptar, tu nombre, foto, descripción breve, texto "Sobre mí" y frase de cierre podrán ser accesibles públicamente en el blog. Tu email no se publica.
                     </p>
                     <p>
-                      Podes retirar este consentimiento cuando quieras desmarcando "Publicar mi perfil de autor" y guardando nuevamente.
+                      Podés retirar este consentimiento cuando quieras desmarcando "Publicar mi perfil de autor" y guardando nuevamente.
                     </p>
                     <div className="admin-modal-actions">
                       <button className="btn btn-ghost" disabled={savingProfile || isActionLoading('profile-save')} onClick={() => setProfileConsentOpen(false)} type="button">
@@ -4998,7 +5022,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
                   <div aria-modal="true" className="admin-modal" role="dialog">
                     <h3>Eliminar perfil de autor</h3>
                     <p>
-                      Vas a eliminar el perfil gestionado de "{adminProfileDeleteTarget.fullName || 'este autor'}". Esta accion no borra posts ni cambia sus autores.
+                      Vas a eliminar el perfil gestionado de "{adminProfileDeleteTarget.fullName || 'este autor'}". Esta acción no borra posts ni cambia sus autores.
                     </p>
                     <div className="admin-modal-actions">
                       <button className="btn btn-ghost" onClick={() => setAdminProfileDeleteTarget(null)} type="button">
@@ -5020,9 +5044,9 @@ export default function AdminConsole({ surface = 'editorial' }) {
               {editRequestConfirmOpen && (
                 <div className="admin-modal-backdrop" role="presentation">
                   <div aria-modal="true" className="admin-modal" role="dialog">
-                    <h3>Solicitar edicion</h3>
+                    <h3>Solicitar edición</h3>
                     <p>
-                      Vas a pedir que este post publicado se habilite como nueva versión editable. El articulo seguira publicado hasta que revision apruebe y vuelva a publicar los cambios.
+                      Vas a pedir que este post publicado se habilite como nueva versión editable. El artículo seguirá publicado hasta que revisión apruebe y vuelva a publicar los cambios.
                     </p>
                     <div className="admin-modal-actions">
                       <button
@@ -5058,8 +5082,8 @@ export default function AdminConsole({ surface = 'editorial' }) {
                       <>
                         <div className="admin-preview-modal-bar admin-submit-review-preview-head">
                           <div>
-                            <span>Revision editorial</span>
-                            <p id="pending-action-title">Revisa la nota completa antes de enviarla.</p>
+                            <span>Revisión editorial</span>
+                            <p id="pending-action-title">Revisá la nota completa antes de enviarla.</p>
                           </div>
                         </div>
                         <div className="admin-submit-review-preview-body">
@@ -5077,10 +5101,10 @@ export default function AdminConsole({ surface = 'editorial' }) {
                       </>
                     ) : pendingAction.requiresPublicationConfirm ? (
                       <>
-                        <span>Publicacion</span>
+                        <span>Publicación</span>
                         <h3 id="pending-action-title">Publicar esta nota</h3>
                         {pendingAction.postTitle && <strong className="admin-publication-title">{pendingAction.postTitle}</strong>}
-                        <p>La nota quedara visible en el blog publico. Elegi si tambien debe entrar al sistema de avisos por email.</p>
+                        <p>La nota quedará visible en el blog público. Elegí si también debe entrar al sistema de avisos por email.</p>
                         <label className={`admin-switch-row admin-publication-mailing-choice ${!mailingPublicationPolicy.enabled ? 'disabled' : ''}`}>
                           <input
                             checked={pendingAction.notifySubscribers}
@@ -5092,23 +5116,23 @@ export default function AdminConsole({ surface = 'editorial' }) {
                             <strong>Avisar a suscriptores de nuevos blogs</strong>
                             <small>
                               {mailingPublicationPolicy.enabled
-                                ? `Se procesara en un ciclo de hasta ${mailingPublicationPolicy.dispatchIntervalHours || 12} horas. Quedan ${mailingPublicationPolicy.remainingThisWeek} de ${mailingPublicationPolicy.weeklyLimit} envios automaticos esta semana.`
-                                : 'La automatizacion esta desactivada. La nota igualmente puede publicarse.'}
+                                ? `Se procesará en un ciclo de hasta ${mailingPublicationPolicy.dispatchIntervalHours || 12} horas. Quedan ${mailingPublicationPolicy.remainingThisWeek} de ${mailingPublicationPolicy.weeklyLimit} envíos automáticos esta semana.`
+                                : 'La automatización está desactivada. La nota igualmente puede publicarse.'}
                             </small>
                           </span>
                         </label>
                         {mailingPublicationPolicy.enabled && mailingPublicationPolicy.remainingThisWeek === 0 && pendingAction.notifySubscribers && (
-                          <p className="admin-publication-mailing-note">El limite semanal ya fue alcanzado: esta nota quedara apilada para el proximo resumen.</p>
+                          <p className="admin-publication-mailing-note">El límite semanal ya fue alcanzado: esta nota quedará apilada para el próximo resumen.</p>
                         )}
                         {pendingAction.hasUnsavedChanges && (
-                          <p className="admin-publication-unsaved-note">Hay cambios sin guardar. Podes publicar la version guardada o guardar primero.</p>
+                          <p className="admin-publication-unsaved-note">Hay cambios sin guardar. Podés publicar la versión guardada o guardar primero.</p>
                         )}
                       </>
                     ) : (
                       <>
                         <h3 id="pending-action-title">Cambios sin guardar</h3>
                         <p>
-                          Tenes cambios sin guardar. Podes cancelar, {pendingAction.label} sin guardar esos cambios, o guardar primero y despues {pendingAction.label}.
+                          Tenés cambios sin guardar. Podés cancelar, {pendingAction.label} sin guardar esos cambios, o guardar primero y después {pendingAction.label}.
                         </p>
                       </>
                     )}
@@ -5162,8 +5186,8 @@ export default function AdminConsole({ surface = 'editorial' }) {
                       )}
                       {pendingAction.requiresPublicationConfirm && (
                         <div>
-                          <strong>Confirmar publicacion</strong>
-                          <p>El aviso por email queda registrado por nota y puede administrarse despues desde Mailing.</p>
+                          <strong>Confirmar publicación</strong>
+                          <p>El aviso por email queda registrado por nota y puede administrarse después desde Mailing.</p>
                         </div>
                       )}
                       <div className="admin-modal-actions">
@@ -5185,7 +5209,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
                           <button className="btn btn-primary" disabled={busy || isActionLoading(pendingAction.loadingKey)} onClick={confirmPendingAction} type="button">
                             {isActionLoading(pendingAction.loadingKey)
                               ? (pendingAction.requiresPublicationConfirm ? 'Publicando...' : 'Enviando...')
-                              : (pendingAction.requiresPublicationConfirm ? 'Publicar nota' : 'Confirmar envio')}
+                              : (pendingAction.requiresPublicationConfirm ? 'Publicar nota' : 'Confirmar envío')}
                             <ActionSpinner active={isActionLoading(pendingAction.loadingKey)} />
                           </button>
                         )}
@@ -5199,7 +5223,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
                   <div aria-modal="true" className="admin-modal rich-comment-modal admin-comment-thread-modal" role="dialog">
                     <div className="admin-comment-thread-head">
                       <div>
-                        <span>Comentario de revision</span>
+                        <span>Comentario de revisión</span>
                         <h3>{reviewCommentDialog.comment.status === 'resolved' ? 'Comentario resuelto' : 'Comentario abierto'}</h3>
                       </div>
                       <span className={`admin-status status-${reviewCommentDialog.comment.status === 'resolved' ? 'published' : 'review'}`}>
@@ -5233,14 +5257,14 @@ export default function AdminConsole({ surface = 'editorial' }) {
                     </div>
                     <label>
                       {reviewCommentDialog.mode === 'resolve'
-                        ? 'Texto para acompanar la resolucion'
+                        ? 'Texto para acompañar la resolución'
                         : reviewCommentDialog.mode === 'reopen'
-                          ? 'Texto para acompanar la reapertura'
+                          ? 'Texto para acompañar la reapertura'
                           : 'Respuesta'}
                       <textarea
                         autoFocus
                         onChange={(event) => setReviewCommentDialog((current) => ({ ...current, replyBody: event.target.value }))}
-                        placeholder="Escribi una respuesta breve para dejar contexto."
+                        placeholder="Escribí una respuesta breve para dejar contexto."
                         rows="5"
                         value={reviewCommentDialog.replyBody || ''}
                       />
@@ -5438,7 +5462,7 @@ function AdminArticlePreview({
           <span className="art-cat" key={tag}>{tag}</span>
         ))}
       </div>
-      <h1>{form.title || 'Titulo del blog'}</h1>
+      <h1>{form.title || 'Título del blog'}</h1>
       <div className="art-meta">{form.authorName ? `Por ${form.authorName} - ` : ''}{previewDate}</div>
       {form.coverImage && form.showCoverInPost !== false && (
         // eslint-disable-next-line @next/next/no-img-element
@@ -5565,15 +5589,15 @@ function sanitizeFormReferences(value = []) {
 function imageLoadErrorMessage(error) {
   const message = String(error?.message || '').trim();
   if (/supera el limite|tama(?:ñ|n)o|too large/i.test(message)) {
-    return 'La imagen supera el limite de 5 MB.';
+    return 'La imagen supera el límite de 5 MB.';
   }
   if (/JPEG|PNG|WebP|AVIF|GIF|file type|formato/i.test(message)) {
-    return 'Usa una imagen JPEG, PNG, WebP, AVIF o GIF.';
+    return 'Usá una imagen JPEG, PNG, WebP, AVIF o GIF.';
   }
   if (/vacia|empty|corrupt|invalid|does not match/i.test(message)) {
-    return 'El archivo no contiene una imagen valida. Elegi otro e intenta nuevamente.';
+    return 'El archivo no contiene una imagen válida. Elegí otro e intentá nuevamente.';
   }
-  return 'No pudimos cargar la imagen. Intenta nuevamente la carga.';
+  return 'No pudimos cargar la imagen. Intentá nuevamente la carga.';
 }
 
 function isValidHttpsUrl(value = '') {
@@ -5861,26 +5885,26 @@ function formatNotificationDay(date) {
 }
 
 function commentReplyActionLabel(action = '') {
-  if (action === 'resolved') return 'resolvio';
-  if (action === 'open') return 'reabrio';
-  return 'respondio';
+  if (action === 'resolved') return 'resolvió';
+  if (action === 'open') return 'reabrió';
+  return 'respondió';
 }
 
 function notificationTitle(notification = {}) {
-  if (notification.type === 'application.created') return 'Nueva postulacion para el equipo';
-  if (notification.type === 'post.submittedReview') return `Post enviado a revision: ${notification.postTitle || 'Sin titulo'}`;
-  if (notification.type === 'comment.created') return `Nuevo comentario: ${notification.postTitle || 'Sin titulo'}`;
-  if (notification.type === 'comment.reply') return `Nueva respuesta: ${notification.postTitle || 'Sin titulo'}`;
-  if (notification.type === 'comment.resolved') return `Comentario resuelto: ${notification.postTitle || 'Sin titulo'}`;
-  if (notification.type === 'comment.reopened') return `Comentario reabierto: ${notification.postTitle || 'Sin titulo'}`;
-  if (notification.type === 'post.published') return `Post publicado: ${notification.postTitle || 'Sin titulo'}`;
-  if (notification.type === 'post.editRequested') return `Solicitud de edición: ${notification.postTitle || 'Sin titulo'}`;
-  if (notification.type === 'post.editEnabled') return `Edición habilitada: ${notification.postTitle || 'Sin titulo'}`;
+  if (notification.type === 'application.created') return 'Nueva postulación para el equipo';
+  if (notification.type === 'post.submittedReview') return `Post enviado a revisión: ${notification.postTitle || 'Sin título'}`;
+  if (notification.type === 'comment.created') return `Nuevo comentario: ${notification.postTitle || 'Sin título'}`;
+  if (notification.type === 'comment.reply') return `Nueva respuesta: ${notification.postTitle || 'Sin título'}`;
+  if (notification.type === 'comment.resolved') return `Comentario resuelto: ${notification.postTitle || 'Sin título'}`;
+  if (notification.type === 'comment.reopened') return `Comentario reabierto: ${notification.postTitle || 'Sin título'}`;
+  if (notification.type === 'post.published') return `Post publicado: ${notification.postTitle || 'Sin título'}`;
+  if (notification.type === 'post.editRequested') return `Solicitud de edición: ${notification.postTitle || 'Sin título'}`;
+  if (notification.type === 'post.editEnabled') return `Edición habilitada: ${notification.postTitle || 'Sin título'}`;
   if (notification.type === 'user.roles.changed') return 'Tus permisos fueron actualizados';
-  if (notification.type === 'profile.claim.requested') return `Nueva vinculacion solicitada: ${notification.profileName || 'Perfil de autor'}`;
+  if (notification.type === 'profile.claim.requested') return `Nueva vinculación solicitada: ${notification.profileName || 'Perfil de autor'}`;
   if (notification.type === 'profile.claim.approved') return `Perfil vinculado: ${notification.profileName || 'Perfil de autor'}`;
-  if (notification.type === 'profile.claim.blocked') return `Vinculacion bloqueada: ${notification.profileName || 'Perfil de autor'}`;
-  if (notification.type === 'profile.claim.released') return `Vinculacion desbloqueada: ${notification.profileName || 'Perfil de autor'}`;
+  if (notification.type === 'profile.claim.blocked') return `Vinculación bloqueada: ${notification.profileName || 'Perfil de autor'}`;
+  if (notification.type === 'profile.claim.released') return `Vinculación desbloqueada: ${notification.profileName || 'Perfil de autor'}`;
   if (notification.type === 'profile.claim.superseded') return `Perfil no disponible: ${notification.profileName || 'Perfil de autor'}`;
   return notification.subject || 'Actividad editorial';
 }
@@ -5918,8 +5942,8 @@ function actionButtonLabel(label = '') {
   const labels = {
     archivar: 'Archivar',
     publicar: 'Publicar',
-    'enviar a revision': 'Enviar a revision',
-    'enviar a revisión': 'Enviar a revision',
+    'enviar a revision': 'Enviar a revisión',
+    'enviar a revisión': 'Enviar a revisión',
   };
   return labels[normalized] || `${normalized.charAt(0).toUpperCase()}${normalized.slice(1)}`;
 }
@@ -6052,6 +6076,7 @@ function normalizeProfile(value = {}) {
     closingPhrase: normalizeInputValue(value.closingPhrase),
     photoUrl: normalizeInputValue(value.photoUrl),
     publicProfileEnabled: normalizeBoolean(value.publicProfileEnabled),
+    publicAuthorProfileSuppressed: normalizeBoolean(value.publicAuthorProfileSuppressed),
     reviewAssignmentsEnabled: normalizeBoolean(value.reviewAssignmentsEnabled),
     canSharePublicProfile: normalizeBoolean(value.canSharePublicProfile),
     authorSlug: normalizeInputValue(value.authorSlug),
@@ -6207,11 +6232,11 @@ function authErrorMessage(err) {
   const networkError = /networkerror|failed to fetch|load failed/i.test(message);
 
   if (networkError && isLocalApiUrl(API_BASE)) {
-    return `El backend local no responde en ${API_BASE}. Levantalo con npm.cmd run blog-api:dev y despues volve a tocar "Usar sesion local".`;
+    return `El backend local no responde en ${API_BASE}. Levantalo con npm.cmd run blog-api:dev y después volvé a tocar "Usar sesión local".`;
   }
 
   if (networkError) {
-    return `No se pudo conectar con ${API_BASE}. Si estas en admin.localhost, usa backend local o habilita ese origen en CORS.`;
+    return `No se pudo conectar con ${API_BASE}. Si estás en admin.localhost, usá backend local o habilitá ese origen en CORS.`;
   }
 
   return message || 'No pudimos validar tu perfil';

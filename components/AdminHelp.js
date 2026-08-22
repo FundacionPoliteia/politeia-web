@@ -111,7 +111,7 @@ export function AdminHelpNavButton() {
   return (
     <button
       aria-expanded={help?.guideOpen || false}
-      aria-label="Abrir ayuda de esta seccion"
+      aria-label="Abrir ayuda de esta sección"
       className={`admin-help-nav-button ${help?.guideOpen ? 'active' : ''}`}
       onClick={(event) => help?.openGuide('', event.currentTarget)}
       type="button"
@@ -224,14 +224,14 @@ export function HelpTrigger({ className = '', help: customHelp = null, label = '
             </button>
           </header>
           <p>{topic.details || topic.summary}</p>
-          {topic.outcome && <div className="admin-help-popover-note"><strong>Que pasa despues</strong><span>{topic.outcome}</span></div>}
+          {topic.outcome && <div className="admin-help-popover-note"><strong>Qué pasa después</strong><span>{topic.outcome}</span></div>}
           {topic.example && <div className="admin-help-popover-example"><strong>Ejemplo</strong><span>{topic.example}</span></div>}
           {topic.area === context?.activeArea && (
             <button className="admin-help-popover-guide" onClick={() => {
               close(false);
               context.openGuide(topic.id, buttonRef.current);
             }} type="button">
-              Ver guia de esta seccion
+              Ver guía de esta sección
               <span aria-hidden="true" className="material-symbols-outlined">arrow_forward</span>
             </button>
           )}
@@ -294,19 +294,19 @@ function ContextHelpTray({ activeIndex, activeTopic, onClose, onComplete, onSele
   }, [onClose]);
 
   return (
-    <aside aria-label="Guia contextual" className="admin-help-tray" ref={trayRef}>
+    <aside aria-label="Guía contextual" className="admin-help-tray" ref={trayRef}>
       <header className="admin-help-tray-head">
         <div>
           <span>Ayuda contextual</span>
           <h2>{areaTitle(activeTopic.area)}</h2>
           <p>Paso {activeIndex + 1} de {topics.length}</p>
         </div>
-        <button aria-label="Cerrar guia" className="admin-icon-button" onClick={onClose} type="button">
+        <button aria-label="Cerrar guía" className="admin-icon-button" onClick={onClose} type="button">
           <span aria-hidden="true" className="material-symbols-outlined">close</span>
         </button>
       </header>
       <div aria-hidden="true" className="admin-help-progress"><span style={{ width: `${((activeIndex + 1) / topics.length) * 100}%` }} /></div>
-      <nav aria-label="Pasos de la guia" className="admin-help-step-dots">
+      <nav aria-label="Pasos de la guía" className="admin-help-step-dots">
         {topics.map((topic, index) => (
           <button aria-label={`Ir a ${topic.title}`} className={index === activeIndex ? 'active' : ''} key={topic.id} onClick={() => onSelect(index)} type="button" />
         ))}
@@ -315,11 +315,11 @@ function ContextHelpTray({ activeIndex, activeTopic, onClose, onComplete, onSele
         <span aria-hidden="true" className="material-symbols-outlined">tips_and_updates</span>
         <h3>{activeTopic.title}</h3>
         <p>{activeTopic.details}</p>
-        {activeTopic.outcome && <div className="admin-help-tray-note"><strong>Que pasa despues</strong><p>{activeTopic.outcome}</p></div>}
+        {activeTopic.outcome && <div className="admin-help-tray-note"><strong>Qué pasa después</strong><p>{activeTopic.outcome}</p></div>}
         {activeTopic.example && <div className="admin-help-tray-example"><strong>Ejemplo</strong><p>{activeTopic.example}</p></div>}
       </div>
       <footer className="admin-help-tray-actions">
-        <button className="btn btn-ghost" onClick={onComplete} type="button">Omitir guia</button>
+        <button className="btn btn-ghost" onClick={onComplete} type="button">Omitir guía</button>
         <div>
           <button className="btn btn-ghost" disabled={activeIndex === 0} onClick={() => onSelect(activeIndex - 1)} type="button">Anterior</button>
           <button className="btn btn-primary" onClick={() => lastStep ? onComplete() : onSelect(activeIndex + 1)} type="button">
@@ -354,7 +354,7 @@ function areaTitle(area) {
   return ({
     access: 'Roles y permisos',
     blogs: 'Gestor de blogs',
-    mailing: 'Mailing automatico',
+    mailing: 'Mailing automático',
     newsletter: 'Newsletter',
     profile: 'Mi perfil',
     profiles: 'Perfiles de autores',

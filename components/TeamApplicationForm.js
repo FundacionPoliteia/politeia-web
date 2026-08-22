@@ -32,7 +32,7 @@ export default function TeamApplicationForm() {
       tokenRef.current = '';
       setTurnstileToken('');
       setVerifying(false);
-      setError('No pudimos completar la verificacion de seguridad. Intenta nuevamente.');
+      setError('No pudimos completar la verificación de seguridad. Intentá nuevamente.');
     };
     return () => {
       delete window.onPoliteiaTurnstileSuccess;
@@ -46,7 +46,7 @@ export default function TeamApplicationForm() {
     if (TURNSTILE_SITE_KEY && !tokenRef.current) {
       setError('');
       if (!turnstileReady || !window.turnstile) {
-        setError('La verificacion de seguridad todavia esta cargando. Intenta nuevamente en un momento.');
+        setError('La verificación de seguridad todavía está cargando. Intentá nuevamente en un momento.');
         return;
       }
       setVerifying(true);
@@ -70,7 +70,7 @@ export default function TeamApplicationForm() {
         body: formData,
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data?.error?.message || 'No pudimos enviar tu postulacion');
+      if (!response.ok) throw new Error(data?.error?.message || 'No pudimos enviar tu postulación');
       window.sessionStorage.removeItem(storageKey);
       setSent(true);
       event.currentTarget.reset();
@@ -88,8 +88,8 @@ export default function TeamApplicationForm() {
     return (
       <section className="application-success" role="status">
         <span aria-hidden="true" className="material-symbols-outlined">check_circle</span>
-        <h2>Recibimos tu postulacion</h2>
-        <p>Gracias por querer sumarte. El equipo va a revisar la informacion enviada.</p>
+        <h2>Recibimos tu postulación</h2>
+        <p>Gracias por querer sumarte. El equipo va a revisar la información enviada.</p>
       </section>
     );
   }
@@ -115,7 +115,7 @@ export default function TeamApplicationForm() {
             <input autoComplete="email" maxLength="254" name="email" required type="email" />
           </label>
           <label>
-            Telefono <small>Opcional</small>
+            Teléfono <small>Opcional</small>
             <input autoComplete="tel" maxLength="40" name="phone" type="tel" />
           </label>
           <label>
@@ -124,19 +124,19 @@ export default function TeamApplicationForm() {
           </label>
         </div>
         <label>
-          Area de interes
+          Área de interés
           <select name="area" required>
-            <option value="">Selecciona un area</option>
-            <option>Comunicacion y contenidos</option>
+            <option value="">Seleccioná un área</option>
+            <option>Comunicación y contenidos</option>
             <option>Desarrollo institucional</option>
-            <option>Investigacion y analisis</option>
-            <option>Proyectos y participacion</option>
-            <option>Tecnologia y datos</option>
+            <option>Investigación y análisis</option>
+            <option>Proyectos y participación</option>
+            <option>Tecnología y datos</option>
             <option>Otra</option>
           </select>
         </label>
         <label>
-          Contanos por que queres sumarte
+          Contanos por qué querés sumarte
           <textarea maxLength="4000" minLength="20" name="message" required rows="7" />
         </label>
         <label className="application-file">
@@ -147,7 +147,7 @@ export default function TeamApplicationForm() {
         <input aria-hidden="true" autoComplete="off" className="application-honeypot" name="website" tabIndex="-1" />
         <label className="application-consent">
           <input name="consent" required type="checkbox" value="true" />
-          <span>Acepto que Fundacion Politeia almacene y revise esta informacion.</span>
+          <span>Acepto que Fundación Politeia almacene y revise esta información.</span>
         </label>
         {TURNSTILE_SITE_KEY && (
           <div
@@ -164,7 +164,7 @@ export default function TeamApplicationForm() {
         )}
         {error && <div className="application-form-error" role="alert">{error}</div>}
         <button className="btn btn-primary" disabled={busy || verifying} type="submit">
-          {busy ? 'Enviando postulacion...' : verifying ? 'Verificando...' : 'Enviar postulacion'}
+          {busy ? 'Enviando postulación...' : verifying ? 'Verificando...' : 'Enviar postulación'}
         </button>
       </form>
     </>

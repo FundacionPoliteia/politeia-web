@@ -17,9 +17,9 @@ import { IMAGE_UPLOAD_ACCEPT } from '../lib/media';
 
 const TOOLBAR_GROUPS = [
   [
-    { icon: 'notes', label: 'P', title: 'Parrafo', action: (editor) => editor.chain().focus().setParagraph().run(), active: (editor) => editor.isActive('paragraph') },
-    { label: 'H2', title: 'Titulo 2', action: (editor) => editor.chain().focus().toggleHeading({ level: 2 }).run(), active: (editor) => editor.isActive('heading', { level: 2 }) },
-    { label: 'H3', title: 'Titulo 3', action: (editor) => editor.chain().focus().toggleHeading({ level: 3 }).run(), active: (editor) => editor.isActive('heading', { level: 3 }) },
+    { icon: 'notes', label: 'P', title: 'Párrafo', action: (editor) => editor.chain().focus().setParagraph().run(), active: (editor) => editor.isActive('paragraph') },
+    { label: 'H2', title: 'Título 2', action: (editor) => editor.chain().focus().toggleHeading({ level: 2 }).run(), active: (editor) => editor.isActive('heading', { level: 2 }) },
+    { label: 'H3', title: 'Título 3', action: (editor) => editor.chain().focus().toggleHeading({ level: 3 }).run(), active: (editor) => editor.isActive('heading', { level: 3 }) },
   ],
   [
     { icon: 'format_bold', label: 'B', title: 'Negrita', action: (editor) => editor.chain().focus().toggleBold().run(), active: (editor) => editor.isActive('bold') },
@@ -29,7 +29,7 @@ const TOOLBAR_GROUPS = [
   [
     { icon: 'format_list_bulleted', label: 'UL', title: 'Lista', action: (editor) => editor.chain().focus().toggleBulletList().run(), active: (editor) => editor.isActive('bulletList') },
     { icon: 'format_list_numbered', label: 'OL', title: 'Lista numerada', action: (editor) => editor.chain().focus().toggleOrderedList().run(), active: (editor) => editor.isActive('orderedList') },
-    { icon: 'horizontal_rule', label: 'Linea', title: 'Separador horizontal', action: (editor) => editor.chain().focus().setHorizontalRule().run() },
+    { icon: 'horizontal_rule', label: 'Línea', title: 'Separador horizontal', action: (editor) => editor.chain().focus().setHorizontalRule().run() },
   ],
   [
     { icon: 'undo', label: '<-', title: 'Deshacer', action: (editor) => editor.chain().focus().undo().run(), enabled: (editor) => editor.can().undo() },
@@ -75,7 +75,7 @@ export default function RichTextEditor({
   onUploadImage,
   onCreateComment,
   showCommentTools = true,
-  placeholder = 'Escribi o importa el contenido de la nota...',
+  placeholder = 'Escribí o importá el contenido de la nota...',
   activeCommentId = '',
   activeCommentNonce = 0,
   disabled = false,
@@ -229,7 +229,7 @@ export default function RichTextEditor({
 
   return (
     <div className={`rich-editor ${disabled ? 'disabled' : ''}`}>
-      <div className="rich-toolbar" aria-label="Herramientas de edicion">
+      <div className="rich-toolbar" aria-label="Herramientas de edición">
         {TOOLBAR_GROUPS.map((group, index) => (
           <div className="rich-toolbar-group" key={index}>
             {group.map((tool) => (
@@ -251,9 +251,9 @@ export default function RichTextEditor({
 
         <div className="rich-toolbar-group">
           {showCommentTools && (
-            <HelpTooltip text="Comentar seleccion">
+            <HelpTooltip text="Comentar selección">
             <button
-              aria-label="Comentar seleccion"
+              aria-label="Comentar selección"
               disabled={disabled || !editor || !onCreateComment || editor.state.selection.empty || selectionHasReviewComment(editor)}
               onClick={addReviewComment}
               type="button"
@@ -378,8 +378,8 @@ export default function RichTextEditor({
           </button>
           {showCommentTools && (
             <button
-              aria-label="Comentar seleccion"
-              data-tooltip="Comentar seleccion"
+              aria-label="Comentar selección"
+              data-tooltip="Comentar selección"
               disabled={!onCreateComment || selectionHasReviewComment(editor)}
               onClick={addReviewComment}
               type="button"
@@ -395,7 +395,7 @@ export default function RichTextEditor({
       {commentDraft && (
         <div className="admin-modal-backdrop" role="presentation">
           <div aria-modal="true" className="admin-modal rich-comment-modal" role="dialog">
-            <h3>Comentario de revision</h3>
+            <h3>Comentario de revisión</h3>
             <p>Este comentario quedará asociado al texto seleccionado.</p>
             {commentDraft.selectedText && <q>{commentDraft.selectedText}</q>}
             <label>
@@ -403,7 +403,7 @@ export default function RichTextEditor({
               <textarea
                 autoFocus
                 onChange={(event) => setCommentDraft((current) => ({ ...current, body: event.target.value }))}
-                placeholder="Escribi la observacion para el autor..."
+                placeholder="Escribí la observación para el autor..."
                 rows="5"
                 value={commentDraft.body}
               />

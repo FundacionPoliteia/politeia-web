@@ -71,7 +71,7 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
         }),
       });
       setMailPreview(null);
-      setMessage('Prueba procesada. En modo console, revisa la terminal del backend.');
+      setMessage('Prueba procesada. En modo console, revisá la terminal del backend.');
     } catch (err) {
       setMessage(err.message);
     } finally {
@@ -94,7 +94,7 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
         }),
       });
       setMessage(send
-        ? 'Newsletter entregado al proveedor para su envio.'
+        ? 'Newsletter entregado al proveedor para su envío.'
         : `Borrador creado${data.item?.providerCampaignId ? `: ${data.item.providerCampaignId}` : '.'}`);
       if (send) setMailPreview(null);
     } catch (err) {
@@ -152,7 +152,7 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
         credentials: 'include',
       });
       const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data?.error?.message || 'No pudimos subir la imagen. Intenta nuevamente.');
+      if (!response.ok) throw new Error(data?.error?.message || 'No pudimos subir la imagen. Intentá nuevamente.');
       setMessage('Imagen cargada.');
       return data.item?.url || '';
     } catch (err) {
@@ -193,7 +193,7 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
       ...options,
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data?.error?.message || 'No pudimos completar la operacion.');
+    if (!response.ok) throw new Error(data?.error?.message || 'No pudimos completar la operación.');
     return data;
   }
 
@@ -284,7 +284,7 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
       <div className="admin-manager-head" data-help-id="newsletter-subscribers">
         <div>
           <span>Newsletter</span>
-          <h2 className="admin-help-heading">Campanas y suscriptores <HelpTrigger topicId="newsletter-subscribers" /></h2>
+          <h2 className="admin-help-heading">Campañas y suscriptores <HelpTrigger topicId="newsletter-subscribers" /></h2>
           <p>Crea una prueba o un borrador antes de enviar novedades a la lista confirmada.</p>
         </div>
         {overview && (
@@ -340,7 +340,7 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
               </div>
             )}
             {subscriberModal.total > subscriberModal.items.length && (
-              <small className="admin-newsletter-subscriber-limit">Se muestran las 50 personas mas recientes.</small>
+              <small className="admin-newsletter-subscriber-limit">Se muestran las 50 personas más recientes.</small>
             )}
           </div>
         </div>
@@ -388,14 +388,14 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
             </button>
           )}
         </div>
-        <small>Al cargar una plantilla se completan el nombre interno, asunto, texto de previsualizacion y contenido.</small>
+        <small>Al cargar una plantilla se completan el nombre interno, asunto, texto de previsualización y contenido.</small>
       </section>
 
       <div className="admin-newsletter-form">
         <div className="admin-two">
           <label>
             Nombre interno
-            <input value={form.name} onChange={(event) => update('name', event.target.value)} placeholder="Edicion semanal" />
+            <input value={form.name} onChange={(event) => update('name', event.target.value)} placeholder="Edición semanal" />
           </label>
           <label>
             Asunto
@@ -403,15 +403,15 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
           </label>
         </div>
         <label>
-          Texto de previsualizacion
-          <input maxLength="180" value={form.previewText} onChange={(event) => update('previewText', event.target.value)} placeholder="La linea que acompana al asunto en la bandeja" />
+          Texto de previsualización
+          <input maxLength="180" value={form.previewText} onChange={(event) => update('previewText', event.target.value)} placeholder="La línea que acompaña al asunto en la bandeja" />
         </label>
         <div className="admin-newsletter-editor" data-help-id="newsletter-editor">
           <span className="admin-field-label">Contenido <HelpTrigger topicId="newsletter-editor" /></span>
           <RichTextEditor
             onChange={(content) => update('content', content)}
             onUploadImage={uploadNewsletterImage}
-            placeholder="Escribi el contenido del newsletter..."
+            placeholder="Escribí el contenido del newsletter..."
             showCommentTools={false}
             value={form.content}
           />
@@ -428,7 +428,7 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
         {message && <div className="admin-profile-notice" role="status">{message}</div>}
         <div className="admin-manager-actions">
           <HelpTrigger topicId="newsletter-send" />
-          <span>{overview?.provider === 'console' ? 'Modo local: los envios se registran en consola.' : 'El envio usa el Segment configurado en Resend.'}</span>
+          <span>{overview?.provider === 'console' ? 'Modo local: los envíos se registran en consola.' : 'El envío usa el segmento configurado en Resend.'}</span>
           <button className="btn btn-ghost" disabled={!campaignReady || busyAction} onClick={() => openMailPreview('preview')} type="button">
             {busyAction === 'preview-preview' ? 'Preparando vista...' : 'Previsualizar'}
           </button>
@@ -448,13 +448,13 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
               <div>
                 <span>Vista previa final</span>
                 <h2 id="newsletter-preview-title">{form.subject}</h2>
-                <p>{mailPreview.intent === 'test' ? `Prueba para ${form.testEmail}` : mailPreview.intent === 'send' ? 'Envio a la lista confirmada' : 'Revision del newsletter'}</p>
+                <p>{mailPreview.intent === 'test' ? `Prueba para ${form.testEmail}` : mailPreview.intent === 'send' ? 'Envío a la lista confirmada' : 'Revisión del newsletter'}</p>
               </div>
               <button aria-label="Cerrar vista previa" className="admin-icon-button" disabled={Boolean(busyAction)} onClick={() => setMailPreview(null)} type="button">
                 <span aria-hidden="true" className="material-symbols-outlined">close</span>
               </button>
             </header>
-            <div className="admin-newsletter-preview-toolbar" aria-label="Tamano de vista previa">
+            <div className="admin-newsletter-preview-toolbar" aria-label="Tamaño de vista previa">
               <button aria-pressed={previewViewport === 'desktop'} className={previewViewport === 'desktop' ? 'selected' : ''} onClick={() => setPreviewViewport('desktop')} type="button">
                 <span aria-hidden="true" className="material-symbols-outlined">desktop_windows</span>
                 Desktop
@@ -478,7 +478,7 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
               )}
               {mailPreview.intent === 'send' && (
                 <button className="btn btn-primary" disabled={busyAction === 'send'} onClick={() => createCampaign(true)} type="button">
-                  {busyAction === 'send' ? 'Enviando...' : 'Confirmar envio'}
+                  {busyAction === 'send' ? 'Enviando...' : 'Confirmar envío'}
                 </button>
               )}
             </div>
@@ -491,7 +491,7 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
           <div aria-labelledby="newsletter-template-load-title" aria-modal="true" className="admin-modal admin-newsletter-confirm" onMouseDown={(event) => event.stopPropagation()} role="dialog">
             <span>Cargar plantilla</span>
             <h2 id="newsletter-template-load-title">Reemplazar el contenido actual</h2>
-            <p>La plantilla "{templateToLoad.name}" reemplazara los datos que estas editando. Esta accion no guarda el borrador actual.</p>
+            <p>La plantilla "{templateToLoad.name}" reemplazará los datos que estás editando. Esta acción no guarda el borrador actual.</p>
             <div className="admin-modal-actions">
               <button className="btn btn-ghost" onClick={() => setTemplateToLoad(null)} type="button">Cancelar</button>
               <button className="btn btn-primary" onClick={() => applyTemplate(templateToLoad)} type="button">Cargar plantilla</button>
@@ -509,7 +509,7 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
               Nombre de la plantilla
               <input autoFocus maxLength="80" onChange={(event) => setTemplateName(event.target.value)} value={templateName} />
             </label>
-            <p>Se guardaran el asunto, la previsualizacion y el contenido actual. Luego podras cargarlos desde esta biblioteca.</p>
+            <p>Se guardarán el asunto, la previsualización y el contenido actual. Luego podrás cargarlos desde esta biblioteca.</p>
             <div className="admin-modal-actions">
               <button className="btn btn-ghost" disabled={busyAction === 'template-save'} onClick={() => setSaveTemplateOpen(false)} type="button">Cancelar</button>
               <button className="btn btn-primary" disabled={!templateName.trim() || busyAction === 'template-save'} onClick={saveTemplate} type="button">
@@ -525,7 +525,7 @@ export default function NewsletterAdminPanel({ apiBase, currentEmail }) {
           <div aria-labelledby="newsletter-template-delete-title" aria-modal="true" className="admin-modal admin-newsletter-confirm" onMouseDown={(event) => event.stopPropagation()} role="dialog">
             <span>Eliminar plantilla</span>
             <h2 id="newsletter-template-delete-title">Eliminar "{templateDeleteTarget.name}"</h2>
-            <p>La plantilla dejara de estar disponible para el equipo. Los newsletters que ya la usaron no se modificaran.</p>
+            <p>La plantilla dejará de estar disponible para el equipo. Los newsletters que ya la usaron no se modificarán.</p>
             <div className="admin-modal-actions">
               <button className="btn btn-ghost" disabled={busyAction === 'template-delete'} onClick={() => setTemplateDeleteTarget(null)} type="button">Cancelar</button>
               <button className="btn btn-danger" disabled={busyAction === 'template-delete'} onClick={deleteTemplate} type="button">

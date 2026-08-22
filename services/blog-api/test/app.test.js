@@ -206,7 +206,7 @@ test('CV inspection accepts real PDF and DOCX signatures and rejects arbitrary f
 
   await assert.rejects(
     () => inspectCv({ buffer: Buffer.from('plain text'), size: 10 }),
-    /PDF o DOCX valido/
+    /PDF o DOCX válido/
   );
 });
 
@@ -784,6 +784,79 @@ test('managed author public opt-in activates when a matching post appears and re
     }, 'dev@politeia.ar');
     assert.equal(disabled.publicProfileEnabled, false);
     assert.equal(await getPublicAuthorProfileBySlug('autora-pendiente'), null);
+  } finally {
+    setFirestoreForTests(null);
+  }
+});
+
+test('admin suppression hides an author profile without affecting matching posts', async () => {
+  const firestore = createMemoryFirestore();
+  setFirestoreForTests(firestore);
+
+  try {
+    await firestore.collection('posts').doc('post-autora-oculta').set({
+      authorName: 'Autora Oculta',
+      title: 'Nota que permanece publicada',
+      status: 'published',
+      publishedAt: '2026-08-22T12:00:00.000Z',
+    });
+    const created = await createManagedAuthorProfile({
+      firstName: 'Autora',
+      lastName: 'Oculta',
+      publicProfileEnabled: true,
+    }, 'dev@politeia.ar');
+
+    assert.equal((await getPublicAuthorProfileBySlug('autora-oculta')).fullName, 'Autora Oculta');
+
+    const suppressed = await updateManagedAuthorProfile(created.id, {
+      publicProfileEnabled: true,
+      publicAuthorProfileSuppressed: true,
+    }, 'dev@politeia.ar');
+    assert.equal(suppressed.publicAuthorProfileSuppressed, true);
+    assert.equal(suppressed.canSharePublicProfile, false);
+    assert.equal(await getPublicAuthorProfileBySlug('autora-oculta'), null);
+
+    const post = await firestore.collection('posts').doc('post-autora-oculta').get();
+    assert.equal(post.exists, true);
+    assert.equal(post.data().status, 'published');
+  } finally {
+    setFirestoreForTests(null);
+  }
+});
+
+test('an author cannot clear an admin public profile suppression by saving their profile', async () => {
+  const firestore = createMemoryFirestore();
+  setFirestoreForTests(firestore);
+
+  try {
+    const user = { email: 'autora@politeia.ar', name: 'Autora Oculta', roles: ['blog'] };
+    await firestore.collection('posts').doc('post-autora-cuenta-oculta').set({
+      authorName: 'Autora Oculta',
+      title: 'Nota publicada de la cuenta',
+      status: 'published',
+      publishedAt: '2026-08-22T13:00:00.000Z',
+    });
+    const created = await updateUserProfile(user, {
+      firstName: 'Autora',
+      lastName: 'Oculta',
+      publicProfileEnabled: true,
+    });
+
+    await updateManagedAuthorProfile(created.id, {
+      firstName: 'Autora',
+      lastName: 'Oculta',
+      publicProfileEnabled: true,
+      publicAuthorProfileSuppressed: true,
+    }, 'dev@politeia.ar');
+
+    const savedByAuthor = await updateUserProfile(user, {
+      description: 'Esta edición no debe volver a publicar el perfil.',
+      publicProfileEnabled: true,
+    });
+
+    assert.equal(savedByAuthor.publicAuthorProfileSuppressed, true);
+    assert.equal(savedByAuthor.canSharePublicProfile, false);
+    assert.equal(await getPublicAuthorProfileBySlug('autora-oculta'), null);
   } finally {
     setFirestoreForTests(null);
   }
@@ -1825,7 +1898,7 @@ test('post mailing respects the weekly cap and the configurable 12 hour dispatch
     assert.equal(overview.recipientCount, 1);
     await assert.rejects(
       () => updateMailingSettings({ timeZone: 'Zona/Inexistente' }, 'admin@politeia.ar'),
-      /zona horaria no es valida/i,
+      /zona horaria no es válida/i,
     );
   } finally {
     config.mailProvider = previousProvider;
@@ -1848,14 +1921,14 @@ test('post mailing variables work in every configurable mail text', async () => 
     }, 'admin@politeia.ar');
 
     const single = await renderMailingPreview({ mode: 'single' });
-    assert.equal(single.subject, '1 nota: Una nueva mirada sobre la politica cotidiana');
-    assert.equal(single.previewText, 'Abrir Una nueva mirada sobre la politica cotidiana');
-    assert.match(single.html, />Leer Una nueva mirada sobre la politica cotidiana<\/a>/);
+    assert.equal(single.subject, '1 nota: Una nueva mirada sobre la política cotidiana');
+    assert.equal(single.previewText, 'Abrir Una nueva mirada sobre la política cotidiana');
+    assert.match(single.html, />Leer Una nueva mirada sobre la política cotidiana<\/a>/);
 
     const digest = await renderMailingPreview({ mode: 'stack' });
-    assert.equal(digest.subject, '4 notas: Una nueva mirada sobre la politica cotidiana');
-    assert.equal(digest.previewText, 'Hay 4 lecturas; empieza por Una nueva mirada sobre la politica cotidiana');
-    assert.match(digest.html, /Publicamos 4 notas\. La primera es Una nueva mirada sobre la politica cotidiana\./);
+    assert.equal(digest.subject, '4 notas: Una nueva mirada sobre la política cotidiana');
+    assert.equal(digest.previewText, 'Hay 4 lecturas; empieza por Una nueva mirada sobre la política cotidiana');
+    assert.match(digest.html, /Publicamos 4 notas\. La primera es Una nueva mirada sobre la política cotidiana\./);
     assert.match(digest.html, />Leer Nota de ejemplo 2<\/a>/);
   } finally {
     setFirestoreForTests(null);
@@ -1929,7 +2002,7 @@ test('newsletter templates provide bases and persist reusable custom drafts', as
     assert.deepEqual(initial.items.map((item) => item.name), [
       'Resumen semanal',
       'Nueva nota',
-      'Actualizacion de proyecto',
+      'Actualización de proyecto',
     ]);
     assert.ok(initial.items.every((item) => item.builtIn));
 
@@ -1984,7 +2057,7 @@ test('newsletter test emails include a signed unsubscribe link', async () => {
     const delivery = snapshot.docs[0].data();
     assert.match(delivery.html, /Una mirada breve antes de abrir el correo/);
     assert.match(delivery.html, /href="https:\/\/api\.example\.com\/v1\/newsletter\/unsubscribe\?token=/);
-    assert.match(delivery.html, />darte de baja de todos los envios<\/a>/);
+    assert.match(delivery.html, />darte de baja de todos los envíos<\/a>/);
     assert.match(delivery.text, /Darte de baja: https:\/\/api\.example\.com\/v1\/newsletter\/unsubscribe\?token=/);
   } finally {
     Object.assign(config, previous);
@@ -2018,7 +2091,7 @@ test('Resend broadcasts receive the provider unsubscribe placeholder as a clicka
       send: false,
     }, 'admin@politeia.ar');
     assert.match(requestBody.html, /href="\{\{\{RESEND_UNSUBSCRIBE_URL\}\}\}"/);
-    assert.match(requestBody.html, />darte de baja de todos los envios<\/a>/);
+    assert.match(requestBody.html, />darte de baja de todos los envíos<\/a>/);
     assert.match(requestBody.text, /Darte de baja: \{\{\{RESEND_UNSUBSCRIBE_URL\}\}\}/);
   } finally {
     Object.assign(config, previous);
@@ -2383,7 +2456,7 @@ test('blocked profile claim can only be requested again after release', async ()
     assert.equal(blocked.status, 'blocked');
     await assert.rejects(
       createProfileClaim(requester, { managedProfileId: managed.id }),
-      /solicitud esta bloqueada/i
+      /solicitud está bloqueada/i
     );
     const released = await releaseProfileClaim(claim.id, admin);
     assert.equal(released.status, 'released');

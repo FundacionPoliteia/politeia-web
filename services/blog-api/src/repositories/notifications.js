@@ -304,14 +304,14 @@ export async function notifyPostSubmittedForReview(post, actor) {
     targetEmails: assignedReviewerEmail ? [assignedReviewerEmail] : [],
     targetRoles: assignedReviewerEmail ? [] : ['admin', 'reviewer'],
     excludeEmails: [actor?.email],
-    subject: `Nuevo post en revision: ${post.title}`,
+    subject: `Nuevo post en revisión: ${post.title}`,
     text: [
-      `${actor?.name || actor?.email} envio un post a revision.`,
-      `Titulo: ${post.title}`,
+      `${actor?.name || actor?.email} envió un post a revisión.`,
+      `Título: ${post.title}`,
       `Autor: ${post.authorName || post.authorEmail}`,
       assignedReviewerEmail
         ? `Reviewer asignado: ${post.assignedReviewerName || assignedReviewerEmail}`
-        : 'Asignacion: equipo de revision',
+        : 'Asignación: equipo de revisión',
       `Abrir panel: ${adminPostUrl(post.id)}`,
     ].join('\n'),
   });
@@ -335,7 +335,7 @@ export async function notifyCommentCreated(post, comment, actor) {
     excludeEmails: [actor?.email],
     subject: `Nuevo comentario en tu post: ${post.title}`,
     text: [
-      `${actor?.name || actor?.email} dejo un comentario de revision.`,
+      `${actor?.name || actor?.email} dejó un comentario de revisión.`,
       `Post: ${post.title}`,
       comment.selectedText ? `Texto seleccionado: "${comment.selectedText}"` : '',
       `Comentario: ${comment.body}`,
@@ -369,7 +369,7 @@ export async function notifyCommentStatusChanged(post, comment, actor, status) {
     excludeEmails: [actor?.email],
     subject: `${status === 'resolved' ? 'Comentario resuelto' : 'Comentario reabierto'}: ${post.title}`,
     text: [
-      `${actor?.name || actor?.email} ${status === 'resolved' ? 'resolvio' : 'reabrio'} un comentario.`,
+      `${actor?.name || actor?.email} ${status === 'resolved' ? 'resolvió' : 'reabrió'} un comentario.`,
       `Post: ${post.title}`,
       `Comentario: ${latestCommentReply(comment)?.body || comment.body}`,
       `Abrir panel: ${adminPostUrl(post.id)}`,
@@ -425,8 +425,8 @@ export async function notifyPostPublished(post, actor) {
     excludeEmails: [actor?.email],
     subject: `Post publicado: ${post.title}`,
     text: [
-      `${actor?.name || actor?.email} publico tu post.`,
-      `Titulo: ${post.title}`,
+      `${actor?.name || actor?.email} publicó tu post.`,
+      `Título: ${post.title}`,
       `Abrir panel: ${adminPostUrl(post.id)}`,
     ].join('\n'),
   });
@@ -448,8 +448,8 @@ export async function notifyPostEditRequested(post, actor) {
     excludeEmails: [actor?.email],
     subject: `Solicitud de edición: ${post.title}`,
     text: [
-      `${actor?.name || actor?.email} solicitó habilitar una edicion.`,
-      `Titulo: ${post.title}`,
+      `${actor?.name || actor?.email} solicitó habilitar una edición.`,
+      `Título: ${post.title}`,
       `Autor: ${post.authorName || post.authorEmail}`,
       `Abrir panel: ${adminPostUrl(post.id)}`,
     ].join('\n'),
@@ -477,10 +477,10 @@ export async function notifyPostEditEnabled(post, actor) {
     targetEmails: [post.authorEmail],
     targetRoles: ['admin', 'reviewer'],
     excludeEmails: [actor?.email],
-    subject: `Edicion habilitada: ${post.title}`,
+    subject: `Edición habilitada: ${post.title}`,
     text: [
-      `${actor?.name || actor?.email} habilito la edicion de tu post.`,
-      `Titulo: ${post.title}`,
+      `${actor?.name || actor?.email} habilitó la edición de tu post.`,
+      `Título: ${post.title}`,
       `Abrir panel: ${adminPostUrl(post.id)}`,
     ].join('\n'),
   });
@@ -501,7 +501,7 @@ export async function notifyRolesChanged(assignment, actorEmail) {
     excludeEmails: [actorEmail],
     subject: 'Tus permisos internos fueron actualizados',
     text: [
-      'Un admin actualizo tus permisos internos en Politeia.',
+      'Un admin actualizó tus permisos internos en Politeia.',
       `Roles actuales: ${(assignment.roles || []).join(', ') || 'sin roles activos'}`,
       `Abrir panel: ${config.appBaseUrl}/admin`,
     ].join('\n'),
@@ -523,7 +523,7 @@ export async function notifyProfileClaimRequested(claim, actor) {
     emailRecipients,
     targetRoles: ['admin'],
     excludeEmails: [actor?.email],
-    subject: `Nueva solicitud de vinculacion: ${claim.fullName}`,
+    subject: `Nueva solicitud de vinculación: ${claim.fullName}`,
     text: [
       `${actor?.name || actor?.email} solicito vincularse con el perfil ${claim.fullName}.`,
       `Email: ${claim.requesterEmail}`,
@@ -540,7 +540,7 @@ export async function notifyProfileClaimApproved(claim, actor) {
     type: 'profile.claim.approved',
     eventKey: NOTIFICATION_EVENTS.profileClaimApproved,
     subject: `Perfil vinculado: ${claim.fullName}`,
-    text: `Tu cuenta ya esta vinculada con ${claim.fullName}. Heredaste el acceso a ${claim.transferredPostCount || claim.affectedPostCount || 0} notas.`,
+    text: `Tu cuenta ya está vinculada con ${claim.fullName}. Heredaste el acceso a ${claim.transferredPostCount || claim.affectedPostCount || 0} notas.`,
   });
 }
 
@@ -553,7 +553,7 @@ export async function notifyProfileClaimBlocked(claim, actor) {
     subject: `Solicitud bloqueada: ${claim.fullName}`,
     text: claim.blockReason
       ? `La solicitud fue bloqueada. Motivo: ${claim.blockReason}`
-      : 'La solicitud fue bloqueada. Contacta a un administrador si necesitas revisarla.',
+      : 'La solicitud fue bloqueada. Contactá a un administrador si necesitás revisarla.',
   });
 }
 
@@ -564,7 +564,7 @@ export async function notifyProfileClaimReleased(claim, actor) {
     type: 'profile.claim.released',
     eventKey: NOTIFICATION_EVENTS.profileClaimReleased,
     subject: `Solicitud desbloqueada: ${claim.fullName}`,
-    text: 'Ya podes volver a solicitar la vinculacion de este perfil.',
+    text: 'Ya podés volver a solicitar la vinculación de este perfil.',
   });
 }
 
@@ -575,7 +575,7 @@ export async function notifyProfileClaimSuperseded(claim, actor) {
     type: 'profile.claim.superseded',
     eventKey: NOTIFICATION_EVENTS.profileClaimSuperseded,
     subject: `Perfil no disponible: ${claim.fullName}`,
-    text: 'El perfil fue vinculado con otra cuenta y ya no esta disponible.',
+    text: 'El perfil fue vinculado con otra cuenta y ya no está disponible.',
   });
 }
 

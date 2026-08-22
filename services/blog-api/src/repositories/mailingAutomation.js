@@ -25,9 +25,9 @@ export const DEFAULT_MAILING_SETTINGS = Object.freeze({
   timeZone: 'America/Argentina/Buenos_Aires',
   singleSubject: 'Nueva nota en Politeia: {{title}}',
   digestSubject: '{{count}} nuevas notas para leer en Politeia',
-  singlePreheader: 'Una nueva lectura ya esta disponible en el blog.',
+  singlePreheader: 'Una nueva lectura ya está disponible en el blog.',
   digestPreheader: 'Las nuevas notas publicadas por Politeia.',
-  digestIntro: 'Mira las nuevas notas que publicamos.',
+  digestIntro: 'Mirá las nuevas notas que publicamos.',
   ctaLabel: 'Leer la nota',
   maxFullCards: 6,
 });
@@ -65,7 +65,7 @@ export async function getMailingSettings() {
 
 export async function updateMailingSettings(body = {}, actorEmail = '') {
   if (Object.prototype.hasOwnProperty.call(body, 'timeZone') && !isValidTimeZone(body.timeZone)) {
-    throw new HttpError(400, 'La zona horaria no es valida');
+    throw new HttpError(400, 'La zona horaria no es válida');
   }
   const current = await getMailingSettings();
   const next = normalizeSettings({ ...current, ...body });
@@ -122,7 +122,7 @@ export async function listMailingJobs({ status = '', limit = 200 } = {}) {
 export async function updateMailingJobs({ jobIds = [], action = '' } = {}, actorEmail = '') {
   const ids = [...new Set((Array.isArray(jobIds) ? jobIds : []).map(String).filter(Boolean))];
   if (!ids.length) throw new HttpError(400, 'Selecciona al menos una nota');
-  if (!['queue', 'exclude', 'retry', 'send-now'].includes(action)) throw new HttpError(400, 'Accion de mailing invalida');
+  if (!['queue', 'exclude', 'retry', 'send-now'].includes(action)) throw new HttpError(400, 'Acción de mailing inválida');
   const jobs = [];
   for (const id of ids) {
     const doc = await jobsCollection().doc(id).get();
@@ -235,7 +235,7 @@ async function safeSend(jobs, options) {
     return { ok: true, item: await sendMailingCampaign(jobs, options) };
   } catch (err) {
     await Promise.all(jobs.map((job) => jobsCollection().doc(job.id).set({
-      status: 'failed', lastError: err?.message || 'No pudimos enviar la campana', updatedAt: serverTimestamp(),
+      status: 'failed', lastError: err?.message || 'No pudimos enviar la campaña', updatedAt: serverTimestamp(),
     }, { merge: true })));
     return { ok: false, error: err };
   }
@@ -248,7 +248,7 @@ async function sendMailingCampaign(jobs, { actorEmail = 'scheduler', forced = fa
     if (!postDoc.exists) continue;
     const post = serializeDoc(postDoc);
     if (!['published', 'published-edition'].includes(post.status) || post.deletedAt) {
-      await jobsCollection().doc(job.id).set({ status: 'canceled', lastError: 'La nota ya no esta publicada', updatedAt: serverTimestamp() }, { merge: true });
+      await jobsCollection().doc(job.id).set({ status: 'canceled', lastError: 'La nota ya no está publicada', updatedAt: serverTimestamp() }, { merge: true });
       continue;
     }
     currentPosts.push({ job, post });
@@ -287,7 +287,7 @@ async function sendMailingCampaign(jobs, { actorEmail = 'scheduler', forced = fa
   });
   if (!provider.ok) {
     await campaignRef.set({ status: 'failed', lastError: provider.error || 'Provider failed', updatedAt: serverTimestamp() }, { merge: true });
-    throw new HttpError(502, provider.error || 'No pudimos enviar la campana');
+    throw new HttpError(502, provider.error || 'No pudimos enviar la campaña');
   }
   const sentAt = new Date().toISOString();
   await Promise.all(currentPosts.map(({ job }) => jobsCollection().doc(job.id).set({
@@ -341,7 +341,7 @@ function toMailPost(item = {}) {
   const slug = publicPostValue(item, 'slug');
   return {
     title: publicPostValue(item, 'title') || item.postTitle || 'Nueva nota',
-    excerpt: publicPostValue(item, 'excerpt') || 'Una nueva lectura ya esta disponible.',
+    excerpt: publicPostValue(item, 'excerpt') || 'Una nueva lectura ya está disponible.',
     coverImage: publicPostValue(item, 'coverImageThumbnail') || publicPostValue(item, 'coverImage'),
     authorName: publicPostValue(item, 'authorName'),
     category: publicPostValue(item, 'category'),
@@ -449,9 +449,9 @@ function syntheticJobs(count) {
   return Array.from({ length: count }, (_, index) => ({
     id: `preview-${index + 1}`,
     postId: `preview-${index + 1}`,
-    title: index === 0 ? 'Una nueva mirada sobre la politica cotidiana' : `Nota de ejemplo ${index + 1}`,
-    excerpt: 'Ideas, datos y preguntas para comprender mejor una conversacion publica.',
-    category: index % 2 ? 'Democracia' : 'Analisis',
+    title: index === 0 ? 'Una nueva mirada sobre la política cotidiana' : `Nota de ejemplo ${index + 1}`,
+    excerpt: 'Ideas, datos y preguntas para comprender mejor una conversación pública.',
+    category: index % 2 ? 'Democracia' : 'Análisis',
     authorName: 'Equipo Politeia',
     slug: `nota-de-ejemplo-${index + 1}`,
   }));
@@ -488,7 +488,7 @@ function clampNumber(value, min, max, fallback) {
 
 function validateEmail(value) {
   const email = normalizeEmail(value);
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError(400, 'Ingresa un email valido');
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError(400, 'Ingresá un email válido');
   return email;
 }
 

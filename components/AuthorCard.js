@@ -4,7 +4,7 @@ const DEFAULT_PROFILE_PHOTO = '/default_profile.png';
 
 export default function AuthorCard({ author = {}, preview = false, featured = false }) {
   const fullName = author.fullName || 'Tu nombre';
-  const aboutMe = author.focusArea || 'Conta brevemente quien sos, que mirada aportas y que te interesa compartir con los lectores.';
+  const aboutMe = author.focusArea || 'Contá brevemente quién sos, qué mirada aportás y qué te interesa compartir con los lectores.';
   const postCount = Number(author.postCount) || 0;
   const authorHref = `/blog?autor=${encodeURIComponent(fullName)}`;
 
@@ -29,7 +29,7 @@ export default function AuthorCard({ author = {}, preview = false, featured = fa
           <small className={!author.latestPostTitle ? 'is-empty' : ''}>
             {author.latestPostTitle && (
               <>
-                Ultima nota:{' '}
+                Última nota:{' '}
                 {author.latestPostSlug && !preview ? (
                   <Link href={`/blog/${author.latestPostSlug}`}>{author.latestPostTitle}</Link>
                 ) : author.latestPostTitle}
@@ -37,7 +37,7 @@ export default function AuthorCard({ author = {}, preview = false, featured = fa
             )}
           </small>
         </div>
-        <div className="author-card-tags" aria-label={author.categories?.length ? 'Categorias principales' : undefined}>
+        <div className="author-card-tags" aria-label={author.categories?.length ? 'Categorías principales' : undefined}>
           {author.categories?.slice(0, 3).map((category) => (
             <Link href={`/blog?categoria=${encodeURIComponent(category)}`} key={category}>
               {category}

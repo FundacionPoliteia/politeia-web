@@ -18,27 +18,27 @@ const BASE_NEWSLETTER_TEMPLATES = [
     id: 'base-weekly-summary',
     name: 'Resumen semanal',
     campaignName: 'Resumen semanal',
-    subject: 'Lo mas importante de la semana en Politeia',
+    subject: 'Lo más importante de la semana en Politeia',
     previewText: 'Notas, ideas y novedades para leer con tiempo.',
-    content: '<h2>Lo mas importante de la semana</h2><p>Escribi una apertura breve que conecte los temas de esta edicion.</p><hr><h3>Para seguir leyendo</h3><p>Presenta las notas destacadas y agrega sus enlaces.</p><h3>Una idea para cerrar</h3><p>Deja una pregunta o reflexion breve para la comunidad.</p>',
+    content: '<h2>Lo más importante de la semana</h2><p>Escribí una apertura breve que conecte los temas de esta edición.</p><hr><h3>Para seguir leyendo</h3><p>Presentá las notas destacadas y agregá sus enlaces.</p><h3>Una idea para cerrar</h3><p>Dejá una pregunta o reflexión breve para la comunidad.</p>',
     builtIn: true,
   },
   {
     id: 'base-new-article',
     name: 'Nueva nota',
     campaignName: 'Lanzamiento de nota',
-    subject: 'Nueva nota en Politeia: completa el titulo',
-    previewText: 'Una nueva lectura para comprender el debate publico.',
-    content: '<h2>Una nueva nota en Politeia</h2><p>Presenta el tema, la pregunta principal y por que vale la pena leerla.</p><blockquote>Agrega una frase destacada del articulo.</blockquote><p>Inclui el enlace a la nota y una invitacion breve a compartirla.</p>',
+    subject: 'Nueva nota en Politeia: completá el título',
+    previewText: 'Una nueva lectura para comprender el debate público.',
+    content: '<h2>Una nueva nota en Politeia</h2><p>Presentá el tema, la pregunta principal y por qué vale la pena leerla.</p><blockquote>Agregá una frase destacada del artículo.</blockquote><p>Incluí el enlace a la nota y una invitación breve a compartirla.</p>',
     builtIn: true,
   },
   {
     id: 'base-project-update',
-    name: 'Actualizacion de proyecto',
-    campaignName: 'Actualizacion de proyecto',
+    name: 'Actualización de proyecto',
+    campaignName: 'Actualización de proyecto',
     subject: 'Novedades de proyecto en Politeia',
-    previewText: 'Avances, proximos pasos y formas de participar.',
-    content: '<h2>En que estamos trabajando</h2><p>Resume el avance principal y su impacto.</p><h3>Lo que sigue</h3><ul><li>Proximo paso o hito.</li><li>Fecha importante.</li><li>Forma de participar.</li></ul><p>Cerra con un enlace o contacto relevante.</p>',
+    previewText: 'Avances, próximos pasos y formas de participar.',
+    content: '<h2>En qué estamos trabajando</h2><p>Resumí el avance principal y su impacto.</p><h3>Lo que sigue</h3><ul><li>Próximo paso o hito.</li><li>Fecha importante.</li><li>Forma de participar.</li></ul><p>Cerrá con un enlace o contacto relevante.</p>',
     builtIn: true,
   },
 ];
@@ -73,7 +73,7 @@ export async function requestNewsletterSubscription({ email, source = 'blog', lo
     channel: MAIL_CHANNELS.newsletter,
     type: 'newsletter.confirmation',
     recipient: cleanEmail,
-    subject: 'Confirma tu suscripcion a Politeia',
+    subject: 'Confirmá tu suscripción a Politeia',
     text: rendered.text,
     html: rendered.html,
     idempotencyKey: `newsletter-confirm:${subscriptionId(cleanEmail)}:${tokenFingerprint(token)}`,
@@ -85,14 +85,14 @@ export async function confirmNewsletterSubscription(token) {
   const payload = verifyNewsletterToken(token, 'confirm');
   const ref = subscriptions().doc(subscriptionId(payload.email));
   const doc = await ref.get();
-  if (!doc.exists) throw new HttpError(400, 'La solicitud de suscripcion no existe o vencio');
+  if (!doc.exists) throw new HttpError(400, 'La solicitud de suscripción no existe o venció');
 
   const topicPreferences = sanitizeTopicPreferences(payload.topics);
   const provider = await syncResendContact({ email: payload.email, subscribed: true, topics: topicPreferences });
   if (!provider.ok) {
     throw new HttpError(
       502,
-      'No pudimos confirmar la suscripcion en este momento',
+      'No pudimos confirmar la suscripción en este momento',
       config.nodeEnv === 'production'
         ? undefined
         : {
@@ -124,7 +124,7 @@ export async function requestNewsletterPreferences(email) {
   const manageUrl = createNewsletterPreferencesUrl(cleanEmail);
   const rendered = renderEditorialMail({
     subject: 'Administra tus preferencias de Politeia',
-    text: 'Usa este enlace para elegir que novedades queres recibir o para darte de baja de todos los envios.',
+    text: 'Usá este enlace para elegir qué novedades querés recibir o para darte de baja de todos los envíos.',
     actionUrl: manageUrl,
     actionLabel: 'Administrar preferencias',
   });
@@ -143,7 +143,7 @@ export async function requestNewsletterPreferences(email) {
 export async function getNewsletterPreferences(token) {
   const payload = verifyNewsletterToken(token, ['preferences', 'unsubscribe'], { allowExpired: true });
   const doc = await subscriptions().doc(subscriptionId(payload.email)).get();
-  if (!doc.exists) throw new HttpError(404, 'La suscripcion no existe');
+  if (!doc.exists) throw new HttpError(404, 'La suscripción no existe');
   const item = serializeDoc(doc);
   return { email: payload.email, status: item.status || 'pending', topics: subscriptionTopics(item) };
 }
@@ -152,7 +152,7 @@ export async function updateNewsletterPreferences(token, topics) {
   const payload = verifyNewsletterToken(token, ['preferences', 'unsubscribe'], { allowExpired: true });
   const ref = subscriptions().doc(subscriptionId(payload.email));
   const doc = await ref.get();
-  if (!doc.exists) throw new HttpError(404, 'La suscripcion no existe');
+  if (!doc.exists) throw new HttpError(404, 'La suscripción no existe');
   const topicPreferences = sanitizeTopicPreferences(topics);
   const subscribed = topicPreferences.newsletter || topicPreferences.newPosts;
   const provider = await syncResendContact({ email: payload.email, subscribed, topics: topicPreferences });
@@ -256,7 +256,7 @@ export async function createNewsletterTemplate(body = {}, actorEmail = '') {
     .map(serializeDoc)
     .filter((item) => item.projectKey === config.mailProjectKey && item.audienceKey === config.newsletterAudienceKey)
     .length;
-  if (customCount >= MAX_CUSTOM_TEMPLATES) throw new HttpError(409, `Solo podes guardar hasta ${MAX_CUSTOM_TEMPLATES} plantillas`);
+  if (customCount >= MAX_CUSTOM_TEMPLATES) throw new HttpError(409, `Solo podés guardar hasta ${MAX_CUSTOM_TEMPLATES} plantillas`);
 
   const ref = templates().doc();
   await ref.set({
@@ -374,7 +374,7 @@ export async function createNewsletterCampaign({ name, subject, previewText = ''
   });
   if (!provider.ok) {
     await ref.update({ status: 'failed', lastError: provider.error || 'Provider failed', updatedAt: serverTimestamp() });
-    throw new HttpError(502, provider.error || 'No pudimos crear la campana');
+    throw new HttpError(502, provider.error || 'No pudimos crear la campaña');
   }
   await ref.update({
     status: provider.status || (send ? 'sent' : 'draft'),
@@ -517,7 +517,7 @@ function sanitizeCampaignHtml(value = '') {
 function validateEmail(value = '') {
   const email = normalizeEmail(value);
   if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    throw new HttpError(400, 'Ingresa un email valido');
+    throw new HttpError(400, 'Ingresá un email válido');
   }
   return email;
 }

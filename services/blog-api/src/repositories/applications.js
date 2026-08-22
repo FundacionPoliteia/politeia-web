@@ -99,7 +99,7 @@ export async function listTeamApplications({ status = '', limit = 30, cursor = '
 
 export async function getTeamApplication(id) {
   const doc = await applications().doc(id).get();
-  if (!doc.exists) throw new HttpError(404, 'Postulacion no encontrada');
+  if (!doc.exists) throw new HttpError(404, 'Postulación no encontrada');
   return serializeDoc(doc);
 }
 
@@ -194,10 +194,10 @@ export async function inspectCv(file = {}) {
         extension: 'docx',
       };
     } catch {
-      throw new HttpError(400, 'El archivo DOCX no es valido');
+      throw new HttpError(400, 'El archivo DOCX no es válido');
     }
   }
-  throw new HttpError(400, 'El CV debe ser un PDF o DOCX valido');
+  throw new HttpError(400, 'El CV debe ser un PDF o DOCX válido');
 }
 
 function sanitizeApplication(body) {
@@ -205,14 +205,14 @@ function sanitizeApplication(body) {
   const email = String(body.email || '').trim().toLowerCase().slice(0, 254);
   const area = String(body.area || '').trim().replace(/\s+/g, ' ').slice(0, 120);
   const message = String(body.message || '').trim().slice(0, 4000);
-  if (fullName.length < 3) throw new HttpError(400, 'Ingresa tu nombre y apellido');
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError(400, 'Ingresa un email valido');
-  if (!area) throw new HttpError(400, 'Selecciona un area de interes');
-  if (message.length < 20) throw new HttpError(400, 'Contanos brevemente por que queres sumarte');
+  if (fullName.length < 3) throw new HttpError(400, 'Ingresá tu nombre y apellido');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new HttpError(400, 'Ingresá un email válido');
+  if (!area) throw new HttpError(400, 'Seleccioná un área de interés');
+  if (message.length < 20) throw new HttpError(400, 'Contanos brevemente por qué querés sumarte');
   if (body.consent !== 'true' && body.consent !== true) throw new HttpError(400, 'Debes aceptar el tratamiento de tus datos');
   const linkedinUrl = String(body.linkedinUrl || '').trim();
   if (linkedinUrl && !/^https:\/\/([a-z]{2,3}\.)?linkedin\.com\//i.test(linkedinUrl)) {
-    throw new HttpError(400, 'El enlace de LinkedIn no es valido');
+    throw new HttpError(400, 'El enlace de LinkedIn no es válido');
   }
   return {
     fullName,
@@ -241,10 +241,10 @@ async function notifyApplication(item) {
   return sendMail({
     channel: MAIL_CHANNELS.internal,
     to: config.applicationRecipients,
-    subject: `Nueva postulacion para ${item.area}`,
+    subject: `Nueva postulación para ${item.area}`,
     text: [
-      'Se recibio una nueva postulacion para integrar el equipo de Politeia.',
-      `Area: ${item.area}`,
+      'Se recibió una nueva postulación para integrar el equipo de Politeia.',
+      `Área: ${item.area}`,
       `Revisala en ${config.appBaseUrl}/admin?tab=applications&application=${item.id}`,
       'El CV permanece en almacenamiento privado y solo puede descargarse desde el panel.',
     ].join('\n'),
@@ -263,7 +263,7 @@ async function createAdminNotification(item) {
     postId: '',
     postTitle: '',
     actorEmail: '',
-    actorName: 'Sitio publico',
+    actorName: 'Sitio público',
     metadata: { area: item.area },
     createdAt: serverTimestamp(),
     expiresAt: Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000),
@@ -276,7 +276,7 @@ function applicationId(key) {
 
 function sanitizeIdempotencyKey(value) {
   const key = String(value || '').trim();
-  if (!/^[a-zA-Z0-9._:-]{16,160}$/.test(key)) throw new HttpError(400, 'Idempotency-Key invalida');
+  if (!/^[a-zA-Z0-9._:-]{16,160}$/.test(key)) throw new HttpError(400, 'Idempotency-Key inválida');
   return key;
 }
 

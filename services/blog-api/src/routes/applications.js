@@ -116,9 +116,9 @@ function uploadCv(req, res, next) {
 async function verifyTurnstile(token, remoteIp) {
   if (!config.turnstileSecretKey) {
     if (config.nodeEnv !== 'production') return;
-    throw new HttpError(503, 'La validacion anti-spam no esta disponible');
+    throw new HttpError(503, 'La validación anti-spam no está disponible');
   }
-  if (!token) throw new HttpError(400, 'Completa la validacion anti-spam');
+  if (!token) throw new HttpError(400, 'Completá la validación anti-spam');
   const body = new URLSearchParams({
     secret: config.turnstileSecretKey,
     response: String(token),
@@ -130,5 +130,5 @@ async function verifyTurnstile(token, remoteIp) {
     body,
   });
   const result = await response.json().catch(() => null);
-  if (!response.ok || result?.success !== true) throw new HttpError(400, 'No pudimos validar el envio. Intenta nuevamente');
+  if (!response.ok || result?.success !== true) throw new HttpError(400, 'No pudimos validar el envío. Intentá nuevamente');
 }

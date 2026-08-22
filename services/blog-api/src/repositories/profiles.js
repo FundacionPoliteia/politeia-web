@@ -33,7 +33,7 @@ export async function updateUserProfile(user, data) {
   if (before && await hasPendingClaimForEmail(email)) {
     const requestedName = buildFullName(data?.firstName ?? before.firstName, data?.lastName ?? before.lastName);
     if (identityNameKey(requestedName) !== identityNameKey(before.fullName)) {
-      throw new HttpError(409, 'No podes cambiar el nombre mientras haya una solicitud de vinculacion pendiente');
+      throw new HttpError(409, 'No podés cambiar el nombre mientras haya una solicitud de vinculación pendiente');
     }
   }
   const clean = sanitizeProfile({ ...(before || {}), ...(data || {}) });
@@ -200,6 +200,7 @@ export async function createManagedAuthorProfile(data, actorEmail = '') {
     ...clean,
     email: '',
     managedAuthor: true,
+    publicAuthorProfileSuppressed: normalizeBoolean(data?.publicAuthorProfileSuppressed),
     publicProfileEnabled: clean.publicProfileEnabled,
     publicProfilePreferenceSet: true,
     fullName,
@@ -254,7 +255,7 @@ export async function updateAuthorProfileAsAdmin(id = '', data, actorEmail = '')
   if (hasPendingClaim) {
     const requestedName = buildFullName(data?.firstName ?? before.firstName, data?.lastName ?? before.lastName);
     if (identityNameKey(requestedName) !== identityNameKey(before.fullName)) {
-      throw new HttpError(409, 'No se puede cambiar el nombre de un perfil con solicitudes de vinculacion pendientes');
+      throw new HttpError(409, 'No se puede cambiar el nombre de un perfil con solicitudes de vinculación pendientes');
     }
   }
 
@@ -278,6 +279,9 @@ export async function updateAuthorProfileAsAdmin(id = '', data, actorEmail = '')
     ...clean,
     email: isManagedAuthor ? '' : before.email,
     managedAuthor: isManagedAuthor,
+    publicAuthorProfileSuppressed: data?.publicAuthorProfileSuppressed !== undefined
+      ? normalizeBoolean(data.publicAuthorProfileSuppressed)
+      : before.publicAuthorProfileSuppressed === true,
     ...(isManagedAuthor ? {} : {
       accountRoles: sanitizeInternalRoles(stored.accountRoles || before.accountRoles),
     }),
@@ -320,7 +324,7 @@ export async function deleteManagedAuthorProfile(id = '', actorEmail = '') {
     throw new HttpError(403, 'Only managed author profiles can be deleted');
   }
   if (await hasPendingClaimForManagedProfile(cleanId)) {
-    throw new HttpError(409, 'No se puede eliminar un perfil con solicitudes de vinculacion pendientes');
+    throw new HttpError(409, 'No se puede eliminar un perfil con solicitudes de vinculación pendientes');
   }
 
   await ref.delete();
@@ -454,7 +458,8 @@ async function toUserProfile(item, user, context = null) {
       ? context.managedNameKeys.has(managedKey)
       : await managedProfileExistsForName(fullName)
   );
-  const canSharePublicProfile = authorExists && !managedExists;
+  const publicAuthorProfileSuppressed = item?.publicAuthorProfileSuppressed === true;
+  const canSharePublicProfile = authorExists && !managedExists && !publicAuthorProfileSuppressed;
   const publicProfileEnabled = resolvePublicProfilePreference(item, clean);
   return {
     id: item?.id || profileId(user?.email),
@@ -462,6 +467,7 @@ async function toUserProfile(item, user, context = null) {
     ...clean,
     accountRoles: sanitizeInternalRoles(item?.accountRoles || user?.roles),
     managedAuthor: item?.managedAuthor === true,
+    publicAuthorProfileSuppressed,
     publicProfileEnabled,
     canSharePublicProfile,
     fullName,
@@ -475,7 +481,7 @@ async function toUserProfile(item, user, context = null) {
 async function toPublicAuthorProfile(item) {
   const clean = sanitizeProfile(item || {});
   const fullName = buildFullName(clean.firstName, clean.lastName);
-  if (!resolvePublicProfilePreference(item, clean) || !fullName || !(await authorNameExists(fullName))) return null;
+  if (item?.publicAuthorProfileSuppressed === true || !resolvePublicProfilePreference(item, clean) || !fullName || !(await authorNameExists(fullName))) return null;
 
   return {
     fullName,
@@ -491,7 +497,7 @@ function toPublicAuthorProfileFromStats(item, authorStats) {
   const clean = sanitizeProfile(item || {});
   const fullName = buildFullName(clean.firstName, clean.lastName);
   const stats = authorStats.get(authorKey(fullName));
-  if (!resolvePublicProfilePreference(item, clean) || !fullName || !stats) return null;
+  if (item?.publicAuthorProfileSuppressed === true || !resolvePublicProfilePreference(item, clean) || !fullName || !stats) return null;
 
   return {
     fullName,

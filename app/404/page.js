@@ -1,5 +1,5 @@
 export const metadata = {
-  title: 'Pagina no encontrada - Politeia',
+  title: 'Página no encontrada - Politeia',
   robots: {
     index: false,
     follow: false,
@@ -11,8 +11,8 @@ export default function NotFoundPage() {
     <main className="page-hero">
       <div className="wrap">
         <span className="eyebrow">404</span>
-        <h1>Pagina no encontrada.</h1>
-        <p className="lead">La pagina que estas buscando no existe o no esta disponible.</p>
+        <h1>Página no encontrada.</h1>
+        <p className="lead">La página que estás buscando no existe o no está disponible.</p>
       </div>
     </main>
   );

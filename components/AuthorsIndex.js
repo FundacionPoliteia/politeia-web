@@ -17,7 +17,7 @@ export default function AuthorsIndex({ authors = [] }) {
       <section className="page-hero authors-hero">
         <div className="wrap">
           <span className="eyebrow">Autores</span>
-          <h1>Conoce las voces que escriben en Politeia.</h1>
+          <h1>Conocé las voces que escriben en Politeia.</h1>
           <p className="lead">
             Miradas, recorridos y temas de quienes investigan, analizan y escriben para el blog.
           </p>
@@ -35,10 +35,10 @@ export default function AuthorsIndex({ authors = [] }) {
                 type="search"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Nombre, mirada o categoria"
+                placeholder="Nombre, mirada o categoría"
               />
               {query && (
-                <button aria-label="Limpiar busqueda" onClick={() => setQuery('')} type="button">
+                <button aria-label="Limpiar búsqueda" onClick={() => setQuery('')} type="button">
                   <span aria-hidden="true" className="material-symbols-outlined">close</span>
                 </button>
               )}
@@ -55,7 +55,7 @@ export default function AuthorsIndex({ authors = [] }) {
               ))}
             </div>
           ) : (
-            <div className="empty">No encontramos autores que coincidan con esa busqueda.</div>
+            <div className="empty">No encontramos autores que coincidan con esa búsqueda.</div>
           )}
         </div>
       </section>

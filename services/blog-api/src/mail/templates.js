@@ -17,12 +17,12 @@ export function renderEditorialMail({ subject, text, actionUrl = '', actionLabel
 
 export function renderNewsletterConfirmation({ confirmUrl }) {
   return renderMailLayout({
-    preheader: 'Confirma tu suscripcion al newsletter de Politeia.',
-    heading: 'Confirma tu suscripcion',
-    bodyHtml: '<p>Recibimos tu solicitud para recibir novedades de Politeia.</p><p>Confirma tu direccion para completar la suscripcion. Si no fuiste vos, podes ignorar este mensaje.</p>',
-    bodyText: 'Recibimos tu solicitud para recibir novedades de Politeia. Confirma tu direccion para completar la suscripcion.',
+    preheader: 'Confirmá tu suscripción al newsletter de Politeia.',
+    heading: 'Confirmá tu suscripción',
+    bodyHtml: '<p>Recibimos tu solicitud para recibir novedades de Politeia.</p><p>Confirmá tu dirección para completar la suscripción. Si no fuiste vos, podés ignorar este mensaje.</p>',
+    bodyText: 'Recibimos tu solicitud para recibir novedades de Politeia. Confirmá tu dirección para completar la suscripción.',
     actionUrl: confirmUrl,
-    actionLabel: 'Confirmar suscripcion',
+    actionLabel: 'Confirmar suscripción',
   });
 }
 
@@ -42,10 +42,10 @@ export function renderMailLayout({
     ? `<p style="margin:28px 0"><a href="${escapeAttribute(actionUrl)}" style="display:inline-block;background:#137a9f;color:#fff;text-decoration:none;padding:13px 20px;border-radius:6px;font-family:${TEXT_FONT};font-weight:700">${escapeHtml(actionLabel)}</a></p>`
     : '';
   const preferences = preferencesUrl
-    ? `<p style="margin:12px 0 0;font-size:12px;color:#737489">Podes <a href="${escapeAttribute(preferencesUrl)}" style="color:#0b809f;text-decoration:underline">administrar que novedades recibis</a>.</p>`
+    ? `<p style="margin:12px 0 0;font-size:12px;color:#737489">Podés <a href="${escapeAttribute(preferencesUrl)}" style="color:#0b809f;text-decoration:underline">administrar qué novedades recibís</a>.</p>`
     : '';
   const unsubscribe = unsubscribeUrl
-    ? `<p style="margin:8px 0 0;font-size:12px;color:#737489">Tambien podes <a href="${escapeAttribute(unsubscribeUrl)}" style="color:#0b809f;text-decoration:underline">darte de baja de todos los envios</a>.</p>`
+    ? `<p style="margin:8px 0 0;font-size:12px;color:#737489">También podés <a href="${escapeAttribute(unsubscribeUrl)}" style="color:#0b809f;text-decoration:underline">darte de baja de todos los envíos</a>.</p>`
     : '';
   const preferencesText = preferencesUrl ? `Administrar preferencias: ${preferencesUrl}` : '';
   const unsubscribeText = unsubscribeUrl ? `Darte de baja: ${unsubscribeUrl}` : '';

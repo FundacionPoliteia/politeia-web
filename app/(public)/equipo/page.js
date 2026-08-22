@@ -616,8 +616,8 @@ export default function EquipoPage() {
         <div className="team-page__container team-page__join-inner">
           <div>
             <span className="team-page__section-kicker">Participa</span>
-            <h2>Tu mirada tambien puede transformar Politeia.</h2>
-            <p>Conoce las areas de trabajo y contanos como te gustaria aportar al equipo.</p>
+            <h2>Tu mirada también puede transformar Politeia.</h2>
+            <p>Conocé las áreas de trabajo y contanos cómo te gustaría aportar al equipo.</p>
           </div>
           <Link className="btn btn-primary" href="/sumate">Quiero sumarme</Link>
         </div>

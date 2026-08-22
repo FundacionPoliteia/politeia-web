@@ -84,12 +84,12 @@ export default function NewsletterForm({ initialStatus = '', initialEmail = '', 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data?.error?.message || 'No pudimos registrar tu email.');
       setStatus('success');
-      setMessage(data.message || 'Revisa tu email para confirmar la suscripcion.');
+      setMessage(data.message || 'Revisá tu email para confirmar la suscripción.');
       setSubscribeModalOpen(false);
       setEmail('');
     } catch (err) {
       setStatus('error');
-      setMessage(err?.message || 'No pudimos registrar tu email. Intenta nuevamente.');
+      setMessage(err?.message || 'No pudimos registrar tu email. Intentá nuevamente.');
     }
   }
 
@@ -97,7 +97,7 @@ export default function NewsletterForm({ initialStatus = '', initialEmail = '', 
     if (!preferencesEmail.trim() || status === 'loading') return;
     await preferenceRequest('/v1/newsletter/preferences/request', {
       email: preferencesEmail,
-    }, 'Revisa tu email para abrir tus preferencias.');
+    }, 'Revisá tu email para abrir tus preferencias.');
   }
 
   async function savePreferences(nextTopics = topics) {
@@ -105,7 +105,7 @@ export default function NewsletterForm({ initialStatus = '', initialEmail = '', 
     await preferenceRequest('/v1/newsletter/preferences', {
       token: preferencesToken,
       topics: nextTopics,
-    }, nextTopics.newsletter || nextTopics.newPosts ? 'Preferencias actualizadas.' : 'Te diste de baja de todos los envios.', 'PATCH');
+    }, nextTopics.newsletter || nextTopics.newPosts ? 'Preferencias actualizadas.' : 'Te diste de baja de todos los envíos.', 'PATCH');
   }
 
   async function preferenceRequest(path, body, successMessage, method = 'POST') {
@@ -153,7 +153,7 @@ export default function NewsletterForm({ initialStatus = '', initialEmail = '', 
         <NewsletterModal eyebrow="Preferencias" title="Qué querés recibir" onClose={closeAllModals}>
           <p>Selecciona de la siguiente lista:</p>
           <TopicChoices topics={topics} setTopics={setTopics} />
-          {!topics.newsletter && !topics.newPosts && <p className="newsletter-preferences-warning">Elegi al menos una opcion para continuar.</p>}
+          {!topics.newsletter && !topics.newPosts && <p className="newsletter-preferences-warning">Elegí al menos una opción para continuar.</p>}
           <div className="newsletter-preferences-actions">
             <button className="btn btn-ghost" disabled={status === 'loading'} onClick={closeAllModals} type="button">Cancelar</button>
             <button className="btn btn-primary" disabled={status === 'loading' || (!topics.newsletter && !topics.newPosts)} onClick={confirmSubscription} type="button">
@@ -164,7 +164,7 @@ export default function NewsletterForm({ initialStatus = '', initialEmail = '', 
       )}
 
       {preferencesOpen && (
-        <NewsletterModal eyebrow="Preferencias" title="Tus envios de Politeia" onClose={closeAllModals}>
+        <NewsletterModal eyebrow="Preferencias" title="Tus envíos de Politeia" onClose={closeAllModals}>
           {!preferencesToken ? (
             <>
               <p>Te enviaremos un enlace seguro para consultar y actualizar tus opciones.</p>
@@ -232,8 +232,8 @@ function NewsletterModal({ eyebrow, icon = '', title, tone = 'neutral', onClose,
 }
 
 function newsletterResult(status) {
-  if (status === 'confirmado') return { tone: 'success', icon: 'check_circle', title: 'Listo, suscripcion confirmada', message: 'A partir de ahora vas a recibir las novedades que elegiste.' };
-  if (status === 'baja') return { tone: 'neutral', icon: 'check_circle', title: 'Suscripcion cancelada', message: 'Tu email fue retirado correctamente.' };
-  if (status === 'error') return { tone: 'error', icon: 'error', title: 'No pudimos completar la accion', message: 'El enlace no es valido o vencio. Podes solicitar uno nuevo desde el formulario.' };
+  if (status === 'confirmado') return { tone: 'success', icon: 'check_circle', title: 'Listo, suscripción confirmada', message: 'A partir de ahora vas a recibir las novedades que elegiste.' };
+  if (status === 'baja') return { tone: 'neutral', icon: 'check_circle', title: 'Suscripción cancelada', message: 'Tu email fue retirado correctamente.' };
+  if (status === 'error') return { tone: 'error', icon: 'error', title: 'No pudimos completar la acción', message: 'El enlace no es válido o venció. Podés solicitar uno nuevo desde el formulario.' };
   return null;
 }

@@ -50,7 +50,7 @@ export async function createProfileClaim(user, body = {}) {
   const email = requireEmail(user);
   const account = await getAccountProfile(email);
   const fullName = buildFullName(account?.firstName, account?.lastName);
-  if (!fullName) throw new HttpError(400, 'Completa nombre y apellido antes de solicitar la vinculacion');
+  if (!fullName) throw new HttpError(400, 'Completá nombre y apellido antes de solicitar la vinculación');
 
   const requestedProfileId = normalizeId(body.managedProfileId);
   const managedProfile = requestedProfileId
@@ -64,7 +64,7 @@ export async function createProfileClaim(user, body = {}) {
   const duplicate = existing.find((item) => item.managedProfileId === managedProfile.id && ACTIVE_STATUSES.includes(item.status));
   if (duplicate) return toUserClaim(duplicate);
   const blocked = existing.find((item) => item.managedProfileId === managedProfile.id && item.status === 'blocked');
-  if (blocked) throw new HttpError(403, 'Esta solicitud esta bloqueada. Contacta a un administrador');
+  if (blocked) throw new HttpError(403, 'Esta solicitud está bloqueada. Contactá a un administrador');
 
   const ref = claims().doc();
   const postCount = await countMatchingPosts(managedProfile.fullName);
@@ -131,9 +131,9 @@ export async function linkManagedProfileAsAdmin(body = {}, adminUser) {
     getAccountProfile(requesterEmail),
     resolveAssignedRoles(requesterEmail),
   ]);
-  if (!managedProfile) throw new HttpError(404, 'El perfil gestionado ya no esta disponible');
+  if (!managedProfile) throw new HttpError(404, 'El perfil gestionado ya no está disponible');
   if (!account && assignedRoles.length === 0) throw new HttpError(404, 'La cuenta interna no existe');
-  if (account?.managedAuthor === true) throw new HttpError(409, 'Un perfil gestionado no puede recibir otra vinculacion');
+  if (account?.managedAuthor === true) throw new HttpError(409, 'Un perfil gestionado no puede recibir otra vinculación');
 
   const existingSnapshot = await claims().where('managedProfileId', '==', managedProfile.id).get();
   const activeClaims = existingSnapshot.docs
@@ -143,7 +143,7 @@ export async function linkManagedProfileAsAdmin(body = {}, adminUser) {
     item.status === 'processing' && item.requesterEmail !== requesterEmail
   ));
   if (processingOtherAccount) {
-    throw new HttpError(409, 'Otra vinculacion ya esta procesando este perfil');
+    throw new HttpError(409, 'Otra vinculación ya está procesando este perfil');
   }
 
   let claim = activeClaims.find((item) => item.requesterEmail === requesterEmail) || null;
@@ -195,7 +195,7 @@ export async function approveProfileClaim(id, adminUser) {
       updatedAt: serverTimestamp(),
     });
     await safeNotify(() => notifyProfileClaimSuperseded(unavailable, adminUser));
-    throw new HttpError(409, 'El perfil gestionado ya no esta disponible');
+    throw new HttpError(409, 'El perfil gestionado ya no está disponible');
   }
 
   const account = await getAccountProfile(claim.requesterEmail);
@@ -210,13 +210,13 @@ export async function approveProfileClaim(id, adminUser) {
       transaction.get(claimRef),
       transaction.get(profileRef),
     ]);
-    if (!claimDoc.exists || !profileDoc.exists) throw new HttpError(409, 'La solicitud ya no esta disponible');
+    if (!claimDoc.exists || !profileDoc.exists) throw new HttpError(409, 'La solicitud ya no está disponible');
     const currentClaim = serializeDoc(claimDoc);
     const currentProfile = serializeDoc(profileDoc);
     if (currentClaim.status === 'approved') return;
     if (!ACTIVE_STATUSES.includes(currentClaim.status)) throw new HttpError(409, 'La solicitud no se puede aprobar en su estado actual');
     if (currentProfile.activeClaimId && currentProfile.activeClaimId !== claim.id) {
-      throw new HttpError(409, 'Otra solicitud esta procesando este perfil');
+      throw new HttpError(409, 'Otra solicitud está procesando este perfil');
     }
     transaction.set(claimRef, {
       status: 'processing',
@@ -249,6 +249,7 @@ export async function approveProfileClaim(id, adminUser) {
     identityNameKey: identityNameKey(managedProfile.fullName),
     identityUpdatedAt: serverTimestamp(),
     publicProfileEnabled: managedClean.publicProfileEnabled,
+    publicAuthorProfileSuppressed: managedProfile.publicAuthorProfileSuppressed === true,
     publicProfilePreferenceSet: true,
     ownershipClaimId: claim.id,
     claimedAt: serverTimestamp(),
@@ -266,7 +267,7 @@ export async function approveProfileClaim(id, adminUser) {
     if (!managedDoc.exists) {
       const current = serializeDoc(claimDoc);
       if (current.status === 'approved') return current;
-      throw new HttpError(409, 'El perfil gestionado ya no esta disponible');
+      throw new HttpError(409, 'El perfil gestionado ya no está disponible');
     }
     transaction.set(claims().doc(claim.id), {
       status: 'approved',

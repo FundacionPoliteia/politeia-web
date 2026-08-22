@@ -23,23 +23,23 @@ const DEFAULT_SETTINGS = {
   timeZone: 'America/Argentina/Buenos_Aires',
   singleSubject: 'Nueva nota en Politeia: {{title}}',
   digestSubject: '{{count}} nuevas notas para leer en Politeia',
-  singlePreheader: 'Una nueva lectura ya esta disponible en el blog.',
+  singlePreheader: 'Una nueva lectura ya está disponible en el blog.',
   digestPreheader: 'Las nuevas notas publicadas por Politeia.',
-  digestIntro: 'Mira las nuevas notas que publicamos.',
+  digestIntro: 'Mirá las nuevas notas que publicamos.',
   ctaLabel: 'Leer la nota',
   maxFullCards: 6,
 };
 
 const MAIL_TEMPLATE_VARIABLES = {
   title: {
-    label: 'Titulo de la nota',
-    shortLabel: 'Titulo',
-    description: 'Usa el titulo de la nota. En un resumen toma la primera publicacion.',
+    label: 'Título de la nota',
+    shortLabel: 'Título',
+    description: 'Usa el título de la nota. En un resumen toma la primera publicación.',
   },
   count: {
     label: 'Cantidad de notas',
     shortLabel: 'Cantidad',
-    description: 'Usa el numero total de publicaciones incluidas en el correo.',
+    description: 'Usa el número total de publicaciones incluidas en el correo.',
   },
 };
 
@@ -47,11 +47,11 @@ const MAIL_TEMPLATE_TOKEN_NAMES = Object.keys(MAIL_TEMPLATE_VARIABLES);
 
 const MAIL_TEMPLATE_FIELDS = {
   singleSubject: { label: 'Asunto individual', maxLength: 180 },
-  singlePreheader: { label: 'Texto de previsualizacion individual', maxLength: 180 },
+  singlePreheader: { label: 'Texto de previsualización individual', maxLength: 180 },
   digestSubject: { label: 'Asunto apilado', maxLength: 180 },
-  digestPreheader: { label: 'Texto de previsualizacion apilado', maxLength: 180 },
-  digestIntro: { label: 'Introduccion del resumen', maxLength: 300 },
-  ctaLabel: { label: 'Texto del boton', maxLength: 40 },
+  digestPreheader: { label: 'Texto de previsualización apilado', maxLength: 180 },
+  digestIntro: { label: 'Introducción del resumen', maxLength: 300 },
+  ctaLabel: { label: 'Texto del botón', maxLength: 40 },
 };
 
 export default function MailingAdminPanel({ apiBase, currentEmail }) {
@@ -84,7 +84,7 @@ export default function MailingAdminPanel({ apiBase, currentEmail }) {
       headers: { ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...(options.headers || {}) },
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data?.error?.message || 'No pudimos completar la accion.');
+    if (!response.ok) throw new Error(data?.error?.message || 'No pudimos completar la acción.');
     return data;
   }
 
@@ -108,7 +108,7 @@ export default function MailingAdminPanel({ apiBase, currentEmail }) {
     try {
       const data = await mailingApi('/v1/mailing/admin/settings', { method: 'PATCH', body: JSON.stringify(settings) });
       setSettings({ ...DEFAULT_SETTINGS, ...(data.item || {}) });
-      setMessage('Configuracion de mailing guardada.');
+      setMessage('Configuración de mailing guardada.');
       await loadOverview({ silent: true });
     } catch (err) {
       setMessage(err.message);
@@ -119,7 +119,7 @@ export default function MailingAdminPanel({ apiBase, currentEmail }) {
 
   function resetSettings() {
     setSettings({ ...DEFAULT_SETTINGS });
-    setMessage('Restauramos los valores predeterminados en el formulario. Revisa los cambios y guardalos para aplicarlos.');
+    setMessage('Restauramos los valores predeterminados en el formulario. Revisá los cambios y guardalos para aplicarlos.');
   }
 
   function registerTemplateInput(field, control) {
@@ -135,12 +135,12 @@ export default function MailingAdminPanel({ apiBase, currentEmail }) {
   async function runAction(action) {
     if (!selected.length || busy) return;
     const forced = action === 'send-now';
-    if (forced && !window.confirm(`Se enviara un correo a todo el segmento con ${selected.length} ${selected.length === 1 ? 'nota' : 'notas'}. Puede superar el limite semanal. Continuar?`)) return;
+    if (forced && !window.confirm(`Se enviará un correo a todo el segmento con ${selected.length} ${selected.length === 1 ? 'nota' : 'notas'}. Puede superar el límite semanal. ¿Continuar?`)) return;
     setBusy(`action:${action}`);
     setMessage('');
     try {
       await mailingApi('/v1/mailing/admin/jobs/actions', { method: 'POST', body: JSON.stringify({ jobIds: selected, action }) });
-      setMessage(action === 'send-now' ? 'Envio excepcional procesado.' : 'Cola actualizada.');
+      setMessage(action === 'send-now' ? 'Envío excepcional procesado.' : 'Cola actualizada.');
       setSelected([]);
       await loadOverview({ silent: true });
     } catch (err) {
@@ -175,7 +175,7 @@ export default function MailingAdminPanel({ apiBase, currentEmail }) {
         method: 'POST',
         body: JSON.stringify({ to: testEmail, jobIds: selected, mode: mode || (selected.length > 1 ? 'stack' : 'single') }),
       });
-      setMessage(`Prueba enviada a ${testEmail}. No consumio cupos.`);
+      setMessage(`Prueba enviada a ${testEmail}. No consumió cupos.`);
     } catch (err) {
       setMessage(err.message);
     } finally {
@@ -188,8 +188,8 @@ export default function MailingAdminPanel({ apiBase, currentEmail }) {
       <div className="admin-manager-head">
         <div>
           <span>Mailing</span>
-          <h2>Avisos automaticos del blog</h2>
-          <p>Controla la frecuencia, la cola y los envios agrupados sin mezclar el newsletter editorial.</p>
+          <h2>Avisos automáticos del blog</h2>
+          <p>Controlá la frecuencia, la cola y los envíos agrupados sin mezclar el newsletter editorial.</p>
         </div>
         <button className="btn btn-ghost" disabled={Boolean(busy)} onClick={() => loadOverview()} type="button">Actualizar</button>
       </div>
@@ -197,39 +197,39 @@ export default function MailingAdminPanel({ apiBase, currentEmail }) {
       {message && <div className="admin-profile-notice" role="status">{message}</div>}
 
       <div className="admin-mailing-metrics" aria-label="Estado semanal">
-        <article><strong>{overview?.sentThisWeek || 0}/{settings.weeklyLimit}</strong><span>envios esta semana</span></article>
+        <article><strong>{overview?.sentThisWeek || 0}/{settings.weeklyLimit}</strong><span>envíos esta semana</span></article>
         <article><strong>{overview?.remainingThisWeek || 0}</strong><span>cupos disponibles</span></article>
         <article><strong>{overview?.queuedCount || 0}</strong><span>notas en cola</span></article>
         <article><strong>{overview?.recipientCount || 0}</strong><span>suscriptores de nuevas notas</span></article>
       </div>
       <p className="admin-mailing-schedule">
         <span className="material-symbols-outlined" aria-hidden="true">schedule</span>
-        El dispatcher procesa la cola cada {settings.dispatchIntervalHours} horas. Proximo ciclo estimado: {formatDate(overview?.nextDispatchAt)}.
+        El sistema procesa la cola cada {settings.dispatchIntervalHours} horas. Próximo ciclo estimado: {formatDate(overview?.nextDispatchAt)}.
       </p>
 
       <details className="admin-mailing-settings" data-help-id="mailing-settings" open>
         <summary>
-          <span className="admin-field-label">Configuracion automatica <HelpTrigger topicId="mailing-settings" /></span>
-          <small>Reglas de envio y textos reutilizables</small>
+          <span className="admin-field-label">Configuración automática <HelpTrigger topicId="mailing-settings" /></span>
+          <small>Reglas de envío y textos reutilizables</small>
         </summary>
         <div className="admin-mailing-settings-content">
           <section className="admin-mailing-settings-group">
             <header>
               <span className="material-symbols-outlined" aria-hidden="true">tune</span>
-              <div><h3>Comportamiento</h3><p>Decidi cuando el sistema puede incorporar nuevas publicaciones a la cola.</p></div>
+              <div><h3>Comportamiento</h3><p>Decidí cuándo el sistema puede incorporar nuevas publicaciones a la cola.</p></div>
             </header>
             <div className="admin-mailing-toggle-grid">
               <label className="admin-mailing-toggle-card">
                 <input checked={settings.enabled} onChange={(event) => setSettings((current) => ({ ...current, enabled: event.target.checked }))} type="checkbox" />
                 <span className="admin-mailing-toggle-copy">
-                  <strong>Automatizacion activa <SettingHelp text="Es el interruptor maestro. Cuando esta apagado no se procesan ciclos automaticos ni se envian avisos pendientes. No elimina suscriptores, historial ni configuracion, y las pruebas o envios manuales siguen disponibles." /></strong>
-                  <small>Procesa automaticamente las publicaciones elegibles.</small>
+                  <strong>Automatización activa <SettingHelp text="Es el interruptor maestro. Cuando está apagado no se procesan ciclos automáticos ni se envían avisos pendientes. No elimina suscriptores, historial ni configuración, y las pruebas o envíos manuales siguen disponibles." /></strong>
+                  <small>Procesa automáticamente las publicaciones elegibles.</small>
                 </span>
               </label>
               <label className="admin-mailing-toggle-card">
                 <input checked={settings.automaticByDefault} onChange={(event) => setSettings((current) => ({ ...current, automaticByDefault: event.target.checked }))} type="checkbox" />
                 <span className="admin-mailing-toggle-copy">
-                  <strong>Avisar al publicar <SettingHelp text="Define el valor inicial del aviso dentro del modal de publicacion. Activarlo no envia el correo inmediatamente: cada nota puede excluirse antes de publicar y, si se incluye, respetara la espera, el ciclo y el limite semanal." /></strong>
+                  <strong>Avisar al publicar <SettingHelp text="Define el valor inicial del aviso dentro del modal de publicación. Activarlo no envía el correo inmediatamente: cada nota puede excluirse antes de publicar y, si se incluye, respetará la espera, el ciclo y el límite semanal." /></strong>
                   <small>Preselecciona el aviso para cada nueva nota.</small>
                 </span>
               </label>
@@ -239,22 +239,22 @@ export default function MailingAdminPanel({ apiBase, currentEmail }) {
           <section className="admin-mailing-settings-group">
             <header>
               <span className="material-symbols-outlined" aria-hidden="true">schedule</span>
-              <div><h3>Ritmo y limites</h3><p>Controla la frecuencia para evitar envios excesivos y dar margen de correccion.</p></div>
+              <div><h3>Ritmo y límites</h3><p>Controlá la frecuencia para evitar envíos excesivos y dar margen de corrección.</p></div>
             </header>
             <div className="admin-mailing-settings-grid admin-mailing-timing-grid">
-              <MailingSettingField label="Limite semanal" help="Cantidad maxima de campanas automaticas que se pueden enviar durante una semana calculada en la zona horaria configurada. Al alcanzar el limite, las notas siguientes se conservan y se agrupan para un resumen posterior. El valor 0 pausa los envios automaticos; un envio manual forzado puede superar este limite.">
+              <MailingSettingField label="Límite semanal" help="Cantidad máxima de campañas automáticas que se pueden enviar durante una semana calculada en la zona horaria configurada. Al alcanzar el límite, las notas siguientes se conservan y se agrupan para un resumen posterior. El valor 0 pausa los envíos automáticos; un envío manual forzado puede superar este límite.">
                 <input min="0" max="7" type="number" value={settings.weeklyLimit} onChange={(event) => setSettings((current) => ({ ...current, weeklyLimit: event.target.value }))} />
               </MailingSettingField>
-              <MailingSettingField label="Frecuencia del ciclo" suffix="horas" help="Intervalo minimo entre dos ciclos automaticos. El proceso externo puede consultar antes, pero el backend no vuelve a despachar hasta que transcurra esta cantidad de horas. Acepta valores entre 1 hora y 7 dias.">
+              <MailingSettingField label="Frecuencia del ciclo" suffix="horas" help="Intervalo mínimo entre dos ciclos automáticos. El proceso externo puede consultar antes, pero el backend no vuelve a despachar hasta que transcurra esta cantidad de horas. Acepta valores entre 1 hora y 7 días.">
                 <input min="1" max="168" type="number" value={settings.dispatchIntervalHours} onChange={(event) => setSettings((current) => ({ ...current, dispatchIntervalHours: event.target.value }))} />
               </MailingSettingField>
-              <MailingSettingField label="Espera despues de publicar" suffix="minutos" help="Tiempo durante el cual una nota publicada queda retenida antes de poder enviarse. Sirve para corregir titulo, portada o extracto, o para excluirla de la cola. Con 0 queda disponible para el proximo ciclo inmediatamente.">
+              <MailingSettingField label="Espera después de publicar" suffix="minutos" help="Tiempo durante el cual una nota publicada queda retenida antes de poder enviarse. Sirve para corregir título, portada o extracto, o para excluirla de la cola. Con 0 queda disponible para el próximo ciclo inmediatamente.">
                 <input min="0" max="1440" type="number" value={settings.gracePeriodMinutes} onChange={(event) => setSettings((current) => ({ ...current, gracePeriodMinutes: event.target.value }))} />
               </MailingSettingField>
-              <MailingSettingField label="Cards completas" suffix="por resumen" help="Cantidad maxima de notas que se muestran como cards completas dentro de un correo apilado. Si existen mas notas, las restantes se presentan de forma compacta para mantener el email legible y liviano.">
+              <MailingSettingField label="Cards completas" suffix="por resumen" help="Cantidad máxima de notas que se muestran como cards completas dentro de un correo apilado. Si existen más notas, las restantes se presentan de forma compacta para mantener el email legible y liviano.">
                 <input min="1" max="12" type="number" value={settings.maxFullCards} onChange={(event) => setSettings((current) => ({ ...current, maxFullCards: event.target.value }))} />
               </MailingSettingField>
-              <MailingSettingField className="admin-mailing-time-zone" label="Zona horaria" help="Se usa para determinar el inicio y cierre de cada semana, calcular el cupo disponible y mostrar el proximo ciclo. No cambia la zona horaria del lector ni la fecha publicada dentro de una nota.">
+              <MailingSettingField className="admin-mailing-time-zone" label="Zona horaria" help="Se usa para determinar el inicio y cierre de cada semana, calcular el cupo disponible y mostrar el próximo ciclo. No cambia la zona horaria del lector ni la fecha publicada dentro de una nota.">
                 <input list="mailing-time-zones" value={settings.timeZone} onChange={(event) => setSettings((current) => ({ ...current, timeZone: event.target.value }))} />
                 <datalist id="mailing-time-zones"><option value="America/Argentina/Buenos_Aires" /><option value="America/Montevideo" /><option value="America/Santiago" /><option value="Europe/Madrid" /><option value="UTC" /></datalist>
               </MailingSettingField>
@@ -264,10 +264,10 @@ export default function MailingAdminPanel({ apiBase, currentEmail }) {
           <section className="admin-mailing-settings-group">
             <header>
               <span className="material-symbols-outlined" aria-hidden="true">mail</span>
-              <div><h3>Correo de una sola nota</h3><p>Textos usados cuando el ciclo envia una publicacion individual.</p></div>
+              <div><h3>Correo de una sola nota</h3><p>Textos usados cuando el ciclo envía una publicación individual.</p></div>
             </header>
             <div className="admin-mailing-settings-grid">
-              <MailingSettingField className="admin-mailing-wide" label="Asunto individual" help="Asunto visible en la bandeja de entrada cuando se envia una sola nota. El chip Titulo se reemplaza automaticamente por el titulo publicado; si lo quitas, todos los correos individuales tendran un asunto fijo.">
+              <MailingSettingField className="admin-mailing-wide" label="Asunto individual" help="Asunto visible en la bandeja de entrada cuando se envía una sola nota. El chip Título se reemplaza automáticamente por el título publicado; si lo quitás, todos los correos individuales tendrán un asunto fijo.">
                 <TemplateTokenInput
                   allowedTokens={MAIL_TEMPLATE_TOKEN_NAMES}
                   ariaLabel="Asunto individual"
@@ -278,10 +278,10 @@ export default function MailingAdminPanel({ apiBase, currentEmail }) {
                   value={settings.singleSubject}
                 />
               </MailingSettingField>
-              <MailingSettingField className="admin-mailing-wide" label="Texto de previsualizacion individual" help="Resumen corto que algunos clientes de correo muestran al lado o debajo del asunto antes de abrir el mensaje. No es un parrafo visible del cuerpo y se limita a 180 caracteres.">
+              <MailingSettingField className="admin-mailing-wide" label="Texto de previsualización individual" help="Resumen corto que algunos clientes de correo muestran al lado o debajo del asunto antes de abrir el mensaje. No es un párrafo visible del cuerpo y se limita a 180 caracteres.">
                 <TemplateTokenInput
                   allowedTokens={MAIL_TEMPLATE_TOKEN_NAMES}
-                  ariaLabel="Texto de previsualizacion individual"
+                  ariaLabel="Texto de previsualización individual"
                   maxLength={180}
                   onActivate={() => setActiveTemplateField('singlePreheader')}
                   onChange={(singlePreheader) => setSettings((current) => ({ ...current, singlePreheader }))}
@@ -295,10 +295,10 @@ export default function MailingAdminPanel({ apiBase, currentEmail }) {
           <section className="admin-mailing-settings-group">
             <header>
               <span className="material-symbols-outlined" aria-hidden="true">view_agenda</span>
-              <div><h3>Resumen de varias notas</h3><p>Textos usados cuando varias publicaciones se agrupan en un unico correo.</p></div>
+              <div><h3>Resumen de varias notas</h3><p>Textos usados cuando varias publicaciones se agrupan en un único correo.</p></div>
             </header>
             <div className="admin-mailing-settings-grid">
-              <MailingSettingField className="admin-mailing-wide" label="Asunto apilado" help="Asunto para un resumen con varias publicaciones. El chip Cantidad se reemplaza por la cantidad real de notas incluidas en el envio.">
+              <MailingSettingField className="admin-mailing-wide" label="Asunto apilado" help="Asunto para un resumen con varias publicaciones. El chip Cantidad se reemplaza por la cantidad real de notas incluidas en el envío.">
                 <TemplateTokenInput
                   allowedTokens={MAIL_TEMPLATE_TOKEN_NAMES}
                   ariaLabel="Asunto apilado"
@@ -309,10 +309,10 @@ export default function MailingAdminPanel({ apiBase, currentEmail }) {
                   value={settings.digestSubject}
                 />
               </MailingSettingField>
-              <MailingSettingField className="admin-mailing-wide" label="Texto de previsualizacion apilado" help="Texto breve que acompana al asunto en la bandeja de entrada cuando el correo contiene varias notas. Ayuda a anticipar el contenido sin repetir literalmente el asunto.">
+              <MailingSettingField className="admin-mailing-wide" label="Texto de previsualización apilado" help="Texto breve que acompaña al asunto en la bandeja de entrada cuando el correo contiene varias notas. Ayuda a anticipar el contenido sin repetir literalmente el asunto.">
                 <TemplateTokenInput
                   allowedTokens={MAIL_TEMPLATE_TOKEN_NAMES}
-                  ariaLabel="Texto de previsualizacion apilado"
+                  ariaLabel="Texto de previsualización apilado"
                   maxLength={180}
                   onActivate={() => setActiveTemplateField('digestPreheader')}
                   onChange={(digestPreheader) => setSettings((current) => ({ ...current, digestPreheader }))}
@@ -320,10 +320,10 @@ export default function MailingAdminPanel({ apiBase, currentEmail }) {
                   value={settings.digestPreheader}
                 />
               </MailingSettingField>
-              <MailingSettingField className="admin-mailing-wide" label="Introduccion del resumen" help="Frase visible al comienzo del cuerpo del correo, antes de las cards de las notas. Conviene que sea breve y funcione con cualquier combinacion de publicaciones.">
+              <MailingSettingField className="admin-mailing-wide" label="Introducción del resumen" help="Frase visible al comienzo del cuerpo del correo, antes de las cards de las notas. Conviene que sea breve y funcione con cualquier combinación de publicaciones.">
                 <TemplateTokenInput
                   allowedTokens={MAIL_TEMPLATE_TOKEN_NAMES}
-                  ariaLabel="Introduccion del resumen"
+                  ariaLabel="Introducción del resumen"
                   maxLength={300}
                   onActivate={() => setActiveTemplateField('digestIntro')}
                   onChange={(digestIntro) => setSettings((current) => ({ ...current, digestIntro }))}
@@ -331,10 +331,10 @@ export default function MailingAdminPanel({ apiBase, currentEmail }) {
                   value={settings.digestIntro}
                 />
               </MailingSettingField>
-              <MailingSettingField label="Texto del boton" help="Etiqueta de la llamada a la accion que abre cada nota en el blog. Se reutiliza tanto en correos individuales como en resumenes; debe ser corta y describir claramente el destino.">
+              <MailingSettingField label="Texto del botón" help="Etiqueta de la llamada a la acción que abre cada nota en el blog. Se reutiliza tanto en correos individuales como en resúmenes; debe ser corta y describir claramente el destino.">
                 <TemplateTokenInput
                   allowedTokens={MAIL_TEMPLATE_TOKEN_NAMES}
-                  ariaLabel="Texto del boton"
+                  ariaLabel="Texto del botón"
                   maxLength={40}
                   onActivate={() => setActiveTemplateField('ctaLabel')}
                   onChange={(ctaLabel) => setSettings((current) => ({ ...current, ctaLabel }))}
@@ -350,7 +350,7 @@ export default function MailingAdminPanel({ apiBase, currentEmail }) {
               <span className="material-symbols-outlined" aria-hidden="true">data_object</span>
               <div>
                 <h3 id="mailing-template-variables-title">Variables disponibles</h3>
-                <p>Inserta datos dinamicos en los asuntos. Al enviar, el sistema los reemplaza con la informacion de cada correo.</p>
+                <p>Insertá datos dinámicos en los asuntos. Al enviar, el sistema los reemplaza con la información de cada correo.</p>
               </div>
             </header>
             <div className="admin-mailing-variable-list">
@@ -360,7 +360,7 @@ export default function MailingAdminPanel({ apiBase, currentEmail }) {
             <p className="admin-mailing-variable-note">
               <span className="material-symbols-outlined" aria-hidden="true">touch_app</span>
               <span>
-                Campo activo: <strong>{MAIL_TEMPLATE_FIELDS[activeTemplateField]?.label}</strong>. Hace click en una variable para insertarla donde dejaste el cursor.
+                Campo activo: <strong>{MAIL_TEMPLATE_FIELDS[activeTemplateField]?.label}</strong>. Hacé click en una variable para insertarla donde dejaste el cursor.
               </span>
             </p>
           </section>
@@ -370,12 +370,12 @@ export default function MailingAdminPanel({ apiBase, currentEmail }) {
             <span aria-hidden="true" className="material-symbols-outlined">restart_alt</span>
             Restaurar valores predeterminados
           </button>
-          <button className="btn btn-primary" disabled={Boolean(busy)} onClick={saveSettings} type="button">{busy === 'settings' ? 'Guardando...' : 'Guardar configuracion'}</button>
+          <button className="btn btn-primary" disabled={Boolean(busy)} onClick={saveSettings} type="button">{busy === 'settings' ? 'Guardando...' : 'Guardar configuración'}</button>
         </div>
       </details>
 
       <section className="admin-mailing-lab" data-help-id="mailing-lab">
-        <div><span>Laboratorio</span><h3 className="admin-help-heading">Previsualizacion y pruebas <HelpTrigger topicId="mailing-lab" /></h3><p>Las pruebas no consumen cupos ni cambian el estado de la cola.</p></div>
+        <div><span>Laboratorio</span><h3 className="admin-help-heading">Previsualización y pruebas <HelpTrigger topicId="mailing-lab" /></h3><p>Las pruebas no consumen cupos ni cambian el estado de la cola.</p></div>
         <label>Enviar prueba a<input type="email" value={testEmail} onChange={(event) => setTestEmail(event.target.value)} /></label>
         <div className="admin-row-actions">
           <button className="btn btn-ghost" disabled={Boolean(busy)} onClick={() => openPreview(selected.length ? '' : 'single')} type="button">Previsualizar</button>
@@ -385,28 +385,28 @@ export default function MailingAdminPanel({ apiBase, currentEmail }) {
       </section>
 
       <section className="admin-mailing-queue" data-help-id="mailing-queue">
-        <div className="admin-mailing-queue-head"><div><span>Cola inteligente</span><h3 className="admin-help-heading">Notas y estado de envio <HelpTrigger topicId="mailing-queue" /></h3></div><small>{selectedJobs.length} seleccionadas</small></div>
+        <div className="admin-mailing-queue-head"><div><span>Cola inteligente</span><h3 className="admin-help-heading">Notas y estado de envío <HelpTrigger topicId="mailing-queue" /></h3></div><small>{selectedJobs.length} seleccionadas</small></div>
         <div className="admin-mailing-batch-actions">
           <button className="btn btn-ghost" disabled={!selected.length || Boolean(busy)} onClick={() => runAction('queue')} type="button">Incluir</button>
           <button className="btn btn-ghost" disabled={!selected.length || Boolean(busy)} onClick={() => runAction('exclude')} type="button">Excluir</button>
           <button className="btn btn-ghost" disabled={!selected.length || Boolean(busy)} onClick={() => runAction('retry')} type="button">Reintentar</button>
-          <button className="btn btn-primary" disabled={!selected.length || Boolean(busy)} onClick={() => runAction('send-now')} type="button">Enviar seleccion ahora</button>
+          <button className="btn btn-primary" disabled={!selected.length || Boolean(busy)} onClick={() => runAction('send-now')} type="button">Enviar selección ahora</button>
         </div>
         <div className="admin-table-wrap">
           <table className="admin-table admin-mailing-table">
-            <thead><tr><th><input aria-label="Seleccionar todas" checked={allSelected} onChange={() => setSelected(allSelected ? [] : jobs.map((job) => job.id))} type="checkbox" /></th><th>Nota</th><th>Estado</th><th>Publicada</th><th>Envio</th><th>Detalle</th></tr></thead>
+            <thead><tr><th><input aria-label="Seleccionar todas" checked={allSelected} onChange={() => setSelected(allSelected ? [] : jobs.map((job) => job.id))} type="checkbox" /></th><th>Nota</th><th>Estado</th><th>Publicada</th><th>Envío</th><th>Detalle</th></tr></thead>
             <tbody>
               {jobs.map((job) => (
                 <tr key={job.id}>
                   <td><input aria-label={`Seleccionar ${job.postTitle}`} checked={selected.includes(job.id)} onChange={() => setSelected((current) => current.includes(job.id) ? current.filter((id) => id !== job.id) : [...current, job.id])} type="checkbox" /></td>
-                  <td><strong>{job.postTitle || 'Nota sin titulo'}</strong><small>{job.postSlug || job.postId}</small></td>
+                  <td><strong>{job.postTitle || 'Nota sin título'}</strong><small>{job.postSlug || job.postId}</small></td>
                   <td><span className={`admin-status status-${mailingStatusTone(job.status)}`}>{mailingStatusLabel(job.status)}</span></td>
                   <td>{formatDate(job.publishedAt)}</td>
                   <td>{job.sentAt ? formatDate(job.sentAt) : job.digestWeekId ? `Resumen ${job.digestWeekId}` : 'Pendiente'}</td>
                   <td>{job.lastError || job.excludedReason || (job.providerCampaignId ? `Resend: ${job.providerCampaignId}` : '')}</td>
                 </tr>
               ))}
-              {!jobs.length && <tr><td colSpan="6">Todavia no hay publicaciones registradas en el sistema de mailing.</td></tr>}
+              {!jobs.length && <tr><td colSpan="6">Todavía no hay publicaciones registradas en el sistema de mailing.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -449,7 +449,7 @@ function MailingSettingField({ children, className = '', help, label, suffix = '
 }
 
 function SettingHelp({ text }) {
-  return <HelpTrigger help={helpTopicFromText('Como funciona', text, { summary: 'Abrir explicacion detallada de esta configuracion.' })} />;
+  return <HelpTrigger help={helpTopicFromText('Cómo funciona', text, { summary: 'Abrir explicación detallada de esta configuración.' })} />;
 }
 
 const TemplateTokenInput = forwardRef(function TemplateTokenInput({
@@ -552,7 +552,7 @@ const TemplateTokenInput = forwardRef(function TemplateTokenInput({
       aria-label={ariaLabel}
       className="admin-mailing-template-input"
       contentEditable
-      data-placeholder="Escribi el asunto"
+      data-placeholder="Escribí el asunto"
       onBlur={normalizeEditor}
       onClick={rememberSelection}
       onFocus={onActivate}

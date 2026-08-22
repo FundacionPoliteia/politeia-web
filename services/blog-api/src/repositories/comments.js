@@ -74,7 +74,7 @@ export async function createPostComment(postId, data, user) {
     assertCanAccessPostCommentsData(post, user);
     beforePost = post;
     if (lockDoc?.exists && !serializeDoc(lockDoc)?.releasedAt) {
-      throw new HttpError(409, 'Ya existe un comentario abierto igual para esa seleccion.');
+      throw new HttpError(409, 'Ya existe un comentario abierto igual para esa selección.');
     }
 
     transaction.set(lockRef, {
@@ -201,7 +201,7 @@ export async function updatePostCommentStatus(postId, commentId, data, user) {
       const newLockRef = commentLocks().doc(duplicateLockId(newDuplicateKey));
       const newLockDoc = await transaction.get(newLockRef);
       if (newLockDoc.exists && !serializeDoc(newLockDoc)?.releasedAt) {
-        throw new HttpError(409, 'Ya existe un comentario abierto igual para esa seleccion.');
+        throw new HttpError(409, 'Ya existe un comentario abierto igual para esa selección.');
       }
       if (oldDuplicateKey) {
         transaction.set(commentLocks().doc(duplicateLockId(oldDuplicateKey)), {
