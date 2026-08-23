@@ -115,8 +115,17 @@ export async function listUserProfiles() {
     .filter((item) => item?.managedAuthor === true)
     .map((item) => item.identityNameKey || identityNameKey(item.fullName || buildFullName(item.firstName, item.lastName)))
     .filter(Boolean));
+  const suppressedNameKeys = new Set(profileItems
+    .filter((item) => item?.publicAuthorProfileSuppressed === true)
+    .map((item) => item.identityNameKey || identityNameKey(item.fullName || buildFullName(item.firstName, item.lastName)))
+    .filter(Boolean));
   const items = await Promise.all(profileItems
-    .map((item) => toUserProfile(item, { email: item?.email }, { authorNameKeys, managedNameKeys, authorPostCounts })));
+    .map((item) => toUserProfile(item, { email: item?.email }, {
+      authorNameKeys,
+      managedNameKeys,
+      suppressedNameKeys,
+      authorPostCounts,
+    })));
   items.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
 
   return { items };
@@ -360,8 +369,16 @@ export async function getPublicAuthorProfileBySlug(slug = '') {
     });
   }
 
-  const items = await Promise.all(candidateDocs
-    .map((doc) => serializeDoc(doc))
+  const candidateItems = candidateDocs.map((doc) => serializeDoc(doc));
+  const suppressedNameKeys = new Set(candidateItems
+    .filter((item) => item?.publicAuthorProfileSuppressed === true)
+    .map((item) => identityNameKey(item.identityNameKey || item.fullName || buildFullName(item.firstName, item.lastName)))
+    .filter(Boolean));
+  if (candidateItems.some((item) => suppressedNameKeys.has(identityNameKey(item.fullName || buildFullName(item.firstName, item.lastName))))) {
+    return null;
+  }
+
+  const items = await Promise.all(candidateItems
     .sort((left, right) => Number(right?.managedAuthor === true) - Number(left?.managedAuthor === true))
     .map((item) => toPublicAuthorProfile(item)));
   const item = items.find(Boolean);
@@ -381,8 +398,13 @@ export async function listPublicAuthorProfiles({ limit = 24 } = {}) {
       : posts().where('status', 'in', PUBLIC_AUTHOR_STATUSES).orderBy('publishedAt', 'desc').limit(150).get(),
   ]);
   const authorStats = buildAuthorStats(postSnapshot.docs.map((doc) => serializeDoc(doc)));
-  const items = profileSnapshot.docs
-    .map((doc) => serializeDoc(doc))
+  const profileItems = profileSnapshot.docs.map((doc) => serializeDoc(doc));
+  const suppressedNameKeys = new Set(profileItems
+    .filter((item) => item?.publicAuthorProfileSuppressed === true)
+    .map((item) => identityNameKey(item.identityNameKey || item.fullName || buildFullName(item.firstName, item.lastName)))
+    .filter(Boolean));
+  const items = profileItems
+    .filter((item) => !suppressedNameKeys.has(identityNameKey(item.fullName || buildFullName(item.firstName, item.lastName))))
     .sort((left, right) => Number(right?.managedAuthor === true) - Number(left?.managedAuthor === true))
     .map((item) => toPublicAuthorProfileFromStats(item, authorStats))
     .filter(Boolean)
@@ -458,7 +480,13 @@ async function toUserProfile(item, user, context = null) {
       ? context.managedNameKeys.has(managedKey)
       : await managedProfileExistsForName(fullName)
   );
-  const publicAuthorProfileSuppressed = item?.publicAuthorProfileSuppressed === true;
+  const publicAuthorProfileSuppressed = item?.publicAuthorProfileSuppressed === true || (
+    Boolean(managedKey) && (
+      context
+        ? context.suppressedNameKeys?.has(managedKey) === true
+        : await profileSuppressionExistsForName(fullName)
+    )
+  );
   const canSharePublicProfile = authorExists && !managedExists && !publicAuthorProfileSuppressed;
   const publicProfileEnabled = resolvePublicProfilePreference(item, clean);
   return {
@@ -623,6 +651,24 @@ async function managedProfileExistsForName(fullName = '') {
     .limit(1)
     .get();
   return !snapshot.empty;
+}
+
+async function profileSuppressionExistsForName(fullName = '') {
+  const key = identityNameKey(fullName);
+  if (!key) return false;
+  if (hasFirestoreTestOverride()) {
+    const snapshot = await profiles().get();
+    return snapshot.docs.some((doc) => {
+      const item = serializeDoc(doc);
+      const itemKey = identityNameKey(item.identityNameKey || item.fullName || buildFullName(item.firstName, item.lastName));
+      return itemKey === key && item?.publicAuthorProfileSuppressed === true;
+    });
+  }
+  const snapshot = await profiles()
+    .where('identityNameKey', '==', key)
+    .limit(10)
+    .get();
+  return snapshot.docs.some((doc) => serializeDoc(doc)?.publicAuthorProfileSuppressed === true);
 }
 
 export function invalidateProfileCaches() {

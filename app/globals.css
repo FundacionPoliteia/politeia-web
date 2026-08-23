@@ -1211,6 +1211,10 @@ a {
   text-align: left
 }
 
+.blog-mobile-author-strip {
+  display: none
+}
+
 .blog-category-section {
   scroll-margin-top: 96px
 }
@@ -1621,7 +1625,7 @@ a {
 
   .blog-mobile-filters {
     display: block;
-    margin-bottom: 24px;
+    margin-bottom: 10px;
     border: 1px solid var(--linea);
     border-radius: 14px;
     background: var(--blanco);
@@ -1629,35 +1633,79 @@ a {
     overflow: hidden
   }
 
-  .blog-mobile-filters summary {
+  .blog-mobile-search-row {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr) auto auto;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     min-height: 56px;
-    padding: 10px 14px;
-    color: var(--tinta);
-    cursor: pointer;
-    list-style: none
+    padding: 8px 9px 8px 14px
   }
 
-  .blog-mobile-filters summary::-webkit-details-marker {
-    display: none
-  }
-
-  .blog-mobile-filters summary>span:first-child {
+  .blog-mobile-search-row>span:first-child {
     color: var(--azul);
     font-size: 21px
   }
 
-  .blog-mobile-filters summary strong {
-    font-size: .92rem
+  .blog-mobile-search-row input {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--tinta);
+    font: inherit;
+    font-size: .92rem;
+    padding: 8px 2px
   }
 
-  .blog-mobile-filters summary small {
+  .blog-mobile-search-row input::placeholder {
+    color: var(--gris)
+  }
+
+  .blog-mobile-search-clear,
+  .blog-mobile-filter-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    background: transparent;
     color: var(--gris);
-    font-size: .74rem;
-    font-weight: 700
+    cursor: pointer
+  }
+
+  .blog-mobile-search-clear {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%
+  }
+
+  .blog-mobile-search-clear:hover {
+    color: var(--tinta);
+    background: var(--hueso)
+  }
+
+  .blog-mobile-search-clear span {
+    font-size: 19px
+  }
+
+  .blog-mobile-filter-toggle {
+    gap: 4px;
+    min-height: 40px;
+    border-left: 1px solid var(--linea);
+    padding: 0 5px 0 10px
+  }
+
+  .blog-mobile-filter-toggle small {
+    min-width: 25px;
+    color: var(--gris);
+    font-size: .72rem;
+    font-weight: 800;
+    text-align: center
+  }
+
+  .blog-mobile-search-row:focus-within {
+    box-shadow: inset 3px 0 0 var(--azul)
   }
 
   .blog-mobile-filters__arrow {
@@ -1666,7 +1714,7 @@ a {
     transition: transform .2s ease
   }
 
-  .blog-mobile-filters[open] .blog-mobile-filters__arrow {
+  .blog-mobile-filters.is-open .blog-mobile-filters__arrow {
     transform: rotate(180deg)
   }
 
@@ -1675,10 +1723,20 @@ a {
     border-top: 1px solid var(--linea)
   }
 
-  .blog-mobile-filters .blog-search-panel {
-    max-width: none;
-    margin: 0;
+  .blog-mobile-filter-advanced {
+    display: grid;
+    gap: 12px;
     padding: 16px
+  }
+
+  .blog-mobile-filter-advanced .blog-date-filter {
+    margin: 0
+  }
+
+  .blog-mobile-filter-advanced>p {
+    margin: 0;
+    color: var(--gris);
+    font-size: .76rem
   }
 
   .blog-mobile-filters .blog-toc {
@@ -1819,6 +1877,71 @@ a {
 
   .author-card-about {
     overflow: visible
+  }
+
+  .blog-mobile-author-strip {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    min-height: 58px;
+    margin-bottom: 24px;
+    border: 1px solid var(--linea);
+    border-radius: 12px;
+    background: var(--blanco);
+    color: var(--tinta);
+    padding: 8px 13px;
+    text-decoration: none;
+    box-shadow: 0 8px 22px rgba(26, 26, 55, .04)
+  }
+
+  .blog-mobile-author-strip:focus-visible {
+    outline: 3px solid rgba(19, 122, 159, .24);
+    outline-offset: 3px
+  }
+
+  .blog-mobile-author-strip__faces {
+    display: flex;
+    align-items: center;
+    padding-left: 1px
+  }
+
+  .blog-mobile-author-strip__faces img {
+    width: 34px;
+    height: 34px;
+    margin-left: -9px;
+    border: 2px solid var(--blanco);
+    border-radius: 50%;
+    background: var(--hueso);
+    object-fit: cover
+  }
+
+  .blog-mobile-author-strip__faces img:first-child {
+    margin-left: 0
+  }
+
+  .blog-mobile-author-strip__copy {
+    display: grid;
+    min-width: 0;
+    gap: 1px
+  }
+
+  .blog-mobile-author-strip__copy strong {
+    overflow: hidden;
+    font-size: .82rem;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap
+  }
+
+  .blog-mobile-author-strip__copy small {
+    color: var(--gris);
+    font-size: .68rem
+  }
+
+  .blog-mobile-author-strip>span:last-child {
+    color: var(--azul);
+    font-size: 20px
   }
 
   .author-card-about p {

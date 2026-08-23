@@ -35,7 +35,18 @@ function BlogSearchControls({
           </button>
         )}
       </div>
-      <div className="blog-date-filter" aria-label="Ordenar notas por fecha" role="group">
+      <BlogDateControls dateOrder={dateOrder} setDateOrder={setDateOrder} />
+      <p>
+        {postsCount} {postsCount === 1 ? 'nota visible' : 'notas visibles'}
+        {hasFilters ? ' con los filtros actuales.' : '.'}
+      </p>
+    </>
+  );
+}
+
+function BlogDateControls({ dateOrder, setDateOrder }) {
+  return (
+    <div className="blog-date-filter" aria-label="Ordenar notas por fecha" role="group">
         <span>Orden por fecha</span>
         <div>
           {[
@@ -55,11 +66,31 @@ function BlogSearchControls({
           ))}
         </div>
       </div>
-      <p>
-        {postsCount} {postsCount === 1 ? 'nota visible' : 'notas visibles'}
-        {hasFilters ? ' con los filtros actuales.' : '.'}
-      </p>
-    </>
+  );
+}
+
+function MobileAuthorStrip({ authors = [] }) {
+  const visibleAuthors = authors.slice(0, 3);
+  if (!visibleAuthors.length) return null;
+
+  return (
+    <Link className="blog-mobile-author-strip" href="/blog/autores">
+      <span className="blog-mobile-author-strip__faces" aria-hidden="true">
+        {visibleAuthors.map((author) => (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            alt=""
+            key={author.authorSlug || author.fullName}
+            src={author.photoUrl || DEFAULT_PROFILE_PHOTO}
+          />
+        ))}
+      </span>
+      <span className="blog-mobile-author-strip__copy">
+        <strong>Conocé a quienes escriben</strong>
+        <small>Autores y sus notas</small>
+      </span>
+      <span aria-hidden="true" className="material-symbols-outlined">arrow_forward</span>
+    </Link>
   );
 }
 
@@ -126,6 +157,7 @@ export default function BlogIndex({ posts = [], autorFiltro = '', categoriaFiltr
   const [query, setQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('');
   const [dateOrder, setDateOrder] = useState('neutral');
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const filtrandoAutor = Boolean(autorFiltro && authorProfile);
   const filtrandoCategoria = Boolean(categoriaFiltro);
   const authorName = authorProfile?.fullName || '';
@@ -154,7 +186,7 @@ export default function BlogIndex({ posts = [], autorFiltro = '', categoriaFiltr
 
   function scrollToCategory(sectionId, categoria) {
     setActiveCategory(categoria);
-    document.querySelector('.blog-mobile-filters[open]')?.removeAttribute('open');
+    setMobileFiltersOpen(false);
     document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
@@ -221,25 +253,39 @@ export default function BlogIndex({ posts = [], autorFiltro = '', categoriaFiltr
           </div>
 
           {postsPorAutor.length > 0 && (
-            <details className="blog-mobile-filters">
-              <summary>
-                <span className="material-symbols-outlined" aria-hidden="true">tune</span>
-                <strong>Buscar y filtrar</strong>
-                <small>{postsFiltrados.length} {postsFiltrados.length === 1 ? 'nota' : 'notas'}</small>
-                <span className="material-symbols-outlined blog-mobile-filters__arrow" aria-hidden="true">expand_more</span>
-              </summary>
-              <div className="blog-mobile-filters__content">
-                <div className="blog-search-panel">
-                  <BlogSearchControls
-                    dateOrder={dateOrder}
-                    hasFilters={hasFilters}
-                    inputId="blog-search-mobile"
-                    postsCount={postsFiltrados.length}
-                    query={query}
-                    setDateOrder={setDateOrder}
-                    setQuery={setQuery}
-                  />
-                </div>
+            <div className={`blog-mobile-filters ${mobileFiltersOpen ? 'is-open' : ''}`}>
+              <div className="blog-mobile-search-row">
+                <span aria-hidden="true" className="material-symbols-outlined">search</span>
+                <input
+                  aria-label="Buscar en el blog"
+                  id="blog-search-mobile"
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Buscar por autor, título, categoría o tag"
+                  type="search"
+                  value={query}
+                />
+                {query && (
+                  <button aria-label="Limpiar búsqueda" className="blog-mobile-search-clear" onClick={() => setQuery('')} type="button">
+                    <span aria-hidden="true" className="material-symbols-outlined">close</span>
+                  </button>
+                )}
+                <button
+                  aria-expanded={mobileFiltersOpen}
+                  aria-label={mobileFiltersOpen ? 'Cerrar filtros avanzados' : 'Abrir filtros avanzados'}
+                  className="blog-mobile-filter-toggle"
+                  onClick={() => setMobileFiltersOpen((current) => !current)}
+                  type="button"
+                >
+                  <small>{postsFiltrados.length}</small>
+                  <span className="material-symbols-outlined blog-mobile-filters__arrow" aria-hidden="true">expand_more</span>
+                </button>
+              </div>
+              {mobileFiltersOpen && (
+                <div className="blog-mobile-filters__content">
+                  <div className="blog-mobile-filter-advanced">
+                    <BlogDateControls dateOrder={dateOrder} setDateOrder={setDateOrder} />
+                    <p>{postsFiltrados.length} {postsFiltrados.length === 1 ? 'nota visible' : 'notas visibles'}{hasFilters ? ' con los filtros actuales.' : '.'}</p>
+                  </div>
                 {postsFiltrados.length > 0 && (
                   <aside className="blog-toc" aria-label="Categorías y autores del blog">
                     <BlogSidebarContent
@@ -248,13 +294,16 @@ export default function BlogIndex({ posts = [], autorFiltro = '', categoriaFiltr
                       idSuffix="-mobile"
                       onCategory={scrollToCategory}
                       secciones={secciones}
-                      showAuthors={!filtrandoAutor}
+                      showAuthors={false}
                     />
                   </aside>
                 )}
-              </div>
-            </details>
+                </div>
+              )}
+            </div>
           )}
+
+          {!filtrandoAutor && <MobileAuthorStrip authors={authors} />}
 
           {postsPorAutor.length === 0 && (
             <div className="empty">

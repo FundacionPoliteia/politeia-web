@@ -824,6 +824,47 @@ test('admin suppression hides an author profile without affecting matching posts
   }
 });
 
+test('admin suppression hides every duplicate profile for the same author identity', async () => {
+  const firestore = createMemoryFirestore();
+  setFirestoreForTests(firestore);
+
+  try {
+    await firestore.collection('posts').doc('post-autora-duplicada').set({
+      authorName: 'Autora Duplicada',
+      title: 'Nota publicada',
+      slug: 'nota-publicada',
+      status: 'published',
+      publishedAt: '2026-08-22T12:00:00.000Z',
+    });
+    await firestore.collection('userProfiles').doc('autora@politeia.ar').set({
+      email: 'autora@politeia.ar',
+      firstName: 'Autora',
+      lastName: 'Duplicada',
+      fullName: 'Autora Duplicada',
+      identityNameKey: 'autora duplicada',
+      authorSlug: 'autora-duplicada',
+      publicProfileEnabled: true,
+      publicProfilePreferenceSet: true,
+    });
+    await firestore.collection('userProfiles').doc('managed-author-autora-duplicada').set({
+      firstName: 'Autora',
+      lastName: 'Duplicada',
+      fullName: 'Autora Duplicada',
+      identityNameKey: 'autora duplicada',
+      authorSlug: 'autora-duplicada',
+      managedAuthor: true,
+      publicProfileEnabled: true,
+      publicProfilePreferenceSet: true,
+      publicAuthorProfileSuppressed: true,
+    });
+
+    assert.equal(await getPublicAuthorProfileBySlug('autora-duplicada'), null);
+    assert.equal((await listPublicAuthorProfiles()).items.length, 0);
+  } finally {
+    setFirestoreForTests(null);
+  }
+});
+
 test('an author cannot clear an admin public profile suppression by saving their profile', async () => {
   const firestore = createMemoryFirestore();
   setFirestoreForTests(firestore);
