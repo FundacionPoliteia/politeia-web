@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import '@politeia/brand/tokens.css';
 import './globals.css';
 import { SiteFooter, SiteHeader } from '@/components/SiteChrome';
+import MobileNavigation from '@/components/MobileNavigation';
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://quorum.politeia.ar';
 
@@ -31,6 +32,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <SiteHeader />
         {children}
         <SiteFooter />
+        <MobileNavigation />
       </body>
     </html>
   );
