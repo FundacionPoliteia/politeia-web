@@ -21,7 +21,7 @@ export default function AuthorCard({ author = {}, preview = false, featured = fa
       </div>
       <div className="author-card-body">
         <section className="author-card-about" aria-label={`Sobre ${fullName}`}>
-          <h3>Sobre mi</h3>
+          <h3>Sobre mí</h3>
           <p>{aboutMe}</p>
         </section>
         <div className="author-card-meta">

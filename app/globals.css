@@ -1437,7 +1437,7 @@ a {
 .author-card-body {
   padding: 26px 28px 28px;
   display: grid;
-  grid-template-rows: 94px 64px 34px 1fr;
+  grid-template-rows: auto auto 34px 1fr;
   gap: 14px
 }
 
@@ -1470,6 +1470,7 @@ a {
   color: var(--gris);
   font-size: 1rem;
   line-height: 1.55;
+  margin: 0;
   display: -webkit-box;
   overflow: hidden;
   -webkit-box-orient: vertical;

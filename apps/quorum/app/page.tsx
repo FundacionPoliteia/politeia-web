@@ -34,7 +34,13 @@ function FeaturedProjects({ projects }: { projects: PublicProject[] }) {
         const progress = stageProgress(project.workflow, stageId);
         return <Link className={`featured-project-row stage-visual-${stageVisual}`} href={`/proyectos/${project.slug}`} key={project.id}>
           <span className="featured-project-icon material-symbols-outlined" aria-hidden="true">{projectIcon(project, index)}</span>
-          <span className="featured-project-copy"><strong>{project.title}</strong><small>{[project.docketNumber, project.chamber?.label, project.initiative?.label].filter(Boolean).join(' · ') || 'Información legislativa'}</small></span>
+          <span className="featured-project-copy">
+            <strong>{project.title}</strong>
+            <small className="featured-project-meta">
+              {project.docketNumber && <span className="featured-project-docket">Exp. {project.docketNumber}</span>}
+              <span>{[project.chamber?.label, project.initiative?.label].filter(Boolean).join(' · ') || 'Información legislativa'}</span>
+            </small>
+          </span>
           <span className="featured-project-arrow material-symbols-outlined" aria-hidden="true">arrow_forward</span>
           <ol className="featured-project-progress" aria-label={`Recorrido legislativo. Estado actual: ${stage?.label || 'En seguimiento'}`}>
             {progress.map((step, stepIndex) => <li className={`featured-step ${step.state}`} key={step.id} aria-current={!stage?.branchFromId && step.state === 'current' ? 'step' : undefined} title={step.label}>

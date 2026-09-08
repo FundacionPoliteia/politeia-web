@@ -75,9 +75,12 @@ h3 { font-size: 1.35rem; }
 .featured-project-row.stage-visual-closed { --featured-stage-color: #747581; --featured-stage-soft: color-mix(in srgb,#747581 12%,var(--blanco)); }
 .featured-project-row.stage-visual-promulgated { --featured-stage-color: var(--quorum-green); --featured-stage-soft: color-mix(in srgb,var(--quorum-green) 13%,var(--blanco)); }
 .featured-project-icon.material-symbols-outlined { box-sizing: border-box; width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; flex: 0 0 42px; overflow: hidden; border-radius: 10px; background: var(--featured-stage-color); color: white; padding: 0; font-size: 1.3rem; line-height: 1; text-align: center; text-indent: 0; font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24; }
-.featured-project-copy { min-width: 0; display: grid; gap: 3px; }
-.featured-project-copy strong { overflow: hidden; font-family: var(--display); font-size: 1rem; line-height: 1.15; text-overflow: ellipsis; white-space: nowrap; }
-.featured-project-copy small { overflow: hidden; color: var(--gris); font-size: .68rem; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.featured-project-copy { min-width: 0; display: grid; gap: 4px; }
+.featured-project-copy strong { min-width: 0; overflow: hidden; font-family: var(--display); font-size: 1rem; line-height: 1.15; text-overflow: ellipsis; white-space: nowrap; }
+.featured-project-copy small { min-width: 0; overflow: hidden; color: var(--gris); font-size: .68rem; font-weight: 650; }
+.featured-project-meta { display: flex; min-width: 0; align-items: baseline; flex-wrap: wrap; gap: 2px 8px; line-height: 1.35; }
+.featured-project-meta > span { min-width: 0; overflow-wrap: anywhere; }
+.featured-project-docket { color: var(--tinta); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .featured-project-progress { grid-column: 1 / -1; display: flex; align-items: start; list-style: none; margin: 0; padding: 0; }
 .featured-step { position: relative; isolation: isolate; flex: 1; min-width: 0; display: grid; justify-items: center; gap: 6px; color: var(--gris); text-align: center; }
 .featured-step:not(:last-child)::after { position: absolute; z-index: -1; top: 13px; left: 50%; width: 100%; height: 2px; background: var(--linea); content: ''; }
@@ -117,7 +120,7 @@ h3 { font-size: 1.35rem; }
 .project-card-identity { min-width: 0; display: inline-flex; align-items: center; gap: 8px; }
 .project-card-icon.material-symbols-outlined { box-sizing: border-box; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; flex: 0 0 36px; overflow: hidden; border-radius: 9px; background: var(--azul); color: white; padding: 0; font-size: 1.1rem; line-height: 1; text-align: center; text-indent: 0; font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24; }
 .status-pill { display: inline-flex; border-radius: 999px; background: var(--quorum-blue-soft); color: var(--azul); font-size: .7rem; font-weight: 800; padding: 6px 10px; }
-.docket { color: var(--gris); font-size: .76rem; font-weight: 700; }
+.docket { min-width: 0; max-width: 42%; overflow-wrap: anywhere; color: var(--gris); font-size: .76rem; font-weight: 700; line-height: 1.25; text-align: right; }
 .project-card h3 { margin-bottom: 12px; }
 .project-card p { color: var(--gris); font-size: .93rem; display: -webkit-box; overflow: hidden; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
 .mini-progress { display: flex; gap: 4px; margin-top: auto; padding-top: 24px; }
@@ -804,6 +807,8 @@ body:has(.management-root) > .site-header, body:has(.management-root) > .site-fo
   .featured-project-icon.material-symbols-outlined { width: 38px; height: 38px; flex-basis: 38px; font-size: 1.15rem; }
   .featured-project-copy strong { font-size: .93rem; white-space: normal; overflow-wrap: anywhere; }
   .featured-project-copy small { white-space: normal; overflow-wrap: anywhere; line-height: 1.5; }
+  .featured-project-meta { align-items: flex-start; gap: 1px 6px; }
+  .docket { max-width: 38%; font-size: .68rem; }
   .featured-step-marker.material-symbols-outlined { width: 24px; height: 24px; font-size: 14px; }
   .featured-step:not(:last-child)::after { top: 11px; }
   .featured-step-label { font-size: .625rem; }
