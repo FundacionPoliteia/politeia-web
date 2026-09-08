@@ -24,6 +24,7 @@ import { bulkImportAllExternalLegislators, bulkImportExternalLegislators, import
 import { getIntegrationOverview } from './integrations/registry.js';
 import { syncHcdnLegislators, syncSenateLegislators } from './integrations/sync.js';
 import { syncAllLegislatorSources, syncDueLegislators } from './integrations/scheduler.js';
+import { importOfficialVoting, getVotingOriginal } from './integrations/voting.js';
 import {
   applyLegislatorSuggestion, dismissLegislatorSuggestion, listLegislatorRevisions, listLegislatorSuggestions,
   reopenLegislatorSuggestion, restoreLegislatorRevision,
@@ -93,6 +94,11 @@ export function createApp() {
 
   app.use('/v1/manage', requireAuth, requireCsrf);
   app.get('/v1/manage/bootstrap', requireRole('quorum_editor'), asyncHandler(async (_req, res) => res.json(await getManageBootstrap())));
+  app.post('/v1/manage/integrations/votings/import', requireRole('quorum_editor'), sensitiveLimiter, asyncHandler(async (req, res) => res.json(await importOfficialVoting(String(req.body?.url || ''), req.user!.email))));
+  app.get('/v1/manage/integrations/votings/snapshots/:id', requireRole('quorum_editor'), asyncHandler(async (req, res) => {
+    const snapshot = await getVotingOriginal(String(req.params.id));
+    res.json({ item: snapshot.original, sha256: snapshot.sha256, sourceUrl: snapshot.sourceUrl });
+  }));
   app.get('/v1/manage/projects/:id/preview', requireRole('quorum_editor'), asyncHandler(async (req, res) => res.json({ item: await previewProject(String(req.params.id)) })));
   app.post('/v1/manage/projects/:id/preview', requireRole('quorum_editor'), asyncHandler(async (req, res) => res.json({ item: await previewProject(String(req.params.id), req.body) })));
   app.post('/v1/manage/projects', requireRole('quorum_editor'), asyncHandler(async (req, res) => res.status(201).json({ item: await createProject(req.body, req.user!.email) })));

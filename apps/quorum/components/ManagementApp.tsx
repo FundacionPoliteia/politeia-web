@@ -1,6 +1,7 @@
 'use client';
 
 import Script from 'next/script';
+import VotingEditor from '@/components/VotingEditor';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MutableRefObject } from 'react';
 import { effectiveProjectStageId, glossaryTermAppearsInTexts, hasChronologyChanges, type CatalogItem, type ContentRevision, type ExternalEntityLink, type ExternalLegislatorRecord, type ExternalSource, type GlossaryTerm, type Legislator, type LegislatorImportField, type LegislatorImportSuggestion, type OfficialDocument, type Project, type ProjectIconName, type ProjectInput, type ProjectUpdate, type PublicProject, type RoleAssignment, type SiteSettings, type Source, type Subscription, type WorkflowDefinition } from '@politeia/quorum-contracts';
@@ -174,6 +175,7 @@ function ProjectEditor({ project, data, call, reload, notify, onCreated, editorH
     <AdvancedTextField label="¿Cómo me afecta?" value={form.impact || ''} format={form.impactFormat} onChange={(value) => set('impact', value)} onFormatChange={(value) => set('impactFormat', value)} onUploadImage={uploadEditorImage} />
     <ProjectGlossarySettings terms={data.glossary} form={form} enabled={form.glossaryEnabled !== false} excludedIds={form.glossaryExcludedTermIds || []} occurrenceMode={form.glossaryOccurrenceMode || 'all'} excludedOccurrenceIds={form.glossaryExcludedOccurrenceIds || []} onEnabledChange={(value) => set('glossaryEnabled', value)} onExcludedChange={(value) => set('glossaryExcludedTermIds', value)} onOccurrenceModeChange={(value) => set('glossaryOccurrenceMode', value)} onExcludedOccurrenceChange={(value) => set('glossaryExcludedOccurrenceIds', value)} />
     <LegislatorRelationPicker items={data.legislators} selected={form.signatoryIds || []} onChange={(items) => set('signatoryIds', items)} />
+    <VotingEditor items={form.votingResults || []} legislators={data.legislators} call={call} onChange={(items) => set('votingResults', items)} />
     <SourcesEditor items={form.sources || []} onChange={(items) => set('sources', items)} />
     <DocumentsEditor items={form.documents || []} onChange={(items) => set('documents', items)} project={project} call={call} notify={notify} />
     <UpdatesEditor items={form.updates || []} publishedItems={publishedForm?.updates || []} onChange={(items) => set('updates', items)} workflow={workflow} canSave={Boolean(project && chronologyDirty)} saving={savingChronology} onSave={saveChronology} />

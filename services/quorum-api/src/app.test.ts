@@ -18,6 +18,18 @@ beforeEach(() => {
 });
 
 describe('Quórum API', () => {
+  it('conserva votaciones en el borrador, preview y publicación sin exponer ediciones posteriores', async () => {
+    const [project] = await testStore.list<Project>('projects');
+    const vote = { id: 'vote-test', chamber: 'deputies', date: '2026-09-08', subject: 'Votación en general', type: 'general', method: 'aggregate', outcome: 'pending', counts: { yes: 120, no: 100, abstention: 5, absent: 20, notVoting: 0 }, sourceUrl: '', notes: '', blocks: [], nominal: [] };
+    const completed = { ...project, docketNumber: '1234-D-2026', entryDate: '2026-08-03', originChamberId: 'diputados', initiativeTypeId: 'poder-legislativo', summary: 'Un resumen editorial validado que explica el contenido del proyecto.', impact: 'Una explicación clara de cómo la propuesta puede afectar a la ciudadanía.', votingResults: [vote] };
+    await request(createApp()).patch(`/v1/manage/projects/${project.id}`).send(completed).expect(200);
+    const preview = await request(createApp()).get(`/v1/manage/projects/${project.id}/preview`).expect(200);
+    expect(preview.body.item.votingResults).toEqual([vote]);
+    await request(createApp()).post(`/v1/manage/projects/${project.id}/publish`).send({ changeSummary: 'Resultados de votación', notifyFollowers: false }).expect(200);
+    await request(createApp()).patch(`/v1/manage/projects/${project.id}`).send({ votingResults: [{ ...vote, notes: 'Cambio privado' }] }).expect(200);
+    const published = await request(createApp()).get(`/v1/public/projects/${project.slug}`).expect(200);
+    expect(published.body.item.votingResults).toEqual([vote]);
+  });
   it('restringe toda la API pública durante el batch y permite al servidor web autenticado', async () => {
     process.env.DEV_AUTH = 'false';
     config.devAuth = false;

@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { votingResultSchema } from './votes.js';
+export * from './votes.js';
 
 export const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 export const isoDateTimeSchema = z.string().datetime({ offset: true });
@@ -122,6 +124,7 @@ export const projectSchema = z.object({
   impactFormat: z.enum(['plain', 'markdown']).default('plain'),
   authorLegislatorId: z.string().nullable().default(null),
   signatoryIds: z.array(z.string()).default([]),
+  votingResults: z.array(votingResultSchema).max(100).optional(),
   glossaryTermIds: z.array(z.string()).default([]),
   glossaryEnabled: z.boolean().default(true),
   glossaryExcludedTermIds: z.array(z.string()).default([]),

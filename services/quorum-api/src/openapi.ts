@@ -1,6 +1,7 @@
 import {
   apiErrorSchema, catalogItemSchema, contentRevisionSchema, glossaryTermSchema, legislatorImportSuggestionSchema, legislatorRevisionSchema, legislatorSchema,
   projectSchema, publicProjectSchema, roleAssignmentSchema, siteSettingsSchema, subscriptionSchema, workflowDefinitionSchema,
+  votingResultSchema,
 } from '@politeia/quorum-contracts';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
@@ -52,6 +53,8 @@ export const openApiSpec = {
     '/manage/integrations/legislators/changes/{id}/reopen': { post: { tags: ['Integrations'], summary: 'Reabre un cambio descartado', security: [{ sessionCookie: [], csrf: [] }], responses: { '200': ok('Cambio reabierto'), ...errorResponses } } },
     '/manage/legislators/{id}/revisions': { get: { tags: ['Integrations'], summary: 'Lista revisiones inmutables de un legislador', security: [{ sessionCookie: [] }], responses: { '200': ok('Revisiones'), ...errorResponses } } },
     '/manage/legislators/{id}/revisions/{revisionId}/restore': { post: { tags: ['Integrations'], summary: 'Restaura datos mediante una revisión nueva', security: [{ sessionCookie: [], csrf: [] }], responses: { '200': ok('Revisión restaurada'), ...errorResponses } } },
+    '/manage/integrations/votings/import': { post: { tags: ['Integrations'], summary: 'Consulta acta nominal oficial (caché de 30 minutos) sin modificar proyectos', security: [{ sessionCookie: [], csrf: [] }], requestBody: { required: true, content: { 'application/json': { schema: { type: 'object', required: ['url'], properties: { url: { type: 'string', format: 'uri' } } } } } }, responses: { '200': ok('Original editable con procedencia', { type: 'object', properties: { item: json(votingResultSchema), cached: { type: 'boolean' }, checkedAt: { type: 'string', format: 'date-time' } } }), '502': ok('Fuente no disponible'), ...errorResponses } } },
+    '/manage/integrations/votings/snapshots/{id}': { get: { tags: ['Integrations'], summary: 'Lee el original normalizado e inmutable de una votación', security: [{ sessionCookie: [] }], parameters: [{ in: 'path', name: 'id', required: true, schema: { type: 'string' } }], responses: { '200': ok('Original normalizado'), ...errorResponses } } },
     '/manage/documents': { post: { tags: ['Manage'], summary: 'Carga un PDF validado con metadatos', security: [{ sessionCookie: [], csrf: [] }], responses: { '201': ok('Documento cargado'), ...errorResponses } } },
     '/manage/media/images': { post: { tags: ['Manage'], summary: 'Carga una imagen editorial validada para contenido enriquecido', security: [{ sessionCookie: [], csrf: [] }], responses: { '201': ok('Imagen cargada'), ...errorResponses } } },
     '/operations/backups/export': { post: { tags: ['Operations'], summary: 'Inicia exportación diaria de Firestore mediante OIDC', responses: { '202': ok('Exportación iniciada'), ...errorResponses } } },

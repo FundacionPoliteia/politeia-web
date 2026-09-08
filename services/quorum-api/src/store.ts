@@ -32,6 +32,8 @@ export const collections = {
   fieldProvenance: 'quorumFieldProvenance',
   importSuggestions: 'quorumImportSuggestions',
   legislatorRevisions: 'quorumLegislatorRevisions',
+  votingSnapshots: 'quorumVotingSnapshots',
+  votingSources: 'quorumVotingSources',
 } as const;
 
 export type CollectionKey = keyof typeof collections;

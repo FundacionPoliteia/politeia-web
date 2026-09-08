@@ -19,14 +19,15 @@
     "@google-cloud/firestore": "^8.6.0",
     "@google-cloud/storage": "^7.16.0",
     "@politeia/quorum-contracts": "0.1.0",
+    "cheerio": "^1.2.0",
     "cors": "^2.8.5",
     "express": "^4.21.2",
     "express-rate-limit": "^7.5.0",
     "google-auth-library": "^10.7.0",
     "helmet": "^8.0.0",
     "multer": "^2.0.2",
-    "svix": "^1.54.0"
-    ,"zod-to-json-schema": "^3.24.6"
+    "svix": "^1.54.0",
+    "zod-to-json-schema": "^3.24.6"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",

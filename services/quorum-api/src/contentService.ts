@@ -26,6 +26,7 @@ import {
 import { ApiError, notFound } from './errors.js';
 import { cachedGet, cachedList, cachedValue, cacheTtl } from './dataCache.js';
 import { newId, store } from './store.js';
+import { validateVotingProvenance } from './integrations/voting.js';
 
 const now = () => new Date().toISOString();
 
@@ -98,6 +99,7 @@ export async function previewProject(id: string, input?: unknown) {
   if (!project) throw notFound('Proyecto');
   if (input === undefined) return materializeProject(project);
   const draft = projectSchema.parse({ ...project, ...projectInputSchema.parse(input) });
+  if (draft.votingResults) draft.votingResults = await validateVotingProvenance(draft.votingResults);
   await validateProjectStageExplanations(draft);
   return materializeProject(draft);
 }
@@ -116,6 +118,7 @@ export async function createProject(input: unknown, actorEmail: string) {
     updatedBy: actorEmail,
   });
   await validateProjectStageExplanations(project);
+  if (project.votingResults) project.votingResults = await validateVotingProvenance(project.votingResults);
   await ensureUniqueSlug(project.slug);
   await store().set('projects', id, project);
   await audit('project.created', actorEmail, id, { slug: project.slug });
@@ -131,6 +134,7 @@ export async function updateProject(id: string, input: unknown, actorEmail: stri
   }
   if (parsed.slug && parsed.slug !== existing.slug) await ensureUniqueSlug(parsed.slug, id);
   const project = projectSchema.parse({ ...existing, ...parsed, updatedAt: now(), updatedBy: actorEmail });
+  if (project.votingResults) project.votingResults = await validateVotingProvenance(project.votingResults);
   await validateProjectStageExplanations(project);
   await store().set('projects', id, project);
   await audit('project.updated', actorEmail, id, { slug: project.slug });
