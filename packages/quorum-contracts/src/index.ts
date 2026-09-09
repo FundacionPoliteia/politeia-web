@@ -106,6 +106,29 @@ export const projectIconNames = [
 export const projectIconSchema = z.enum(projectIconNames);
 export type ProjectIconName = z.infer<typeof projectIconSchema>;
 
+export const projectPositionSchema = z.object({
+  id: z.string().min(1),
+  stance: z.enum(['for', 'against']),
+  name: z.string().trim().min(1, 'Completá el nombre de quien declara.').max(160),
+  role: z.string().trim().max(200).default(''),
+  quote: z.string().trim().min(1, 'Completá la declaración.').max(6000),
+  sourceLabel: z.string().trim().max(160).default(''),
+  sourceUrl: z.string().trim().max(2000).refine((value) => {
+    if (!value) return true;
+    try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password; } catch { return false; }
+  }, 'Ingresá un enlace HTTP o HTTPS válido, sin credenciales.').default(''),
+  date: isoDateSchema.nullable().default(null),
+});
+export type ProjectPosition = z.infer<typeof projectPositionSchema>;
+export const projectPositionsSchema = z.array(projectPositionSchema).max(100).superRefine((items, context) => {
+  const ids = new Set<string>();
+  items.forEach((item, index) => {
+    if (ids.has(item.id)) context.addIssue({ code: z.ZodIssueCode.custom, path: [index, 'id'], message: 'Hay declaraciones con el mismo identificador.' });
+    ids.add(item.id);
+  });
+  if (items.reduce((total, item) => total + item.quote.length, 0) > 60000) context.addIssue({ code: z.ZodIssueCode.custom, message: 'Las declaraciones no pueden superar 60.000 caracteres en total.' });
+});
+
 export const projectSchema = z.object({
   id: z.string().min(1),
   slug: slugSchema,
@@ -125,6 +148,7 @@ export const projectSchema = z.object({
   authorLegislatorId: z.string().nullable().default(null),
   signatoryIds: z.array(z.string()).default([]),
   votingResults: z.array(votingResultSchema).max(100).optional(),
+  positions: projectPositionsSchema.optional(),
   glossaryTermIds: z.array(z.string()).default([]),
   glossaryEnabled: z.boolean().default(true),
   glossaryExcludedTermIds: z.array(z.string()).default([]),

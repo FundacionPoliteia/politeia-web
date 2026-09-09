@@ -7,6 +7,8 @@ import type { MutableRefObject } from 'react';
 import { effectiveProjectStageId, glossaryTermAppearsInTexts, hasChronologyChanges, type CatalogItem, type ContentRevision, type ExternalEntityLink, type ExternalLegislatorRecord, type ExternalSource, type GlossaryTerm, type Legislator, type LegislatorImportField, type LegislatorImportSuggestion, type OfficialDocument, type Project, type ProjectIconName, type ProjectInput, type ProjectUpdate, type PublicProject, type RoleAssignment, type SiteSettings, type Source, type Subscription, type WorkflowDefinition } from '@politeia/quorum-contracts';
 import { publicApiBase } from '@/lib/api';
 import ProjectDetail from '@/components/ProjectDetail';
+import ProjectPositionsEditor from '@/components/ProjectPositionsEditor';
+import { projectPositionsSchema } from '@politeia/quorum-contracts';
 import { SiteFooter, SiteHeader } from '@/components/SiteChrome';
 import QuorumRichTextEditor from '@/components/QuorumRichTextEditor';
 import StageExplanationEditor, { ProjectStageExplanationEditor } from '@/components/StageExplanationEditor';
@@ -108,6 +110,8 @@ function ProjectEditor({ project, data, call, reload, notify, onCreated, editorH
   const set = (key: keyof ProjectInput, value: unknown) => setForm((current) => ({ ...current, [key]: value }));
   async function save(): Promise<boolean> {
     if (!isDirty || saving) return !isDirty;
+    const positionsCheck = projectPositionsSchema.safeParse(form.positions || []);
+    if (!positionsCheck.success) { notify(`A favor / En contra: ${positionsCheck.error.issues[0].message}`); return false; }
     setSaving(true);
     try {
       const body = await call(project ? `/v1/manage/projects/${project.id}` : '/v1/manage/projects', { method: project ? 'PATCH' : 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(form) });
@@ -176,6 +180,7 @@ function ProjectEditor({ project, data, call, reload, notify, onCreated, editorH
     <ProjectGlossarySettings terms={data.glossary} form={form} enabled={form.glossaryEnabled !== false} excludedIds={form.glossaryExcludedTermIds || []} occurrenceMode={form.glossaryOccurrenceMode || 'all'} excludedOccurrenceIds={form.glossaryExcludedOccurrenceIds || []} onEnabledChange={(value) => set('glossaryEnabled', value)} onExcludedChange={(value) => set('glossaryExcludedTermIds', value)} onOccurrenceModeChange={(value) => set('glossaryOccurrenceMode', value)} onExcludedOccurrenceChange={(value) => set('glossaryExcludedOccurrenceIds', value)} />
     <LegislatorRelationPicker items={data.legislators} selected={form.signatoryIds || []} onChange={(items) => set('signatoryIds', items)} />
     <VotingEditor items={form.votingResults || []} legislators={data.legislators} call={call} onChange={(items) => set('votingResults', items)} />
+    <ProjectPositionsEditor items={form.positions || []} onChange={(items) => set('positions', items)} />
     <SourcesEditor items={form.sources || []} onChange={(items) => set('sources', items)} />
     <DocumentsEditor items={form.documents || []} onChange={(items) => set('documents', items)} project={project} call={call} notify={notify} />
     <UpdatesEditor items={form.updates || []} publishedItems={publishedForm?.updates || []} onChange={(items) => set('updates', items)} workflow={workflow} canSave={Boolean(project && chronologyDirty)} saving={savingChronology} onSave={saveChronology} />
@@ -618,6 +623,8 @@ function getPublicationIssues(project: Project, input: ProjectInput, isDirty: bo
   if ((input.impact || '').trim().length < 20) issues.push('“¿Cómo me afecta?” debe tener al menos 20 caracteres.');
   const workflow = data.workflows.find((item) => item.id === input.workflowId && item.version === input.workflowVersion);
   if (!workflow?.stages.some((stage) => stage.id === input.currentStageId && stage.active)) issues.push('El flujo o la etapa seleccionada ya no son válidos.');
+  const positions = projectPositionsSchema.safeParse(input.positions || []);
+  if (!positions.success) issues.push(...positions.error.issues.map((issue) => `A favor / En contra: ${issue.message}`));
   return issues;
 }
 function withoutUpdates(input: ProjectInput) { const { updates: _updates, ...rest } = input; return rest; }

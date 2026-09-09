@@ -18,6 +18,33 @@ beforeEach(() => {
 });
 
 describe('Quórum API', () => {
+  it('rechaza declaraciones inválidas sin sobrescribir las guardadas y conserva su orden en cambios parciales', async () => {
+    const [project] = await testStore.list<Project>('projects');
+    const app = createApp();
+    const first = { id: 'first', stance: 'for', name: 'Persona A', role: '', quote: 'Texto a favor.', sourceLabel: '', sourceUrl: '', date: null };
+    const second = { ...first, id: 'second', stance: 'against', name: 'Persona B' };
+    const path = `/v1/manage/projects/${project.id}`;
+    await request(app).patch(path).send({ positions: [second, first] }).expect(200);
+    for (const positions of [[first, first], [{ ...first, name: ' ' }], [{ ...first, quote: '' }], [{ ...first, sourceUrl: 'javascript:alert(1)' }], [{ ...first, sourceUrl: 'https://user:password@example.com' }], Array.from({ length: 11 }, (_, index) => ({ ...first, id: String(index), quote: 'a'.repeat(6000) }))]) {
+      await request(app).patch(path).send({ positions }).expect(422);
+      expect((await testStore.get<Project>('projects', project.id))?.positions).toEqual([second, first]);
+    }
+    await request(app).patch(path).send({ impact: 'Edición independiente del impacto.' }).expect(200);
+    expect((await request(app).get(`${path}/preview`).expect(200)).body.item.positions).toEqual([second, first]);
+  });
+  it('conserva declaraciones en preview y publicación y permite quitarlas sin filtrar borradores', async () => {
+    const [project] = await testStore.list<Project>('projects');
+    const position = { id: 'position-test', stance: 'for', name: 'Persona de prueba', role: 'Diputada', quote: 'Declaración de prueba para verificar la persistencia.', sourceLabel: 'Fuente', sourceUrl: 'https://example.com/declaracion', date: '2026-09-08' };
+    const app = createApp();
+    await request(app).patch(`/v1/manage/projects/${project.id}`).send({ docketNumber: '1234-D-2026', entryDate: '2026-08-03', originChamberId: 'diputados', initiativeTypeId: 'poder-legislativo', summary: 'Un resumen editorial validado que explica el contenido del proyecto.', impact: 'Una explicación clara de cómo la propuesta puede afectar a la ciudadanía.', positions: [position] }).expect(200);
+    expect((await request(app).get(`/v1/manage/projects/${project.id}/preview`).expect(200)).body.item.positions).toEqual([position]);
+    await request(app).post(`/v1/manage/projects/${project.id}/publish`).send({ notifyFollowers: false }).expect(200);
+    await request(app).patch(`/v1/manage/projects/${project.id}`).send({ positions: [] }).expect(200);
+    expect((await request(app).get(`/v1/public/projects/${project.slug}`).expect(200)).body.item.positions).toEqual([position]);
+    expect((await request(app).get(`/v1/manage/projects/${project.id}/preview`).expect(200)).body.item.positions).toEqual([]);
+    await request(app).post(`/v1/manage/projects/${project.id}/publish`).send({ notifyFollowers: false }).expect(200);
+    expect((await request(app).get(`/v1/public/projects/${project.slug}`).expect(200)).body.item.positions).toEqual([]);
+  });
   it('conserva votaciones en el borrador, preview y publicación sin exponer ediciones posteriores', async () => {
     const [project] = await testStore.list<Project>('projects');
     const vote = { id: 'vote-test', chamber: 'deputies', date: '2026-09-08', subject: 'Votación en general', type: 'general', method: 'aggregate', outcome: 'pending', counts: { yes: 120, no: 100, abstention: 5, absent: 20, notVoting: 0 }, sourceUrl: '', notes: '', blocks: [], nominal: [] };
