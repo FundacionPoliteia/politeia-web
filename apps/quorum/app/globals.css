@@ -763,7 +763,8 @@ body:has(.management-root) > .site-header, body:has(.management-root) > .site-fo
   .hero-grid { width: calc(100% - 48px); gap: 32px; grid-template-columns: minmax(0,.8fr) minmax(0,1.2fr); }
   .hero h1 { font-size: 3.5rem; }
   .detail-layout { grid-template-columns: 156px minmax(0,1fr); gap: 28px; }
-  .detail-layout > aside { grid-column: 2; }
+  .detail-layout > .project-toc { grid-column: 1; grid-row: 1; }
+  .detail-layout > aside:not(.project-toc) { grid-column: 2; }
 }
 @media (max-width: 900px) {
   .hero h1 { max-width: 14ch; font-size: 3.75rem; }
