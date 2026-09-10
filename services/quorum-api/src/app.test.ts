@@ -18,6 +18,11 @@ beforeEach(() => {
 });
 
 describe('Quórum API', () => {
+  it('rechaza campos desconocidos sin guardar parcialmente el proyecto', async () => {
+    const [project] = await testStore.list<Project>('projects');
+    await request(createApp()).patch(`/v1/manage/projects/${project.id}`).send({ title: 'Cambio que debe rechazarse', unsupportedField: 'contenido' }).expect(422);
+    expect(await testStore.get<Project>('projects', project.id)).toEqual(project);
+  });
   it('rechaza declaraciones inválidas sin sobrescribir las guardadas y conserva su orden en cambios parciales', async () => {
     const [project] = await testStore.list<Project>('projects');
     const app = createApp();
@@ -49,7 +54,8 @@ describe('Quórum API', () => {
     const [project] = await testStore.list<Project>('projects');
     const vote = { id: 'vote-test', chamber: 'deputies', date: '2026-09-08', subject: 'Votación en general', type: 'general', method: 'aggregate', outcome: 'pending', counts: { yes: 120, no: 100, abstention: 5, absent: 20, notVoting: 0 }, sourceUrl: '', notes: '', blocks: [], nominal: [] };
     const completed = { ...project, docketNumber: '1234-D-2026', entryDate: '2026-08-03', originChamberId: 'diputados', initiativeTypeId: 'poder-legislativo', summary: 'Un resumen editorial validado que explica el contenido del proyecto.', impact: 'Una explicación clara de cómo la propuesta puede afectar a la ciudadanía.', votingResults: [vote] };
-    await request(createApp()).patch(`/v1/manage/projects/${project.id}`).send(completed).expect(200);
+    const { id, status, publishedRevisionId, publishedAt, updatedAt, updatedBy, ...input } = completed;
+    await request(createApp()).patch(`/v1/manage/projects/${project.id}`).send(input).expect(200);
     const preview = await request(createApp()).get(`/v1/manage/projects/${project.id}/preview`).expect(200);
     expect(preview.body.item.votingResults).toEqual([vote]);
     await request(createApp()).post(`/v1/manage/projects/${project.id}/publish`).send({ changeSummary: 'Resultados de votación', notifyFollowers: false }).expect(200);

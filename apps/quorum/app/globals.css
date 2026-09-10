@@ -435,7 +435,10 @@ body:has(.management-root) > .site-header, body:has(.management-root) > .site-fo
 .admin-list span { margin-top: 3px; color: var(--gris); font-size: .72rem; }
 .editor-form { display: grid; gap: 15px; }
 .form-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0 14px; }
-.project-editor-toolbar { display: grid; grid-template-columns: 188px minmax(0,1fr); align-items: start; gap: 22px; border-bottom: 1px solid var(--linea); padding-bottom: 18px; }
+.project-editor-layout { display: grid; grid-template-columns: minmax(0,1fr) 164px; gap: 16px; min-width: 0; align-items: start; }
+.project-editor-layout > .editor-form { grid-column: 1; grid-row: 1; min-width: 0; }
+.project-editor-aside { grid-column: 2; grid-row: 1; position: sticky; top: 20px; max-height: calc(100dvh - 40px); overflow-y: auto; }
+.project-editor-toolbar { border-bottom: 1px solid var(--linea); padding-bottom: 18px; }
 .project-editor-heading { min-width: 0; }
 .project-editor-heading .panel-title { margin: 0; }
 .project-editor-nav { position: sticky; top: 88px; z-index: 4; display: grid; gap: 8px; border: 1px solid var(--linea); border-radius: 14px; background: color-mix(in srgb,var(--blanco) 94%,var(--quorum-blue-soft)); padding: 10px; box-shadow: 0 12px 30px rgba(26,26,55,.06); }
@@ -443,7 +446,15 @@ body:has(.management-root) > .site-header, body:has(.management-root) > .site-fo
 .project-editor-nav > div { display: grid; gap: 2px; }
 .project-editor-nav button { border: 0; border-left: 2px solid transparent; border-radius: 6px; background: transparent; color: var(--gris); padding: 7px 8px; text-align: left; font-size: .72rem; font-weight: 700; transition: color .18s ease, background .18s ease, border-color .18s ease; }
 .project-editor-nav button:hover, .project-editor-nav button:focus-visible { border-left-color: var(--azul); background: var(--quorum-blue-soft); color: var(--tinta); }
-.project-editor-anchor { scroll-margin-top: 96px; }
+.project-editor-anchor, #project-presentation, #project-publication { scroll-margin-top: 96px; }
+.project-presentation-heading-icon { display: grid !important; place-items: center; }
+@media (max-width: 1200px) {
+  .project-editor-layout { grid-template-columns: minmax(0,1fr); }
+  .project-editor-aside { grid-column: 1; grid-row: 1; top: 8px; z-index: 10; }
+  .project-editor-layout > .editor-form { grid-row: 2; }
+  .project-editor-nav > div { display: flex; overflow-x: auto; }
+  .project-editor-nav button { flex: 0 0 auto; white-space: nowrap; }
+}
 .project-presentation-settings { display: grid; gap: 16px; border: 1px solid var(--linea); border-radius: 16px; background: color-mix(in srgb,var(--hueso) 74%,var(--blanco)); padding: 20px; transition: border-color .2s ease, box-shadow .2s ease; }
 .project-presentation-settings.is-featured { border-color: color-mix(in srgb,var(--azul) 48%,var(--linea)); box-shadow: inset 4px 0 var(--azul); }
 .project-presentation-heading { display: grid; grid-template-columns: 42px minmax(0,1fr); align-items: start; gap: 13px; }

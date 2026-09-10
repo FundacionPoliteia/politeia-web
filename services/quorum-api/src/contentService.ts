@@ -105,7 +105,7 @@ export async function previewProject(id: string, input?: unknown) {
 }
 
 export async function createProject(input: unknown, actorEmail: string) {
-  const parsed = projectInputSchema.parse(input);
+  const parsed = projectInputSchema.strict().parse(input);
   const timestamp = now();
   const id = newId('project');
   const project = projectSchema.parse({
@@ -128,7 +128,7 @@ export async function createProject(input: unknown, actorEmail: string) {
 export async function updateProject(id: string, input: unknown, actorEmail: string) {
   const existing = await store().get<Project>('projects', id);
   if (!existing) throw notFound('Proyecto');
-  const parsed = projectInputSchema.partial().parse(input);
+  const parsed = projectInputSchema.partial().strict().parse(input);
   if (parsed.slug && parsed.slug !== existing.slug && existing.publishedAt) {
     throw new ApiError(409, 'published_slug_locked', 'El slug de un proyecto publicado no puede modificarse');
   }
