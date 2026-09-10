@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { projectPositionsSchema, type Legislator, type ProjectPosition } from '@politeia/quorum-contracts';
+import { projectPositionSchema, projectPositionsSchema, type Legislator, type ProjectPosition } from '@politeia/quorum-contracts';
 import styles from './ProjectPositions.module.css';
 
 function normalize(value: string) {
@@ -14,8 +14,26 @@ function legislatorRole(item: Legislator) {
   return bloc ? `${office} · ${bloc}` : office;
 }
 
-export default function ProjectPositionsEditor({ items, legislators, onChange }: { items: ProjectPosition[]; legislators: Legislator[]; onChange: (items: ProjectPosition[]) => void }) {
+export default function ProjectPositionsEditor({ items, legislators, savedItems, onSave, busy, canSave, onChange }: { items: ProjectPosition[]; legislators: Legislator[]; savedItems: ProjectPosition[]; onSave: (item: ProjectPosition) => Promise<ProjectPosition>; busy: boolean; canSave: boolean; onChange: (items: ProjectPosition[]) => void }) {
   const [removed, setRemoved] = useState<{ item: ProjectPosition; index: number } | null>(null);
+  const [editing, setEditing] = useState<Set<string>>(new Set());
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
+  const [savedId, setSavedId] = useState<string | null>(null);
+  async function saveItem(item: ProjectPosition) {
+    const parsed = projectPositionSchema.safeParse(item);
+    if (!parsed.success) { setRowErrors((current) => ({ ...current, [item.id]: parsed.error.issues[0].message })); return; }
+    setSavingId(item.id);
+    setRowErrors((current) => ({ ...current, [item.id]: '' }));
+    try {
+      await onSave(parsed.data);
+      setEditing((current) => { const next = new Set(current); next.delete(item.id); return next; });
+      setSavedId(item.id);
+      setActiveNameId(null);
+    } catch (error) {
+      setRowErrors((current) => ({ ...current, [item.id]: error instanceof Error ? error.message : 'No pudimos guardar. Tu texto sigue disponible para reintentar.' }));
+    } finally { setSavingId(null); }
+  }
   const [activeNameId, setActiveNameId] = useState<string | null>(null);
   const validation = projectPositionsSchema.safeParse(items);
   const errors = validation.success ? [] : validation.error.issues;
@@ -39,9 +57,21 @@ export default function ProjectPositionsEditor({ items, legislators, onChange }:
     {removed && <div className={styles.undo} role="status">Declaración eliminada.<button type="button" className="button compact" disabled={items.length >= 100} onClick={() => { const next = [...items]; next.splice(Math.min(removed.index, items.length), 0, removed.item); onChange(next); setRemoved(null); }}>Deshacer</button></div>}
     {errors.length > 0 && <ul className={styles.errors} aria-live="polite">{errors.map((error, index) => <li key={index}>{typeof error.path[0] === 'number' ? `Declaración ${error.path[0] + 1}: ` : ''}{error.message}</li>)}</ul>}
     <div className="panel-title"><h3>A favor / En contra</h3><button type="button" className="button compact" disabled={items.length >= 100} onClick={() => onChange([...items, { id: crypto.randomUUID(), stance: 'for', name: '', role: '', quote: '', sourceLabel: '', sourceUrl: '', date: null }])}>Agregar declaración</button></div>
-    {items.map((item, index) => <fieldset key={item.id} className={styles.editorRow}>
+    {!canSave && <p className={styles.nameHint}>Guardá primero los datos básicos del proyecto para habilitar el guardado individual.</p>}
+    {items.map((item, index) => {
+      const saved = savedItems.find((entry) => entry.id === item.id);
+      const locked = Boolean(saved && JSON.stringify(saved) === JSON.stringify(item) && !editing.has(item.id));
+      return <fieldset key={item.id} className={`${styles.editorRow} ${locked ? styles.lockedRow : ''}`} disabled={busy || savingId !== null}>
       <legend>{item.name || `Declaración ${index + 1}`}</legend>
+      <div className={styles.rowSaveBar}>
+        <span role="status">{locked ? 'Guardada en el borrador' : 'En edición'}</span>
+        {locked ? <button type="button" className={styles.iconButton} aria-label={`Editar declaración de ${item.name}`} title="Editar declaración" onClick={() => { setEditing((current) => new Set(current).add(item.id)); setSavedId(null); }}><span className="material-symbols-outlined" aria-hidden="true">edit</span></button> : <button type="button" className="button primary compact" disabled={!canSave} onClick={() => void saveItem(item)}>{savingId === item.id ? 'Guardando…' : 'Guardar declaración'}</button>}
+      </div>
+      {rowErrors[item.id] && <p className="message error" role="alert">{rowErrors[item.id]}</p>}
+      {savedId === item.id && locked && <p className={styles.nameHint} role="status">Guardada. Se hará pública al publicar la revisión del proyecto.</p>}
       <div className={styles.actions}>{([-1, 1] as const).map((offset) => <button key={offset} type="button" className={styles.iconButton} disabled={index + offset < 0 || index + offset >= items.length} title={offset < 0 ? 'Mover arriba' : 'Mover abajo'} aria-label={offset < 0 ? 'Mover arriba' : 'Mover abajo'} onClick={() => move(index, offset)}><span className="material-symbols-outlined" aria-hidden="true">{offset < 0 ? 'arrow_upward' : 'arrow_downward'}</span></button>)}<button type="button" className={styles.iconButton} title="Eliminar declaración" aria-label="Eliminar declaración" onClick={() => { setRemoved({ item, index }); onChange(items.filter((entry) => entry.id !== item.id)); }}><span className="material-symbols-outlined" aria-hidden="true">delete</span></button></div>
+      <fieldset className={styles.fields} disabled={locked}>
+      <legend className="sr-only">Contenido de la declaración</legend>
       <div className="form-grid">
         <label className="field">Postura<select value={item.stance} onChange={(e) => update(item.id, { stance: e.target.value as ProjectPosition['stance'] })}><option value="for">A favor</option><option value="against">En contra</option></select></label>
         <div className={`field ${styles.nameField}`}>
@@ -60,6 +90,7 @@ export default function ProjectPositionsEditor({ items, legislators, onChange }:
       </div>
       <label className="field">Declaración<textarea required rows={5} maxLength={6000} value={item.quote} onChange={(e) => update(item.id, { quote: e.target.value })} /></label>
       <div className="form-grid"><label className="field">Nombre de la fuente<input maxLength={160} value={item.sourceLabel} onChange={(e) => update(item.id, { sourceLabel: e.target.value })} /></label><label className="field">Enlace a la fuente<input type="url" value={item.sourceUrl} onChange={(e) => update(item.id, { sourceUrl: e.target.value })} /></label></div>
-    </fieldset>)}
+      </fieldset>
+    </fieldset>; })}
   </section>;
 }

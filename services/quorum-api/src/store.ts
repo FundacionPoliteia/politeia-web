@@ -61,6 +61,7 @@ export interface DataStore {
   set<T extends RecordValue>(collection: CollectionKey, id: string, value: T): Promise<T>;
   delete(collection: CollectionKey, id: string): Promise<void>;
   publish(bundle: PublishBundle): Promise<void>;
+  mutateProject(id: string, mutate: (project: Project) => Project): Promise<Project | null>;
   acquireIntegrationLease(sourceId: string, runId: string, leaseUntil: string): Promise<boolean>;
   finalizeIntegrationRun(source: ExternalSource, run: ExternalSyncRun): Promise<void>;
   applyLegislatorReview(bundle: LegislatorReviewBundle): Promise<void>;
@@ -102,6 +103,15 @@ class MemoryStore implements DataStore {
   async delete(collection: CollectionKey, id: string) {
     this.records.get(collection)!.delete(id);
     invalidateCollectionCache(collection);
+  }
+
+  async mutateProject(id: string, mutate: (project: Project) => Project) {
+    const current = this.records.get('projects')!.get(id);
+    if (!current) return null;
+    const next = mutate(structuredClone(current) as Project);
+    this.records.get('projects')!.set(id, structuredClone(next));
+    invalidateCollectionCache('projects');
+    return structuredClone(next);
   }
 
   async publish(bundle: PublishBundle) {
@@ -157,6 +167,19 @@ class FirestoreStore implements DataStore {
 
   private collection(key: CollectionKey) {
     return this.firestore.collection(collections[key]);
+  }
+
+  async mutateProject(id: string, mutate: (project: Project) => Project) {
+    const ref = this.collection('projects').doc(id);
+    const result = await this.firestore.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(ref);
+      if (!snapshot.exists) return null;
+      const next = mutate({ ...snapshot.data(), id } as Project);
+      transaction.set(ref, next);
+      return next;
+    });
+    invalidateCollectionCache('projects');
+    return result;
   }
 
   async list<T>(collection: CollectionKey): Promise<T[]> {

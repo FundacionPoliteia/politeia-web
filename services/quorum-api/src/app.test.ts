@@ -18,6 +18,29 @@ beforeEach(() => {
 });
 
 describe('Quórum API', () => {
+  it('guarda declaraciones individuales, conserva las demás y rechaza ediciones obsoletas', async () => {
+    const [project] = await testStore.list<Project>('projects');
+    const app = createApp();
+    const path = `/v1/manage/projects/${project.id}/positions`;
+    const first = { id: 'one', stance: 'for', name: 'Persona A', role: 'Diputada', quote: 'Primera declaración.', sourceLabel: '', sourceUrl: '', date: null };
+    const second = { ...first, id: 'two', name: 'Persona B', stance: 'against' };
+    await Promise.all([
+      request(app).put(`${path}/one`).send({ item: first, previous: null }).expect(200),
+      request(app).put(`${path}/two`).send({ item: second, previous: null }).expect(200),
+    ]);
+    const edited = { ...first, quote: 'Declaración corregida.' };
+    expect((await request(app).put(`${path}/one`).send({ item: edited, previous: first }).expect(200)).body.item).toEqual(edited);
+    // A lost response can be retried without duplicating the declaration.
+    await request(app).put(`${path}/one`).send({ item: edited, previous: first }).expect(200);
+    await request(app).put(`${path}/one`).send({ item: { ...first, quote: 'Versión obsoleta' }, previous: first }).expect(409);
+    await request(app).put(`${path}/two`).send({ item: { ...second, name: '' }, previous: second }).expect(422);
+    const stored = (await testStore.get<Project>('projects', project.id))!;
+    expect(stored.positions).toEqual([edited, second]);
+    expect(stored.summary).toEqual(project.summary);
+    expect(stored.status).toEqual(project.status);
+    expect((await request(app).get('/v1/manage/bootstrap').expect(200)).body.projects.find((entry: Project) => entry.id === project.id).positions).toEqual([edited, second]);
+    expect(await testStore.list('publicProjects')).toEqual([]);
+  });
   it('rechaza campos desconocidos sin guardar parcialmente el proyecto', async () => {
     const [project] = await testStore.list<Project>('projects');
     await request(createApp()).patch(`/v1/manage/projects/${project.id}`).send({ title: 'Cambio que debe rechazarse', unsupportedField: 'contenido' }).expect(422);

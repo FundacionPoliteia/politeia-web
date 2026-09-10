@@ -9,6 +9,7 @@ import { publicApiBase } from '@/lib/api';
 import ProjectDetail from '@/components/ProjectDetail';
 import ProjectPositionsEditor from '@/components/ProjectPositionsEditor';
 import { projectPositionsSchema } from '@politeia/quorum-contracts';
+import type { ProjectPosition } from '@politeia/quorum-contracts';
 import { SiteFooter, SiteHeader } from '@/components/SiteChrome';
 import QuorumRichTextEditor from '@/components/QuorumRichTextEditor';
 import StageExplanationEditor, { ProjectStageExplanationEditor } from '@/components/StageExplanationEditor';
@@ -91,10 +92,11 @@ function Projects({ data, call, reload, notify }: AdminProps) {
 }
 
 const projectEditorSections = [
-  ['project-info', 'Datos básicos'], ['project-presentation', 'Presentación'], ['project-stages', 'Etapas'],
-  ['project-summary', 'Resumen'], ['project-impact', 'Impacto'], ['project-glossary', 'Glosario'],
+  ['project-info', 'Datos básicos'], ['project-presentation', 'Presentación'],
+  ['project-summary', 'Resumen'], ['project-impact', 'Impacto'],
   ['project-signatories', 'Firmantes'], ['project-votes', 'Votaciones'], ['project-positions', 'Posiciones'],
   ['project-sources', 'Fuentes'], ['project-documents', 'Documentos'], ['project-chronology', 'Cronología'],
+  ['project-glossary', 'Glosario'], ['project-stages', 'Etapas y explicaciones'],
   ['project-publication', 'Publicación'],
 ] as const;
 
@@ -110,9 +112,12 @@ function ProjectEditorNav() {
 function ProjectEditor({ project, data, call, reload, notify, onCreated, editorHandle, onDirtyChange }: AdminProps & { project?: Project; onCreated: (id: string) => void; editorHandle: MutableRefObject<{ save: () => Promise<boolean> } | null>; onDirtyChange: (dirty: boolean) => void }) {
   const workflow = data.workflows.find((item) => item.id === project?.workflowId) || data.workflows.find((item) => item.active) || data.workflows[0];
   const [form, setForm] = useState<ProjectInput>(() => project ? projectToInput(project) : emptyProject(workflow));
+  const [savedPositions, setSavedPositions] = useState(project?.positions);
+  const [savingPosition, setSavingPosition] = useState(false);
+  const positionSaveInFlight = useRef(false);
   const [preview, setPreview] = useState(false); const [publish, setPublish] = useState(false); const [publishGate, setPublishGate] = useState<'unsaved' | 'blocked' | null>(null); const [publishGateError, setPublishGateError] = useState(''); const [saving, setSaving] = useState(false); const [savingChronology, setSavingChronology] = useState(false);
   const [projectAction, setProjectAction] = useState<'unpublish' | 'archive' | null>(null); const [projectActionBusy, setProjectActionBusy] = useState(false); const [projectActionError, setProjectActionError] = useState('');
-  const storedForm = project ? projectToInput(project) : emptyProject(workflow);
+  const storedForm = project ? { ...projectToInput(project), ...(savedPositions ? { positions: savedPositions } : {}) } : emptyProject(workflow);
   const revisions = data.revisions.filter((item) => item.projectId === project?.id).sort((a, b) => b.number - a.number);
   const latestRevision = revisions[0];
   const publishedForm = latestRevision ? projectToInput(latestRevision.snapshot) : null;
@@ -126,6 +131,7 @@ function ProjectEditor({ project, data, call, reload, notify, onCreated, editorH
   const stageChanged = Boolean(latestRevision && effectiveProjectStageId(latestRevision.snapshot) !== effectiveProjectStageId({ currentStageId: form.currentStageId, updates: form.updates || [] }));
   const set = (key: keyof ProjectInput, value: unknown) => setForm((current) => ({ ...current, [key]: value }));
   async function save(): Promise<boolean> {
+    if (positionSaveInFlight.current) { notify('Esperá a que termine de guardarse la declaración.'); return false; }
     if (!isDirty || saving) return !isDirty;
     const positionsCheck = projectPositionsSchema.safeParse(form.positions || []);
     if (!positionsCheck.success) { notify(`A favor / En contra: ${positionsCheck.error.issues[0].message}`); return false; }
@@ -135,6 +141,7 @@ function ProjectEditor({ project, data, call, reload, notify, onCreated, editorH
       const omitted = Object.keys(form).filter((key) => form[key as keyof ProjectInput] !== undefined && !Object.prototype.hasOwnProperty.call(body?.item || {}, key));
       if (omitted.length) throw new Error(`El servidor no confirmó todos los campos (${omitted.join(', ')}). Conservamos tus cambios en pantalla. No publiques todavía: la API necesita actualizarse.`);
       setForm(projectToInput(body.item));
+      setSavedPositions(body.item.positions);
       notify('Borrador guardado. Los cambios todavía no son públicos.');
       await reload();
       if (!project) onCreated(body.item.id);
@@ -146,6 +153,7 @@ function ProjectEditor({ project, data, call, reload, notify, onCreated, editorH
   useEffect(() => { onDirtyChange(isDirty); return () => onDirtyChange(false); }, [isDirty, onDirtyChange]);
   useEffect(() => { const warn = (event: BeforeUnloadEvent) => { if (!isDirty) return; event.preventDefault(); event.returnValue = ''; }; window.addEventListener('beforeunload', warn); return () => window.removeEventListener('beforeunload', warn); }, [isDirty]);
   async function saveChronology() {
+    if (positionSaveInFlight.current) return;
     if (!project || !chronologyDirty || savingChronology) return;
     setSavingChronology(true);
     try {
@@ -157,7 +165,23 @@ function ProjectEditor({ project, data, call, reload, notify, onCreated, editorH
     finally { setSavingChronology(false); }
   }
   async function uploadEditorImage(file: File) { return uploadRichImage(call, file); }
+  async function savePosition(item: ProjectPosition): Promise<ProjectPosition> {
+    if (!project) throw new Error('Guardá primero los datos básicos del proyecto para guardar declaraciones individuales.');
+    if (positionSaveInFlight.current || saving || savingChronology || projectActionBusy) throw new Error('Esperá a que termine el guardado en curso.');
+    positionSaveInFlight.current = true;
+    setSavingPosition(true);
+    try {
+      const previous = savedPositions?.find((position) => position.id === item.id) || null;
+      const body = await call(`/v1/manage/projects/${project.id}/positions/${item.id}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ item, previous }) });
+      if (!body?.item || !sameValue(body.item, item)) throw new Error('El servidor no confirmó la declaración completa. Conservamos tu texto para reintentar.');
+      setSavedPositions((current) => current?.some((position) => position.id === item.id) ? current.map((position) => position.id === item.id ? body.item : position) : [...(current || []), body.item]);
+      setForm((current) => ({ ...current, positions: current.positions?.map((position) => position.id === item.id ? body.item : position) }));
+      try { await reload(); } catch { notify('Declaración guardada. No se pudo actualizar el listado; tu texto está conservado.'); }
+      return body.item;
+    } finally { positionSaveInFlight.current = false; setSavingPosition(false); }
+  }
   function requestPublication() {
+    if (positionSaveInFlight.current) { notify('Esperá a que termine de guardarse la declaración.'); return; }
     setPublishGateError('');
     if (publicationIssues.length) { setPublishGate('blocked'); return; }
     if (isDirty) { setPublishGate('unsaved'); return; }
@@ -170,6 +194,7 @@ function ProjectEditor({ project, data, call, reload, notify, onCreated, editorH
     setPublishGate(null); setPublish(true);
   }
   function requestProjectAction(action: 'unpublish' | 'archive') {
+    if (positionSaveInFlight.current) return;
     setProjectActionError('');
     setProjectAction(action);
   }
@@ -194,16 +219,16 @@ function ProjectEditor({ project, data, call, reload, notify, onCreated, editorH
     <div className="project-editor-toolbar"><div className="project-editor-heading"><div className="panel-title"><div><div className="status-line"><span className="status-pill">{project ? statusLabel(project.status) : 'Nuevo borrador'}</span>{isDirty && <span className="unsaved-pill">Cambios sin guardar</span>}</div><h2>{project?.title || 'Nuevo proyecto'}</h2></div><div className="editor-actions"><button className="button ghost" onClick={() => setPreview(true)} disabled={!project}>Previsualizar</button><button className="button primary" onClick={save} disabled={!isDirty || saving || savingChronology}>{saving ? 'Guardando…' : 'Guardar'}</button></div></div></div></div>
     <details id="project-info" className="project-editor-group project-editor-anchor" open><summary>Datos básicos</summary><div className="project-editor-group-body"><div className="form-grid"><Field label="Título"><input value={form.title} onChange={(e) => { set('title', e.target.value); if (!project) set('slug', slugify(e.target.value)); }} /></Field><Field label="Slug estable"><input value={form.slug} onChange={(e) => set('slug', slugify(e.target.value))} disabled={Boolean(project?.publishedAt)} /></Field><Field label="Expediente"><input value={form.docketNumber || ''} onChange={(e) => set('docketNumber', e.target.value)} /></Field><Field label="Fecha de ingreso"><input type="date" value={form.entryDate || ''} onChange={(e) => set('entryDate', e.target.value || null)} /></Field><Field label="Cámara de origen"><select value={form.originChamberId || ''} onChange={(e) => set('originChamberId', e.target.value || null)}><option value="">Seleccionar</option>{data.catalogs.filter((item) => item.kind === 'chamber' && item.active).map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></Field><Field label="Iniciativa"><select value={form.initiativeTypeId || ''} onChange={(e) => set('initiativeTypeId', e.target.value || null)}><option value="">Seleccionar</option>{data.catalogs.filter((item) => item.kind === 'initiative' && item.active).map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></Field><Field label="Etapa inicial o histórica"><select value={form.currentStageId} onChange={(e) => set('currentStageId', e.target.value)}>{workflow.stages.filter((item) => item.active).sort((a, b) => a.order - b.order).map((item) => <option key={item.id} value={item.id}>{item.label}{item.branchFromId ? ' (rama)' : ''}</option>)}</select></Field><SingleLegislatorPicker items={data.legislators} value={form.authorLegislatorId || null} onChange={(value) => set('authorLegislatorId', value)} /></div></div></details>
     <details id="project-presentation" className="project-editor-group project-editor-anchor" open><summary>Identidad y jerarquía</summary><div className="project-editor-group-body"><ProjectPresentationSettings featured={form.featured || false} icon={projectIcon(form)} order={form.order || 0} onFeaturedChange={(value) => set('featured', value)} onIconChange={(value) => set('icon', value)} onOrderChange={(value) => set('order', value)} /></div></details>
-    <details id="project-stages" className="project-editor-group project-editor-anchor" open><summary>Etapas y explicaciones</summary><div className="project-editor-group-body"><ProjectStageExplanationEditor workflow={workflow} chamber={data.catalogs.find((item) => item.id === form.originChamberId) || null} initiative={data.catalogs.find((item) => item.id === form.initiativeTypeId) || null} globalExplanations={data.settings.legislativeStageExplanations} value={form.stageExplanationOverrides || []} onChange={(value) => set('stageExplanationOverrides', value)} /></div></details>
     <details id="project-summary" className="project-editor-group project-editor-anchor" open><summary>Resumen</summary><div className="project-editor-group-body"><AdvancedTextField label="Resumen en lenguaje claro" value={form.summary || ''} format={form.summaryFormat} onChange={(value) => set('summary', value)} onFormatChange={(value) => set('summaryFormat', value)} onUploadImage={uploadEditorImage} /></div></details>
     <details id="project-impact" className="project-editor-group project-editor-anchor" open><summary>¿Cómo me afecta?</summary><div className="project-editor-group-body"><AdvancedTextField label="¿Cómo me afecta?" value={form.impact || ''} format={form.impactFormat} onChange={(value) => set('impact', value)} onFormatChange={(value) => set('impactFormat', value)} onUploadImage={uploadEditorImage} /></div></details>
-    <details id="project-glossary" className="project-editor-group project-editor-anchor" open><summary>Glosario</summary><div className="project-editor-group-body"><ProjectGlossarySettings terms={data.glossary} form={form} enabled={form.glossaryEnabled !== false} excludedIds={form.glossaryExcludedTermIds || []} occurrenceMode={form.glossaryOccurrenceMode || 'all'} excludedOccurrenceIds={form.glossaryExcludedOccurrenceIds || []} onEnabledChange={(value) => set('glossaryEnabled', value)} onExcludedChange={(value) => set('glossaryExcludedTermIds', value)} onOccurrenceModeChange={(value) => set('glossaryOccurrenceMode', value)} onExcludedOccurrenceChange={(value) => set('glossaryExcludedOccurrenceIds', value)} /></div></details>
     <details id="project-signatories" className="project-editor-group project-editor-anchor" open><summary>Firmantes</summary><div className="project-editor-group-body"><LegislatorRelationPicker items={data.legislators} selected={form.signatoryIds || []} onChange={(items) => set('signatoryIds', items)} /></div></details>
     <details id="project-votes" className="project-editor-group project-editor-anchor" open><summary>Votaciones</summary><div className="project-editor-group-body"><VotingEditor items={form.votingResults || []} legislators={data.legislators} call={call} onChange={(items) => set('votingResults', items)} /></div></details>
-    <details id="project-positions" className="project-editor-group project-editor-anchor" open><summary>A favor / En contra</summary><div className="project-editor-group-body"><ProjectPositionsEditor items={form.positions || []} legislators={data.legislators} onChange={(items) => set('positions', items)} /></div></details>
+    <details id="project-positions" className="project-editor-group project-editor-anchor" open><summary>A favor / En contra</summary><div className="project-editor-group-body"><ProjectPositionsEditor items={form.positions || []} legislators={data.legislators} savedItems={savedPositions || []} onSave={savePosition} busy={saving || savingChronology || savingPosition || projectActionBusy} canSave={Boolean(project)} onChange={(items) => set('positions', items)} /></div></details>
     <details id="project-sources" className="project-editor-group project-editor-anchor" open><summary>Fuentes</summary><div className="project-editor-group-body"><SourcesEditor items={form.sources || []} onChange={(items) => set('sources', items)} /></div></details>
     <details id="project-documents" className="project-editor-group project-editor-anchor" open><summary>Documentos</summary><div className="project-editor-group-body"><DocumentsEditor items={form.documents || []} onChange={(items) => set('documents', items)} project={project} call={call} notify={notify} /></div></details>
     <details id="project-chronology" className="project-editor-group project-editor-anchor" open><summary>Cronología</summary><div className="project-editor-group-body"><UpdatesEditor items={form.updates || []} publishedItems={publishedForm?.updates || []} onChange={(items) => set('updates', items)} workflow={workflow} canSave={Boolean(project && chronologyDirty)} saving={savingChronology} onSave={saveChronology} /></div></details>
+    <details id="project-glossary" className="project-editor-group project-editor-anchor" open><summary>Glosario</summary><div className="project-editor-group-body"><ProjectGlossarySettings terms={data.glossary} form={form} enabled={form.glossaryEnabled !== false} excludedIds={form.glossaryExcludedTermIds || []} occurrenceMode={form.glossaryOccurrenceMode || 'all'} excludedOccurrenceIds={form.glossaryExcludedOccurrenceIds || []} onEnabledChange={(value) => set('glossaryEnabled', value)} onExcludedChange={(value) => set('glossaryExcludedTermIds', value)} onOccurrenceModeChange={(value) => set('glossaryOccurrenceMode', value)} onExcludedOccurrenceChange={(value) => set('glossaryExcludedOccurrenceIds', value)} /></div></details>
+    <details id="project-stages" className="project-editor-group project-editor-anchor" open><summary>Etapas y explicaciones</summary><div className="project-editor-group-body"><ProjectStageExplanationEditor workflow={workflow} chamber={data.catalogs.find((item) => item.id === form.originChamberId) || null} initiative={data.catalogs.find((item) => item.id === form.initiativeTypeId) || null} globalExplanations={data.settings.legislativeStageExplanations} value={form.stageExplanationOverrides || []} onChange={(value) => set('stageExplanationOverrides', value)} /></div></details>
     {project && <details id="project-publication" className="project-editor-group project-editor-anchor" open><summary>Publicación</summary><div className="project-editor-group-body"><div className={`publication-guidance ${canPublish || (isDirty && publicationIssues.length === 0) ? 'ready' : ''}`} role="status"><strong>{isDirty && publicationIssues.length === 0 ? 'Podés guardar y publicar en un solo paso' : canPublish ? 'La revisión está lista para publicar' : 'La publicación necesita atención'}</strong>{isDirty && publicationIssues.length === 0 ? <p>Al elegir “Publicar revisión” vas a confirmar primero el guardado de estos cambios.</p> : canPublish ? <p>Vas a poder revisar la notificación y confirmar la publicación en el paso siguiente.</p> : <ul>{publicationIssues.map((issue) => <li key={issue}>{issue}</li>)}</ul>}</div><div className="publish-row"><div className={`publication-state ${isDirty || savedChangesPending ? 'pending' : ''}`}><strong>{isDirty ? 'Cambios sin guardar' : onlyChronologyPending ? 'Cronología guardada' : savedChangesPending ? 'Cambios guardados' : 'Sin cambios pendientes'}</strong><span>{isDirty ? 'Podés guardarlos y continuar con la publicación desde el mismo flujo.' : savedChangesPending ? 'Pendiente de aprobación y publicación.' : 'La versión pública coincide con el borrador guardado.'}</span></div><button className="button dark" onClick={requestPublication} disabled={saving || savingChronology || projectActionBusy} aria-describedby="publication-feedback">{saving ? 'Guardando…' : 'Publicar revisión'}</button>{project.status === 'published' && <button className="button warning" type="button" disabled={projectActionBusy} onClick={() => requestProjectAction('unpublish')}>Despublicar</button>}{project.status !== 'archived' && <button className="button danger" type="button" disabled={projectActionBusy} onClick={() => requestProjectAction('archive')}>Archivar</button>}</div><span id="publication-feedback" className="sr-only">{isDirty && publicationIssues.length === 0 ? 'Hay cambios sin guardar. Podés guardarlos y continuar con la publicación.' : canPublish ? 'La revisión está lista para publicar' : publicationIssues.join('. ')}</span></div></details>}
     {publishGate === 'unsaved' && <div className="dialog-backdrop" onMouseDown={() => !saving && setPublishGate(null)}><section className="dialog warning-dialog" role="alertdialog" aria-modal="true" aria-labelledby="publish-unsaved-title" aria-describedby="publish-unsaved-description" onMouseDown={(event) => event.stopPropagation()}><span className="eyebrow">Cambios sin guardar</span><h2 id="publish-unsaved-title">¿Guardar y preparar la publicación?</h2><p id="publish-unsaved-description">La publicación debe usar la versión que estás viendo. Primero guardaremos todos los cambios de esta pantalla y, si el guardado termina correctamente, podrás revisar y confirmar la nueva revisión pública.</p>{publishGateError && <p className="message error" role="alert">{publishGateError}</p>}<div className="dialog-actions"><button className="button ghost" type="button" disabled={saving} onClick={() => setPublishGate(null)}>Cancelar</button><button className="button primary" type="button" disabled={saving} onClick={() => void saveAndOpenPublication()}>{saving ? 'Guardando…' : 'Guardar y publicar'}</button></div></section></div>}
     {publishGate === 'blocked' && <div className="dialog-backdrop" onMouseDown={() => setPublishGate(null)}><section className="dialog warning-dialog" role="alertdialog" aria-modal="true" aria-labelledby="publish-blocked-title" onMouseDown={(event) => event.stopPropagation()}><span className="eyebrow">Antes de publicar</span><h2 id="publish-blocked-title">Faltan datos para publicar</h2><p>Corregí estos puntos en el proyecto y volvé a elegir “Publicar revisión”:</p><ul className="publication-blockers">{publicationIssues.map((issue) => <li key={issue}>{issue}</li>)}</ul><div className="dialog-actions"><button className="button primary" type="button" onClick={() => setPublishGate(null)}>Volver a editar</button></div></section></div>}

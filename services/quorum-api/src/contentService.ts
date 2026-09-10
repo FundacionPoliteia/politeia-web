@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
+import { z } from 'zod';
 import {
   catalogItemSchema,
   effectiveProjectStageId,
@@ -10,6 +12,8 @@ import {
   legislatorSchema,
   projectInputSchema,
   projectSchema,
+  projectPositionSchema,
+  projectPositionsSchema,
   siteSettingsSchema,
   slugify,
   workflowDefinitionSchema,
@@ -139,6 +143,22 @@ export async function updateProject(id: string, input: unknown, actorEmail: stri
   await store().set('projects', id, project);
   await audit('project.updated', actorEmail, id, { slug: project.slug });
   return project;
+}
+
+export async function saveProjectPosition(id: string, positionId: string, body: unknown, actorEmail: string) {
+  const { item, previous } = z.object({ item: projectPositionSchema, previous: projectPositionSchema.nullable() }).strict().parse(body);
+  if (item.id !== positionId) throw new ApiError(422, 'position_id_mismatch', 'La declaración no coincide con la que querés guardar.');
+  const project = await store().mutateProject(id, (current) => {
+    const existing = current.positions?.find((position) => position.id === positionId) || null;
+    // Retrying after a lost response is safe; stale edits cannot overwrite a newer declaration.
+    if (isDeepStrictEqual(existing, item)) return current;
+    if (!isDeepStrictEqual(existing, previous)) throw new ApiError(409, 'position_conflict', 'Esta declaración cambió en otra sesión. Conservamos tu texto: revisá la versión guardada antes de reemplazarla.');
+    const positions = existing ? current.positions!.map((position) => position.id === positionId ? item : position) : [...(current.positions || []), item];
+    return { ...current, positions: projectPositionsSchema.parse(positions), updatedAt: now(), updatedBy: actorEmail };
+  });
+  if (!project) throw notFound('Proyecto');
+  await audit('project.position-saved', actorEmail, id, { positionId });
+  return { item: project.positions!.find((position) => position.id === positionId) };
 }
 
 export async function publishProject(id: string, body: unknown, actorEmail: string) {

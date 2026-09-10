@@ -33,6 +33,11 @@
 .editor { margin-block: 32px; padding-block: 24px; border-block: 1px solid var(--linea); }
 .editorRow { min-width: 0; margin: 18px 0 0; border: 1px solid var(--linea); border-radius: 8px; padding: 18px; }
 .editorRow legend { padding-inline: 6px; font-weight: 700; }
+.fields { min-width: 0; border: 0; padding: 0; margin: 0; }
+.lockedRow { border-left: 3px solid var(--azul); }
+.lockedRow .fields :disabled { opacity: 1; color: var(--gris); cursor: default; }
+.rowSaveBar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
+.rowSaveBar > span { color: var(--azul); font-size: .8rem; font-weight: 700; }
 .actions { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 12px; }
 .iconButton { display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid var(--linea); border-radius: 4px; background: var(--blanco); color: var(--azul); }
 .iconButton span { font-size: 20px; }
