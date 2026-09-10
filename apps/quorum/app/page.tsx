@@ -4,7 +4,7 @@ import { effectiveProjectStageId, stageProgress, type PublicProject } from '@pol
 import KineticAdvanceWord from '@/components/KineticAdvanceWord';
 import ProjectExplorer from '@/components/ProjectExplorer';
 import { fetchPublicBootstrap } from '@/lib/api';
-import { projectIcon } from '@/lib/projectIcons';
+import { projectIcon, projectIconGlyph } from '@/lib/projectIcons';
 import { projectStageVisualState } from '@/lib/projectStages';
 
 export default async function HomePage() {
@@ -33,7 +33,7 @@ function FeaturedProjects({ projects }: { projects: PublicProject[] }) {
         const stageVisual = projectStageVisualState(project);
         const progress = stageProgress(project.workflow, stageId);
         return <Link className={`featured-project-row stage-visual-${stageVisual}`} href={`/proyectos/${project.slug}`} key={project.id}>
-          <span className="featured-project-icon material-symbols-outlined" aria-hidden="true">{projectIcon(project, index)}</span>
+          <span className="featured-project-icon material-symbols-outlined" aria-hidden="true">{projectIconGlyph(projectIcon(project, index))}</span>
           <span className="featured-project-copy">
             <strong>{project.title}</strong>
             <small className="featured-project-meta">

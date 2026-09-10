@@ -435,6 +435,15 @@ body:has(.management-root) > .site-header, body:has(.management-root) > .site-fo
 .admin-list span { margin-top: 3px; color: var(--gris); font-size: .72rem; }
 .editor-form { display: grid; gap: 15px; }
 .form-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0 14px; }
+.project-editor-toolbar { display: grid; grid-template-columns: 188px minmax(0,1fr); align-items: start; gap: 22px; border-bottom: 1px solid var(--linea); padding-bottom: 18px; }
+.project-editor-heading { min-width: 0; }
+.project-editor-heading .panel-title { margin: 0; }
+.project-editor-nav { position: sticky; top: 88px; z-index: 4; display: grid; gap: 8px; border: 1px solid var(--linea); border-radius: 14px; background: color-mix(in srgb,var(--blanco) 94%,var(--quorum-blue-soft)); padding: 10px; box-shadow: 0 12px 30px rgba(26,26,55,.06); }
+.project-editor-nav-label { padding: 2px 6px 5px; color: var(--azul); font-size: .63rem; font-weight: 850; letter-spacing: .12em; text-transform: uppercase; }
+.project-editor-nav > div { display: grid; gap: 2px; }
+.project-editor-nav button { border: 0; border-left: 2px solid transparent; border-radius: 6px; background: transparent; color: var(--gris); padding: 7px 8px; text-align: left; font-size: .72rem; font-weight: 700; transition: color .18s ease, background .18s ease, border-color .18s ease; }
+.project-editor-nav button:hover, .project-editor-nav button:focus-visible { border-left-color: var(--azul); background: var(--quorum-blue-soft); color: var(--tinta); }
+.project-editor-anchor { scroll-margin-top: 96px; }
 .project-presentation-settings { display: grid; gap: 16px; border: 1px solid var(--linea); border-radius: 16px; background: color-mix(in srgb,var(--hueso) 74%,var(--blanco)); padding: 20px; transition: border-color .2s ease, box-shadow .2s ease; }
 .project-presentation-settings.is-featured { border-color: color-mix(in srgb,var(--azul) 48%,var(--linea)); box-shadow: inset 4px 0 var(--azul); }
 .project-presentation-heading { display: grid; grid-template-columns: 42px minmax(0,1fr); align-items: start; gap: 13px; }
@@ -447,15 +456,16 @@ body:has(.management-root) > .site-header, body:has(.management-root) > .site-fo
 .featured-project-control strong { font-size: .88rem; }
 .featured-project-control small { color: var(--gris); font-size: .73rem; line-height: 1.45; }
 .featured-project-control em { border-radius: 99px; background: var(--quorum-blue-soft); color: var(--azul); padding: 6px 10px; font-size: .66rem; font-style: normal; font-weight: 850; text-transform: uppercase; white-space: nowrap; }
-.project-presentation-grid { display: grid; grid-template-columns: minmax(0,1.55fr) minmax(180px,.45fr); align-items: start; gap: 16px; }
+.project-presentation-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(214px,.34fr); align-items: stretch; gap: 16px; }
+.project-presentation-grid > .field { display: grid; align-content: start; gap: 8px; margin: 0; border: 1px solid var(--linea); border-radius: 13px; background: var(--blanco); padding: 14px; }
 .project-icon-picker { min-width: 0; display: grid; gap: 10px; }
 .project-icon-picker-label { display: grid; gap: 2px; color: var(--tinta); font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .project-icon-picker-label small { color: var(--gris); font-size: .68rem; font-weight: 500; letter-spacing: 0; text-transform: none; }
 .project-icon-search { display: grid; grid-template-columns: 24px minmax(0,1fr); align-items: center; min-height: 44px; border: 1px solid var(--linea); border-radius: var(--radius-control); background: var(--blanco); padding: 0 11px; }
 .project-icon-search > span { color: var(--azul); font-size: 1.1rem; }
 .project-icon-search input { min-width: 0; border: 0; outline: 0; background: transparent; color: var(--tinta); padding: 10px 5px; }
-.project-icon-options { display: grid; grid-template-columns: repeat(6,minmax(66px,1fr)); gap: 7px; max-height: 205px; overflow-y: auto; scrollbar-gutter: stable; }
-.project-icon-option { min-width: 0; display: grid; justify-items: center; gap: 6px; border: 1px solid var(--linea); border-radius: 10px; background: var(--blanco); color: var(--tinta); padding: 9px 6px; cursor: pointer; }
+.project-icon-options { display: grid; grid-template-columns: repeat(auto-fit,minmax(86px,1fr)); gap: 7px; max-height: 225px; overflow-y: auto; scrollbar-gutter: stable; }
+.project-icon-option { min-width: 0; min-height: 68px; display: grid; align-content: center; justify-items: center; gap: 6px; border: 1px solid var(--linea); border-radius: 10px; background: var(--blanco); color: var(--tinta); padding: 9px 6px; cursor: pointer; }
 .project-icon-option:hover, .project-icon-option:focus-visible { border-color: var(--azul); background: var(--quorum-blue-soft); }
 .project-icon-option.selected { border-color: var(--azul); background: var(--azul); color: white; box-shadow: 0 7px 18px rgba(19,122,159,.18); }
 .project-icon-option > span { font-size: 1.25rem; }
@@ -880,6 +890,11 @@ body:has(.management-root) > .site-header, body:has(.management-root) > .site-fo
   .management-nav nav { grid-template-columns: 1fr 1fr; }
   .management-top, .panel-title, .history-list article { align-items: flex-start; flex-direction: column; }
   .stat-grid, .form-grid { grid-template-columns: 1fr; }
+  .project-editor-toolbar { grid-template-columns: 1fr; gap: 10px; }
+  .project-editor-nav { position: sticky; top: 72px; overflow: hidden; }
+  .project-editor-nav > div { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }
+  .project-editor-nav button { flex: 0 0 auto; border-left: 0; border-bottom: 2px solid transparent; white-space: nowrap; }
+  .project-editor-nav button:hover, .project-editor-nav button:focus-visible { border-left-color: transparent; border-bottom-color: var(--azul); }
   .project-presentation-settings { padding: 16px; }
   .featured-project-control { grid-template-columns: 22px minmax(0,1fr); align-items: start; }
   .featured-project-control em { grid-column: 2; justify-self: start; }

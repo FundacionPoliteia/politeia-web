@@ -1,14 +1,34 @@
 'use client';
 
 import { useState } from 'react';
-import { projectPositionsSchema, type ProjectPosition } from '@politeia/quorum-contracts';
+import { projectPositionsSchema, type Legislator, type ProjectPosition } from '@politeia/quorum-contracts';
 import styles from './ProjectPositions.module.css';
 
-export default function ProjectPositionsEditor({ items, onChange }: { items: ProjectPosition[]; onChange: (items: ProjectPosition[]) => void }) {
+function normalize(value: string) {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+function legislatorRole(item: Legislator) {
+  const office = item.office === 'diputado' ? 'Diputado/a' : item.office === 'senador' ? 'Senador/a' : 'Legislador/a';
+  const bloc = item.bloc || item.party;
+  return bloc ? `${office} · ${bloc}` : office;
+}
+
+export default function ProjectPositionsEditor({ items, legislators, onChange }: { items: ProjectPosition[]; legislators: Legislator[]; onChange: (items: ProjectPosition[]) => void }) {
   const [removed, setRemoved] = useState<{ item: ProjectPosition; index: number } | null>(null);
+  const [activeNameId, setActiveNameId] = useState<string | null>(null);
   const validation = projectPositionsSchema.safeParse(items);
   const errors = validation.success ? [] : validation.error.issues;
   const update = (id: string, patch: Partial<ProjectPosition>) => onChange(items.map((item) => item.id === id ? { ...item, ...patch } : item));
+  const suggestionsFor = (value: string) => {
+    const query = normalize(value);
+    if (!query) return [];
+    return legislators.filter((item) => normalize(item.fullName).includes(query)).slice(0, 6);
+  };
+  const chooseLegislator = (id: string, legislator: Legislator) => {
+    update(id, { name: legislator.fullName, role: legislatorRole(legislator) });
+    setActiveNameId(null);
+  };
   const move = (index: number, offset: number) => {
     const next = [...items];
     [next[index], next[index + offset]] = [next[index + offset], next[index]];
@@ -24,7 +44,17 @@ export default function ProjectPositionsEditor({ items, onChange }: { items: Pro
       <div className={styles.actions}>{([-1, 1] as const).map((offset) => <button key={offset} type="button" className={styles.iconButton} disabled={index + offset < 0 || index + offset >= items.length} title={offset < 0 ? 'Mover arriba' : 'Mover abajo'} aria-label={offset < 0 ? 'Mover arriba' : 'Mover abajo'} onClick={() => move(index, offset)}><span className="material-symbols-outlined" aria-hidden="true">{offset < 0 ? 'arrow_upward' : 'arrow_downward'}</span></button>)}<button type="button" className={styles.iconButton} title="Eliminar declaración" aria-label="Eliminar declaración" onClick={() => { setRemoved({ item, index }); onChange(items.filter((entry) => entry.id !== item.id)); }}><span className="material-symbols-outlined" aria-hidden="true">delete</span></button></div>
       <div className="form-grid">
         <label className="field">Postura<select value={item.stance} onChange={(e) => update(item.id, { stance: e.target.value as ProjectPosition['stance'] })}><option value="for">A favor</option><option value="against">En contra</option></select></label>
-        <label className="field">Nombre<input required maxLength={160} value={item.name} onChange={(e) => update(item.id, { name: e.target.value })} /></label>
+        <div className={`field ${styles.nameField}`}>
+          <label htmlFor={`position-name-${item.id}`}>Nombre</label>
+          <input id={`position-name-${item.id}`} required maxLength={160} value={item.name} autoComplete="off" onFocus={() => setActiveNameId(item.id)} onBlur={() => window.setTimeout(() => setActiveNameId((current) => current === item.id ? null : current), 120)} onChange={(e) => {
+            const name = e.target.value;
+            const match = legislators.find((legislator) => normalize(legislator.fullName) === normalize(name));
+            update(item.id, match ? { name, role: legislatorRole(match) } : { name });
+            setActiveNameId(item.id);
+          }} />
+          {activeNameId === item.id && suggestionsFor(item.name).length > 0 && <div className={styles.nameSuggestions} role="listbox" aria-label="Legisladores recomendados">{suggestionsFor(item.name).map((legislator) => <button key={legislator.id} type="button" role="option" onMouseDown={(event) => event.preventDefault()} onClick={() => chooseLegislator(item.id, legislator)}><strong>{legislator.fullName}</strong><small>{legislator.office === 'diputado' ? 'Diputado/a' : legislator.office === 'senador' ? 'Senador/a' : 'Legislador/a'} · {legislator.bloc || legislator.party || 'Sin bloque'}</small></button>)}</div>}
+          <small className={styles.nameHint}>Escribí un nombre o elegí una coincidencia para completar cargo y bloque.</small>
+        </div>
         <label className="field">Cargo o espacio político<input maxLength={200} value={item.role} onChange={(e) => update(item.id, { role: e.target.value })} /></label>
         <label className="field">Fecha de la declaración<input type="date" value={item.date || ''} onChange={(e) => update(item.id, { date: e.target.value || null })} /></label>
       </div>

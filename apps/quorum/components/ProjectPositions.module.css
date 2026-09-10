@@ -38,4 +38,12 @@
 .iconButton span { font-size: 20px; }
 .iconButton:disabled { opacity: .4; cursor: default; }
 .iconButton:hover:not(:disabled) { background: var(--quorum-blue-soft); }
+.nameField { position: relative; }
+.nameField > label { display: block; margin-bottom: 6px; }
+.nameHint { display: block; margin-top: 5px; color: var(--gris); font-size: .7rem; line-height: 1.35; }
+.nameSuggestions { position: absolute; z-index: 8; top: calc(100% - 18px); left: 0; right: 0; display: grid; gap: 2px; max-height: 220px; overflow-y: auto; border: 1px solid var(--linea); border-radius: 10px; background: var(--blanco); padding: 5px; box-shadow: 0 16px 34px rgba(26,26,55,.14); }
+.nameSuggestions button { display: grid; gap: 2px; border: 0; border-radius: 7px; background: transparent; color: var(--tinta); padding: 8px 9px; text-align: left; }
+.nameSuggestions button:hover, .nameSuggestions button:focus-visible { background: var(--quorum-blue-soft); outline: 0; }
+.nameSuggestions strong { font-size: .8rem; }
+.nameSuggestions small { color: var(--gris); font-size: .68rem; }
 @media (max-width: 620px) { .columns { grid-template-columns: minmax(0, 1fr); } }

@@ -27,6 +27,17 @@ export const projectIconOptions: Array<{ name: ProjectIconName; label: string }>
   { name: 'assured_workload', label: 'Estado y administración' },
 ];
 
+// A few names are not present in every Material Symbols font subset. Keep the
+// editorial choice stable while rendering a guaranteed glyph in the UI.
+const iconGlyphFallbacks: Partial<Record<ProjectIconName, string>> = {
+  social_services: 'groups',
+  assured_workload: 'account_balance',
+};
+
+export function projectIconGlyph(name: string): string {
+  return iconGlyphFallbacks[name as ProjectIconName] || name;
+}
+
 const iconByKeyword: Array<[RegExp, ProjectIconName]> = [
   [/electoral|voto/i, 'how_to_vote'],
   [/salud mental/i, 'psychology'],
