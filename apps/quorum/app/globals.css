@@ -47,7 +47,7 @@ h3 { font-size: 1.35rem; }
 .eyebrow { display: inline-flex; align-items: center; gap: 9px; color: var(--azul); font-size: .74rem; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
 .eyebrow::before { width: 28px; height: 2px; background: currentColor; content: ''; }
 .hero { position: relative; isolation: isolate; overflow: hidden; border-bottom: 1px solid var(--linea); padding: 76px 0 72px; }
-.hero-congress { position: absolute; z-index: -1; top: 0; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; height: 100%; max-width: 1536px; max-height: 1024px; object-fit: contain; object-position: center bottom; opacity: .19; pointer-events: none; user-select: none; }
+.hero-congress { position: absolute; z-index: -1; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; height: 100%; max-width: 1536px; max-height: 1024px; object-fit: contain; object-position: center bottom; opacity: .19; pointer-events: none; user-select: none; }
 .hero-grid { position: relative; width: min(1400px, calc(100% - 80px)); display: grid; grid-template-columns: minmax(0, .88fr) minmax(0, 1.12fr); align-items: center; gap: 56px; }
 .hero h1 { max-width: 11ch; margin: 18px 0 24px; font-size: 4.75rem; letter-spacing: 0; }
 .hero h1 em { color: var(--azul); font-style: italic; }
