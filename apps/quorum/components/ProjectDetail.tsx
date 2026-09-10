@@ -38,14 +38,14 @@ export default function ProjectDetail({ project, subscriptionsEnabled, stageExpl
   const hasAttributions = Boolean(authorAttribution || signatoryAttributions.length);
 
   return <main id={contentId}>
-    <header className="detail-hero"><div className="shell">
+    <header className="detail-hero"><div className="shell project-detail-shell">
       <nav className="breadcrumbs" aria-label="Migas de pan"><Link href="/">Inicio</Link><span>/</span><Link href="/#proyectos">Proyectos</Link><span>/</span><span aria-current="page">{project.title}</span></nav>
       <h1>{project.title}</h1>
       <div className="fact-grid project-facts">
         <div className="fact"><span>Expediente</span><strong>{project.docketNumber}</strong></div><div className="fact"><span>Cámara de origen</span><strong>{project.chamber?.label || 'Sin dato'}</strong></div><div className="fact"><span>Iniciativa</span><strong>{project.initiative?.label || 'Sin dato'}</strong></div><div className="fact"><span>Fecha de ingreso</span><strong>{formatDate(project.entryDate)}</strong></div><div className="fact"><span>Última actualización</span><strong>{formatDate(project.publishedAt)}</strong></div>
       </div>
     </div></header>
-    <section className="section"><div className="shell detail-layout"><ProjectTableOfContents contentId={`${contentId}-article`} /><article id={`${contentId}-article`}>
+    <section className="section"><div className="shell project-detail-shell detail-layout"><ProjectTableOfContents contentId={`${contentId}-article`} /><article id={`${contentId}-article`}>
       <section className="content-block"><span className="eyebrow">Estado del proyecto</span><h2>{current?.label}</h2><StageTracker workflow={project.workflow} currentStageId={currentStageId} previousStageId={stageVisual === 'backward' || stageVisual === 'forward' ? stageTransition?.previousStageId || null : null} chamber={project.chamber} initiative={project.initiative} visualState={stageVisual} explanations={stageExplanations} projectExplanations={project.stageExplanationOverrides} />{current?.description && <p>{current.description}</p>}</section>
       <section className="content-block"><span className="eyebrow">En pocas palabras</span><h2>Resumen del proyecto</h2><RichContent value={project.summary} format={project.summaryFormat} terms={termsFor('summary')} sectionId="summary" occurrenceMode={occurrenceMode} excludedOccurrenceIds={excludedOccurrenceIds} /></section>
       <section className="content-block"><span className="eyebrow">Impacto cotidiano</span><h2>¿Cómo me afecta?</h2><RichContent value={project.impact} format={project.impactFormat} terms={termsFor('impact')} sectionId="impact" occurrenceMode={occurrenceMode} excludedOccurrenceIds={excludedOccurrenceIds} /></section>

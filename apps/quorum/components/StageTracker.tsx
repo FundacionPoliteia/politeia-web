@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import { stageProgress, type CatalogItem, type LegislativeStageExplanation, type ProjectStageExplanation, type WorkflowDefinition, type WorkflowStage } from '@politeia/quorum-contracts';
 import { getLegislativeStageContext } from '@/lib/legislativeStageContext';
 import type { StageVisualState } from '@/lib/projectStages';
@@ -51,8 +51,8 @@ export default function StageTracker({ workflow, currentStageId, previousStageId
     }}
     onKeyDownCapture={(event) => { if (event.key === 'Escape') close(); }}
   >
-    <div className="tracker-scroll" tabIndex={-1}>
-      <div className="tracker-main">
+    <div className="tracker-scroll" tabIndex={0} role="region" aria-label="Etapas del proyecto; desplazá horizontalmente para ver todas">
+      <div className="tracker-main" style={{ '--track-stage-count': progress.length } as CSSProperties}>
         {progress.map((stage, index) => <button
           type="button"
           className={`track-stage ${stage.state} ${activeStageId === stage.id ? 'explaining' : ''}${hasDirectionalTransition && index >= transitionStart && index < transitionEnd ? ' transition-path' : ''}${hasDirectionalTransition && stage.id === previousStageId ? ' transitioned-from' : ''}`}
