@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type MouseEvent } from 'react';
 
 type TocItem = {
   id: string;
@@ -19,6 +19,9 @@ export default function ProjectTableOfContents({ contentId }: { contentId: strin
 
     let headings: HTMLHeadingElement[] = [];
     let frame = 0;
+    // The private preview scrolls inside a panel rather than the window.
+    let scrollRoot: HTMLElement | null = content.parentElement;
+    while (scrollRoot && !/(auto|scroll)/.test(getComputedStyle(scrollRoot).overflowY)) scrollRoot = scrollRoot.parentElement;
 
     const refresh = () => {
       const usedIds = new Set<string>();
@@ -40,34 +43,52 @@ export default function ProjectTableOfContents({ contentId }: { contentId: strin
     };
 
     const updateActive = () => {
-      const marker = window.innerHeight * 0.22;
+      const top = scrollRoot?.getBoundingClientRect().top || 0;
+      const height = scrollRoot?.clientHeight || window.innerHeight;
+      const marker = top + Math.min(180, Math.max(112, height * 0.22));
       let current = headings[0];
       for (const heading of headings) {
         if (heading.getBoundingClientRect().top <= marker) current = heading;
         else break;
       }
+      // Short final sections may never reach the reading marker before scroll ends.
+      if (headings.length && headings[0].getBoundingClientRect().top < marker && content.getBoundingClientRect().bottom <= top + height) current = headings[headings.length - 1];
       if (current?.id) setActiveId(current.id);
     };
 
     const onScroll = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(updateActive);
+      if (frame) return;
+      frame = requestAnimationFrame(() => { frame = 0; updateActive(); });
     };
 
     refresh();
     updateActive();
-    window.addEventListener('scroll', onScroll, { passive: true });
+    document.addEventListener('scroll', onScroll, { passive: true, capture: true });
     window.addEventListener('resize', onScroll);
-    const observer = new MutationObserver(refresh);
+    const observer = new MutationObserver(() => { refresh(); onScroll(); });
     observer.observe(content, { childList: true, subtree: true });
+    const resizeObserver = new ResizeObserver(onScroll);
+    resizeObserver.observe(content);
 
     return () => {
       cancelAnimationFrame(frame);
-      window.removeEventListener('scroll', onScroll);
+      document.removeEventListener('scroll', onScroll, true);
       window.removeEventListener('resize', onScroll);
       observer.disconnect();
+      resizeObserver.disconnect();
     };
   }, [contentId]);
+
+  function navigate(event: MouseEvent<HTMLAnchorElement>, id: string) {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    const heading = Array.from(document.getElementById(contentId)?.querySelectorAll<HTMLHeadingElement>(headingSelector) || []).find((item) => item.id === id);
+    if (!heading) return;
+    event.preventDefault();
+    heading.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+    // Scope focus to this article: the editor can show another copy in preview.
+    heading.tabIndex = -1;
+    heading.focus({ preventScroll: true });
+  }
 
   if (!items.length) return null;
 
@@ -77,7 +98,7 @@ export default function ProjectTableOfContents({ contentId }: { contentId: strin
       <nav>
         <ol>
           {items.map((item) => <li key={item.id}>
-            <a className={item.id === activeId ? 'is-active' : ''} href={`#${item.id}`} aria-current={item.id === activeId ? 'location' : undefined}>
+            <a className={item.id === activeId ? 'is-active' : ''} href={`#${item.id}`} onClick={(event) => navigate(event, item.id)} aria-current={item.id === activeId ? 'location' : undefined}>
               <span aria-hidden="true" />
               {item.label}
             </a>
