@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
+import { ApiError } from './errors.js';
 import { Firestore } from '@google-cloud/firestore';
 import type {
   ContentRevision, ExternalSource, ExternalSyncRun, FieldProvenance, Legislator,
@@ -40,6 +42,7 @@ export type CollectionKey = keyof typeof collections;
 export type RecordValue = Record<string, unknown>;
 
 export interface PublishBundle {
+  expectedProject: Project;
   project: Project;
   publicProject: PublicProject;
   revision: ContentRevision;
@@ -115,6 +118,7 @@ class MemoryStore implements DataStore {
   }
 
   async publish(bundle: PublishBundle) {
+    if (!isDeepStrictEqual(this.records.get('projects')!.get(bundle.project.id), bundle.expectedProject)) throw new ApiError(409, 'publication_review_stale', 'El borrador cambió mientras se publicaba. Revisá la comparación nuevamente.');
     this.records.get('projects')!.set(bundle.project.id, structuredClone(bundle.project) as unknown as RecordValue);
     this.records.get('publicProjects')!.set(bundle.publicProject.id, structuredClone(bundle.publicProject) as unknown as RecordValue);
     this.records.get('revisions')!.set(bundle.revision.id, structuredClone(bundle.revision) as unknown as RecordValue);
@@ -205,6 +209,8 @@ class FirestoreStore implements DataStore {
 
   async publish(bundle: PublishBundle) {
     await this.firestore.runTransaction(async (transaction) => {
+      const current = await transaction.get(this.collection('projects').doc(bundle.project.id));
+      if (!current.exists || !isDeepStrictEqual({ id: current.id, ...current.data() }, bundle.expectedProject)) throw new ApiError(409, 'publication_review_stale', 'El borrador cambió mientras se publicaba. Revisá la comparación nuevamente.');
       transaction.set(this.collection('projects').doc(bundle.project.id), bundle.project);
       transaction.set(this.collection('publicProjects').doc(bundle.publicProject.id), bundle.publicProject);
       transaction.set(this.collection('revisions').doc(bundle.revision.id), bundle.revision);

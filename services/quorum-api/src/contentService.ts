@@ -1,7 +1,8 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
 import {
+  canonicalProjectValue, compareProjectChanges, summarizeProjectChanges,
   catalogItemSchema,
   effectiveProjectStageId,
   glossaryTermInputSchema,
@@ -161,6 +162,22 @@ export async function saveProjectPosition(id: string, positionId: string, body: 
   return { item: project.positions!.find((position) => position.id === positionId) };
 }
 
+function publicationReviewToken(project: Project, previous?: ContentRevision) {
+  return createHash('sha256').update(canonicalProjectValue({ project, previous: previous?.id || null, snapshot: previous?.snapshot || null })).digest('hex');
+}
+
+export async function reviewProjectPublication(id: string) {
+  const project = await store().get<Project>('projects', id);
+  if (!project) throw notFound('Proyecto');
+  const revisions = (await store().list<ContentRevision>('revisions')).filter((item) => item.projectId === id);
+  const latest = revisions.sort((a, b) => b.number - a.number)[0];
+  return {
+    title: project.title, report: compareProjectChanges(project, latest?.snapshot),
+    token: publicationReviewToken(project, latest), baselineRevision: latest?.number || null,
+    canNotifyFollowers: hasChronologyChanges(project, latest?.snapshot),
+  };
+}
+
 export async function publishProject(id: string, body: unknown, actorEmail: string) {
   const input = publishInput(body);
   const existing = await store().get<Project>('projects', id);
@@ -169,6 +186,8 @@ export async function publishProject(id: string, body: unknown, actorEmail: stri
   const timestamp = now();
   const revisions = (await store().list<ContentRevision>('revisions')).filter((item) => item.projectId === id);
   const latestRevision = [...revisions].sort((left, right) => right.number - left.number)[0];
+  if (input.reviewToken && input.reviewToken !== publicationReviewToken(existing, latestRevision)) throw new ApiError(409, 'publication_review_stale', 'El borrador cambió después de revisar las diferencias. Actualizá la comparación antes de publicar.');
+  const changeReport = summarizeProjectChanges(compareProjectChanges(existing, latestRevision?.snapshot));
   const chronologyChanged = hasChronologyChanges(existing, latestRevision?.snapshot);
   if (input.notifyFollowers && !chronologyChanged) {
     throw new ApiError(422, 'notification_requires_chronology_change', 'Sólo se puede notificar a seguidores cuando la cronología cambió respecto de la última publicación');
@@ -191,18 +210,19 @@ export async function publishProject(id: string, body: unknown, actorEmail: stri
     actorEmail,
     createdAt: timestamp,
     changeSummary: input.changeSummary,
+    changeReport,
     notifyFollowers: input.notifyFollowers,
     restoredFromRevisionId: null,
   };
   const auditEvent = {
     id: newId('audit'), type: 'project.published', actorEmail, targetId: id, createdAt: timestamp,
-    details: { revisionId, notifyFollowers: input.notifyFollowers },
+    details: { revisionId, notifyFollowers: input.notifyFollowers, changedSections: changeReport.sections.map((section) => section.id) },
   };
   const mailJob = input.notifyFollowers ? {
     id: newId('mail'), type: 'project-update', projectId: id, revisionId, status: 'pending', attempts: 0,
     createdAt: timestamp, updatedAt: timestamp,
   } : undefined;
-  await store().publish({ project, publicProject, revision, audit: auditEvent, mailJob });
+  await store().publish({ project, publicProject, revision, audit: auditEvent, mailJob, expectedProject: existing });
   await revalidate(project.slug);
   return { project, publicProject, revision };
 }
@@ -241,10 +261,13 @@ export async function changeProjectVisibility(id: string, status: 'unpublished' 
 export async function saveLegislator(id: string | null, input: unknown, actorEmail: string) {
   const parsed = legislatorInputSchema.parse(input);
   const targetId = id || newId('legislator');
-  const item = legislatorSchema.parse({ ...parsed, id: targetId, updatedAt: now() });
+  const existing = id ? await store().get<Legislator>('legislators', id) : null;
+  const photo = parsed.photoUrl === undefined && existing?.photoUrl !== undefined ? { photoUrl: existing.photoUrl } : {};
+  const item = legislatorSchema.parse({ ...parsed, ...photo, id: targetId, updatedAt: now() });
   await ensureUniqueEntitySlug('legislators', item.slug, targetId);
   await store().set('legislators', targetId, item);
   await audit(id ? 'legislator.updated' : 'legislator.created', actorEmail, targetId, {});
+  await revalidate();
   return item;
 }
 
@@ -416,7 +439,7 @@ function withLegislatorAttributions(project: PublicProject, legislators: Legisla
 
 function toPublicAttribution(item: Legislator) {
   const { id, slug, fullName, party, bloc, district, office, published } = item;
-  return { id, slug, fullName, party, bloc, district, office, published };
+  return { id, slug, fullName, party, bloc, district, office, published, ...(item.photoUrl !== undefined ? { photoUrl: item.photoUrl } : {}) };
 }
 
 async function ensureUniqueSlug(slug: string, exceptId = '') {
@@ -465,7 +488,9 @@ function publishInput(value: unknown) {
   const body = value as Record<string, unknown>;
   const changeSummary = String(body.changeSummary || '').trim();
   if (changeSummary.length > 500) throw new ApiError(422, 'invalid_change_summary', 'El resumen del cambio no puede superar los 500 caracteres');
-  return { changeSummary, notifyFollowers: body.notifyFollowers === true };
+  const reviewToken = body.reviewToken;
+  if (reviewToken !== undefined && (typeof reviewToken !== 'string' || !/^[a-f0-9]{64}$/.test(reviewToken))) throw new ApiError(422, 'invalid_review_token', 'La comparación de publicación no es válida.');
+  return { changeSummary, notifyFollowers: body.notifyFollowers === true, reviewToken: reviewToken as string | undefined };
 }
 
 async function revalidate(slug = '') {

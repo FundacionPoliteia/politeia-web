@@ -8,6 +8,9 @@ import { effectiveProjectStageId, glossaryTermAppearsInTexts, hasChronologyChang
 import { publicApiBase } from '@/lib/api';
 import ProjectDetail from '@/components/ProjectDetail';
 import ProjectPositionsEditor from '@/components/ProjectPositionsEditor';
+import PhotoField from '@/components/PhotoField';
+import PublishDialog from '@/components/PublishDialog';
+import { changeSections } from '@politeia/quorum-contracts';
 import { projectPositionsSchema } from '@politeia/quorum-contracts';
 import type { ProjectPosition } from '@politeia/quorum-contracts';
 import { SiteFooter, SiteHeader } from '@/components/SiteChrome';
@@ -114,6 +117,7 @@ function ProjectEditor({ project, data, call, reload, notify, onCreated, editorH
   const [form, setForm] = useState<ProjectInput>(() => project ? projectToInput(project) : emptyProject(workflow));
   const [savedPositions, setSavedPositions] = useState(project?.positions);
   const [savingPosition, setSavingPosition] = useState(false);
+  const [photoUploading, setPhotoUploading] = useState(false);
   const positionSaveInFlight = useRef(false);
   const [preview, setPreview] = useState(false); const [publish, setPublish] = useState(false); const [publishGate, setPublishGate] = useState<'unsaved' | 'blocked' | null>(null); const [publishGateError, setPublishGateError] = useState(''); const [saving, setSaving] = useState(false); const [savingChronology, setSavingChronology] = useState(false);
   const [projectAction, setProjectAction] = useState<'unpublish' | 'archive' | null>(null); const [projectActionBusy, setProjectActionBusy] = useState(false); const [projectActionError, setProjectActionError] = useState('');
@@ -125,12 +129,12 @@ function ProjectEditor({ project, data, call, reload, notify, onCreated, editorH
   const chronologyDirty = !sameValue(form.updates || [], project?.updates || []);
   const savedChangesPending = Boolean(project && (!publishedForm || !sameValue(storedForm, publishedForm)));
   const onlyChronologyPending = Boolean(publishedForm && !sameValue(storedForm.updates || [], publishedForm.updates || []) && sameValue(withoutUpdates(storedForm), withoutUpdates(publishedForm)));
-  const chronologyChanged = hasChronologyChanges(form, publishedForm);
   const publicationIssues = project ? getPublicationIssues(project, form, false, isDirty || savedChangesPending, data) : [];
   const canPublish = Boolean(project && !isDirty && publicationIssues.length === 0);
   const stageChanged = Boolean(latestRevision && effectiveProjectStageId(latestRevision.snapshot) !== effectiveProjectStageId({ currentStageId: form.currentStageId, updates: form.updates || [] }));
   const set = (key: keyof ProjectInput, value: unknown) => setForm((current) => ({ ...current, [key]: value }));
   async function save(): Promise<boolean> {
+    if (photoUploading) { notify('Esperá a que termine de subir la foto.'); return false; }
     if (positionSaveInFlight.current) { notify('Esperá a que termine de guardarse la declaración.'); return false; }
     if (!isDirty || saving) return !isDirty;
     const positionsCheck = projectPositionsSchema.safeParse(form.positions || []);
@@ -140,6 +144,7 @@ function ProjectEditor({ project, data, call, reload, notify, onCreated, editorH
       const body = await call(project ? `/v1/manage/projects/${project.id}` : '/v1/manage/projects', { method: project ? 'PATCH' : 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(form) });
       const omitted = Object.keys(form).filter((key) => form[key as keyof ProjectInput] !== undefined && !Object.prototype.hasOwnProperty.call(body?.item || {}, key));
       if (omitted.length) throw new Error(`El servidor no confirmó todos los campos (${omitted.join(', ')}). Conservamos tus cambios en pantalla. No publiques todavía: la API necesita actualizarse.`);
+      if (!sameValue(body.item.positions || [], positionsCheck.data)) throw new Error('El servidor no confirmó las declaraciones completas, incluidas sus fotos. Conservamos tus cambios; actualizá la API antes de publicar.');
       setForm(projectToInput(body.item));
       setSavedPositions(body.item.positions);
       notify('Borrador guardado. Los cambios todavía no son públicos.');
@@ -150,10 +155,10 @@ function ProjectEditor({ project, data, call, reload, notify, onCreated, editorH
     finally { setSaving(false); }
   }
   editorHandle.current = { save };
-  useEffect(() => { onDirtyChange(isDirty); return () => onDirtyChange(false); }, [isDirty, onDirtyChange]);
-  useEffect(() => { const warn = (event: BeforeUnloadEvent) => { if (!isDirty) return; event.preventDefault(); event.returnValue = ''; }; window.addEventListener('beforeunload', warn); return () => window.removeEventListener('beforeunload', warn); }, [isDirty]);
+  useEffect(() => { onDirtyChange(isDirty || photoUploading); return () => onDirtyChange(false); }, [isDirty, photoUploading, onDirtyChange]);
+  useEffect(() => { const warn = (event: BeforeUnloadEvent) => { if (!isDirty && !photoUploading) return; event.preventDefault(); event.returnValue = ''; }; window.addEventListener('beforeunload', warn); return () => window.removeEventListener('beforeunload', warn); }, [isDirty, photoUploading]);
   async function saveChronology() {
-    if (positionSaveInFlight.current) return;
+    if (photoUploading || positionSaveInFlight.current) return;
     if (!project || !chronologyDirty || savingChronology) return;
     setSavingChronology(true);
     try {
@@ -165,7 +170,12 @@ function ProjectEditor({ project, data, call, reload, notify, onCreated, editorH
     finally { setSavingChronology(false); }
   }
   async function uploadEditorImage(file: File) { return uploadRichImage(call, file); }
+  async function uploadPhoto(file: File) {
+    setPhotoUploading(true);
+    try { return await uploadRichImage(call, file); } finally { setPhotoUploading(false); }
+  }
   async function savePosition(item: ProjectPosition): Promise<ProjectPosition> {
+    if (photoUploading) throw new Error('Esperá a que termine de subir la foto.');
     if (!project) throw new Error('Guardá primero los datos básicos del proyecto para guardar declaraciones individuales.');
     if (positionSaveInFlight.current || saving || savingChronology || projectActionBusy) throw new Error('Esperá a que termine el guardado en curso.');
     positionSaveInFlight.current = true;
@@ -181,6 +191,7 @@ function ProjectEditor({ project, data, call, reload, notify, onCreated, editorH
     } finally { positionSaveInFlight.current = false; setSavingPosition(false); }
   }
   function requestPublication() {
+    if (photoUploading) { notify('Esperá a que termine de subir la foto.'); return; }
     if (positionSaveInFlight.current) { notify('Esperá a que termine de guardarse la declaración.'); return; }
     setPublishGateError('');
     if (publicationIssues.length) { setPublishGate('blocked'); return; }
@@ -194,7 +205,7 @@ function ProjectEditor({ project, data, call, reload, notify, onCreated, editorH
     setPublishGate(null); setPublish(true);
   }
   function requestProjectAction(action: 'unpublish' | 'archive') {
-    if (positionSaveInFlight.current) return;
+    if (photoUploading || positionSaveInFlight.current) return;
     setProjectActionError('');
     setProjectAction(action);
   }
@@ -223,7 +234,7 @@ function ProjectEditor({ project, data, call, reload, notify, onCreated, editorH
     <details id="project-impact" className="project-editor-group project-editor-anchor" open><summary>¿Cómo me afecta?</summary><div className="project-editor-group-body"><AdvancedTextField label="¿Cómo me afecta?" value={form.impact || ''} format={form.impactFormat} onChange={(value) => set('impact', value)} onFormatChange={(value) => set('impactFormat', value)} onUploadImage={uploadEditorImage} /></div></details>
     <details id="project-signatories" className="project-editor-group project-editor-anchor" open><summary>Firmantes</summary><div className="project-editor-group-body"><LegislatorRelationPicker items={data.legislators} selected={form.signatoryIds || []} onChange={(items) => set('signatoryIds', items)} /></div></details>
     <details id="project-votes" className="project-editor-group project-editor-anchor" open><summary>Votaciones</summary><div className="project-editor-group-body"><VotingEditor items={form.votingResults || []} legislators={data.legislators} call={call} onChange={(items) => set('votingResults', items)} /></div></details>
-    <details id="project-positions" className="project-editor-group project-editor-anchor" open><summary>A favor / En contra</summary><div className="project-editor-group-body"><ProjectPositionsEditor items={form.positions || []} legislators={data.legislators} savedItems={savedPositions || []} onSave={savePosition} busy={saving || savingChronology || savingPosition || projectActionBusy} canSave={Boolean(project)} onChange={(items) => set('positions', items)} /></div></details>
+    <details id="project-positions" className="project-editor-group project-editor-anchor" open><summary>A favor / En contra</summary><div className="project-editor-group-body"><ProjectPositionsEditor items={form.positions || []} legislators={data.legislators} savedItems={savedPositions || []} onSave={savePosition} onUploadImage={uploadPhoto} busy={photoUploading || saving || savingChronology || savingPosition || projectActionBusy} canSave={Boolean(project)} onChange={(items) => set('positions', items)} /></div></details>
     <details id="project-sources" className="project-editor-group project-editor-anchor" open><summary>Fuentes</summary><div className="project-editor-group-body"><SourcesEditor items={form.sources || []} onChange={(items) => set('sources', items)} /></div></details>
     <details id="project-documents" className="project-editor-group project-editor-anchor" open><summary>Documentos</summary><div className="project-editor-group-body"><DocumentsEditor items={form.documents || []} onChange={(items) => set('documents', items)} project={project} call={call} notify={notify} /></div></details>
     <details id="project-chronology" className="project-editor-group project-editor-anchor" open><summary>Cronología</summary><div className="project-editor-group-body"><UpdatesEditor items={form.updates || []} publishedItems={publishedForm?.updates || []} onChange={(items) => set('updates', items)} workflow={workflow} canSave={Boolean(project && chronologyDirty)} saving={savingChronology} onSave={saveChronology} /></div></details>
@@ -233,7 +244,7 @@ function ProjectEditor({ project, data, call, reload, notify, onCreated, editorH
     {publishGate === 'unsaved' && <div className="dialog-backdrop" onMouseDown={() => !saving && setPublishGate(null)}><section className="dialog warning-dialog" role="alertdialog" aria-modal="true" aria-labelledby="publish-unsaved-title" aria-describedby="publish-unsaved-description" onMouseDown={(event) => event.stopPropagation()}><span className="eyebrow">Cambios sin guardar</span><h2 id="publish-unsaved-title">¿Guardar y preparar la publicación?</h2><p id="publish-unsaved-description">La publicación debe usar la versión que estás viendo. Primero guardaremos todos los cambios de esta pantalla y, si el guardado termina correctamente, podrás revisar y confirmar la nueva revisión pública.</p>{publishGateError && <p className="message error" role="alert">{publishGateError}</p>}<div className="dialog-actions"><button className="button ghost" type="button" disabled={saving} onClick={() => setPublishGate(null)}>Cancelar</button><button className="button primary" type="button" disabled={saving} onClick={() => void saveAndOpenPublication()}>{saving ? 'Guardando…' : 'Guardar y publicar'}</button></div></section></div>}
     {publishGate === 'blocked' && <div className="dialog-backdrop" onMouseDown={() => setPublishGate(null)}><section className="dialog warning-dialog" role="alertdialog" aria-modal="true" aria-labelledby="publish-blocked-title" onMouseDown={(event) => event.stopPropagation()}><span className="eyebrow">Antes de publicar</span><h2 id="publish-blocked-title">Faltan datos para publicar</h2><p>Corregí estos puntos en el proyecto y volvé a elegir “Publicar revisión”:</p><ul className="publication-blockers">{publicationIssues.map((issue) => <li key={issue}>{issue}</li>)}</ul><div className="dialog-actions"><button className="button primary" type="button" onClick={() => setPublishGate(null)}>Volver a editar</button></div></section></div>}
     {projectAction && project && <div className="dialog-backdrop" onMouseDown={() => { if (!projectActionBusy) setProjectAction(null); }}><section className={`dialog warning-dialog project-action-dialog ${projectAction}`} role="alertdialog" aria-modal="true" aria-labelledby="project-action-title" aria-describedby="project-action-description" onMouseDown={(event) => event.stopPropagation()}><span className="eyebrow">Confirmación requerida</span><h2 id="project-action-title">¿{projectAction === 'unpublish' ? 'Despublicar' : 'Archivar'} {project.title}?</h2><div className="confirmation-card"><strong>{projectAction === 'unpublish' ? 'La ficha dejará de estar disponible públicamente' : 'El proyecto saldrá del circuito activo'}</strong><p id="project-action-description">{projectAction === 'unpublish' ? 'Se retirará inmediatamente de la web pública. El borrador, los archivos y el historial de revisiones se conservarán para poder trabajar y publicarlo nuevamente.' : 'Se retirará inmediatamente de la web pública y quedará marcado como archivado. No se eliminarán el contenido, los archivos ni el historial editorial.'}</p></div>{projectActionError && <p className="message error" role="alert">{projectActionError}</p>}<div className="dialog-actions"><button className="button ghost" type="button" disabled={projectActionBusy} onClick={() => setProjectAction(null)}>Cancelar</button><button className={projectAction === 'unpublish' ? 'button warning' : 'button danger'} type="button" disabled={projectActionBusy} onClick={() => void confirmProjectAction()}>{projectActionBusy ? 'Procesando…' : projectAction === 'unpublish' ? 'Sí, despublicar' : 'Sí, archivar'}</button></div></section></div>}
-    {preview && project && <PreviewDialog project={project} form={form} settings={data.settings} call={call} close={() => setPreview(false)} />}{publish && project && <PublishDialog project={project} canNotifyFollowers={chronologyChanged} suggestedNotify={stageChanged} call={call} reload={reload} notify={notify} close={() => setPublish(false)} />}
+    {preview && project && <PreviewDialog project={project} form={form} settings={data.settings} call={call} close={() => setPreview(false)} />}{publish && project && <PublishDialog project={project} names={Object.fromEntries([...data.legislators.map((item) => [item.id, item.fullName]), ...data.glossary.map((item) => [item.id, item.term]), ...data.catalogs.map((item) => [item.id, item.label]), ...data.workflows.flatMap((item) => [[item.id, item.name], ...item.stages.map((stage) => [stage.id, stage.label])])])} suggestedNotify={stageChanged} call={call} reload={reload} notify={notify} close={() => setPublish(false)} />}
   </section></div>;
 }
 
@@ -414,17 +425,14 @@ function PreviewDialog({ project, form, settings, call, close }: { project: Proj
   </div>;
 }
 
-function PublishDialog({ project, canNotifyFollowers, suggestedNotify, call, reload, notify, close }: { project: Project; canNotifyFollowers: boolean; suggestedNotify: boolean; call: AdminProps['call']; reload: () => Promise<void>; notify: (value: string) => void; close: () => void }) {
-  const [summary, setSummary] = useState(''); const [send, setSend] = useState(canNotifyFollowers && suggestedNotify); const [confirming, setConfirming] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
-  async function submit() { setBusy(true); setError(''); try { await call(`/v1/manage/projects/${project.id}/publish`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ changeSummary: summary, notifyFollowers: canNotifyFollowers && send }) }); await reload(); notify('La revisión fue publicada y la caché pública se está actualizando.'); close(); } catch (caught) { setError(caught instanceof Error ? caught.message : 'No pudimos publicar.'); } finally { setBusy(false); } }
-  return <div className="dialog-backdrop" onMouseDown={() => !busy && close()}><section className="dialog" role="dialog" aria-modal="true" aria-labelledby="publish-title" onMouseDown={(e) => e.stopPropagation()}><span className="eyebrow">Nueva revisión inmutable</span><h2 id="publish-title">Publicar {project.title}</h2>{!confirming ? <><Field label="Resumen del cambio (opcional)"><textarea value={summary} maxLength={500} onChange={(e) => setSummary(e.target.value)} placeholder="Qué cambió y por qué" /></Field><p className="field-help">Podés dejarlo vacío. El historial registrará igualmente quién publicó, cuándo y qué versión quedó visible.</p>{canNotifyFollowers && <label className="check-row"><input type="checkbox" checked={send} onChange={(e) => setSend(e.target.checked)} /><span>Notificar a seguidores{suggestedNotify ? ' (sugerido porque cambió la etapa)' : ' (opcional para esta actualización de la cronología)'}</span></label>}<div className="dialog-actions"><button className="button ghost" onClick={close}>Cancelar</button><button className="button primary" onClick={() => setConfirming(true)}>Revisar publicación</button></div></> : <><div className="confirmation-card"><strong>Confirmá antes de hacer público el cambio</strong><dl><dt>Proyecto</dt><dd>{project.title}</dd><dt>Resumen</dt><dd>{summary.trim() || 'Sin resumen editorial'}</dd>{canNotifyFollowers && <><dt>Seguidores</dt><dd>{send ? 'Se enviará una notificación' : 'No se enviarán notificaciones'}</dd></>}</dl><p>Se creará una revisión inmutable y la ficha pública pasará a mostrar esta versión.</p></div>{error && <p className="message error" role="alert">{error}</p>}<div className="dialog-actions"><button className="button ghost" disabled={busy} onClick={() => setConfirming(false)}>Volver</button><button className="button primary" disabled={busy} onClick={() => void submit()}>{busy ? 'Publicando…' : 'Sí, publicar revisión'}</button></div></>}</section></div>;
-}
 
 function Legislators({ data, call, reload, notify, admin }: AdminProps & { admin: boolean }) {
-  type LegislatorForm = { fullName: string; slug: string; party: string; bloc: string; district: string; office: Legislator['office']; mandateStart: string; mandateEnd: string; academicTitle: string; bio: string; attendanceValue: string; attendanceAsOf: string; attendanceSourceUrl: string; published: boolean };
+  type LegislatorForm = { fullName: string; photoUrl: string; slug: string; party: string; bloc: string; district: string; office: Legislator['office']; mandateStart: string; mandateEnd: string; academicTitle: string; bio: string; attendanceValue: string; attendanceAsOf: string; attendanceSourceUrl: string; published: boolean };
   type ProfileFeedback = { kind: 'status' | 'error'; text: string };
-  const emptyForm = (): LegislatorForm => ({ fullName: '', slug: '', party: '', bloc: '', district: '', office: 'diputado', mandateStart: '', mandateEnd: '', academicTitle: '', bio: '', attendanceValue: '', attendanceAsOf: '', attendanceSourceUrl: '', published: false });
+  const emptyForm = (): LegislatorForm => ({ fullName: '', photoUrl: '', slug: '', party: '', bloc: '', district: '', office: 'diputado', mandateStart: '', mandateEnd: '', academicTitle: '', bio: '', attendanceValue: '', attendanceAsOf: '', attendanceSourceUrl: '', published: false });
   const [form, setForm] = useState<LegislatorForm>(() => emptyForm()); const [baseline, setBaseline] = useState(JSON.stringify(emptyForm())); const [selectedId, setSelectedId] = useState(''); const [profileSaving, setProfileSaving] = useState(false);
+  const [profilePhotoUploading, setProfilePhotoUploading] = useState(false);
+  async function uploadProfilePhoto(file: File) { setProfilePhotoUploading(true); try { return await uploadRichImage(call, file); } finally { setProfilePhotoUploading(false); } }
   const [profileFeedback, setProfileFeedback] = useState<ProfileFeedback | null>(null);
   const [integration, setIntegration] = useState<IntegrationOverview | null>(null); const [query, setQuery] = useState(''); const [results, setResults] = useState<ExternalLegislatorSearchItem[]>([]); const [sourceBusy, setSourceBusy] = useState(false);
   const [changes, setChanges] = useState<LegislatorImportSuggestion[]>([]); const [changeStatus, setChangeStatus] = useState('pending');
@@ -456,18 +464,19 @@ function Legislators({ data, call, reload, notify, admin }: AdminProps & { admin
   }, [loadChanges, loadIntegration]);
   useEffect(() => { automaticRefresh(); }, [automaticRefresh]);
   useEffect(() => { const timer = window.setInterval(automaticRefresh, 60_000); window.addEventListener('focus', automaticRefresh); document.addEventListener('visibilitychange', automaticRefresh); return () => { window.clearInterval(timer); window.removeEventListener('focus', automaticRefresh); document.removeEventListener('visibilitychange', automaticRefresh); }; }, [automaticRefresh]);
-  function formFor(item: Legislator): LegislatorForm { return { fullName: item.fullName, slug: item.slug, party: item.party || '', bloc: item.bloc || '', district: item.district || '', office: item.office, mandateStart: item.mandateStart || '', mandateEnd: item.mandateEnd || '', academicTitle: item.academicTitle || '', bio: item.bio || '', attendanceValue: item.attendance ? String(item.attendance.value) : '', attendanceAsOf: item.attendance?.asOf || '', attendanceSourceUrl: item.attendance?.sourceUrl || '', published: item.published }; }
-  function editProfile(item: Legislator, discardCurrent = false) { if (!discardCurrent && profileDirty && !window.confirm('Hay cambios sin guardar en el perfil actual. ¿Querés descartarlos y editar otro perfil?')) return; const next = formFor(item); setSelectedId(item.id); setForm(next); setBaseline(JSON.stringify(next)); setProfileFeedback(null); }
-  function newProfile() { if (profileDirty && !window.confirm('Hay cambios sin guardar. ¿Querés descartarlos y crear un perfil nuevo?')) return; const next = emptyForm(); setSelectedId(''); setForm(next); setBaseline(JSON.stringify(next)); setProfileFeedback(null); }
+  function formFor(item: Legislator): LegislatorForm { return { fullName: item.fullName, photoUrl: item.photoUrl || '', slug: item.slug, party: item.party || '', bloc: item.bloc || '', district: item.district || '', office: item.office, mandateStart: item.mandateStart || '', mandateEnd: item.mandateEnd || '', academicTitle: item.academicTitle || '', bio: item.bio || '', attendanceValue: item.attendance ? String(item.attendance.value) : '', attendanceAsOf: item.attendance?.asOf || '', attendanceSourceUrl: item.attendance?.sourceUrl || '', published: item.published }; }
+  function editProfile(item: Legislator, discardCurrent = false) { if (profilePhotoUploading) return; if (!discardCurrent && profileDirty && !window.confirm('Hay cambios sin guardar en el perfil actual. ¿Querés descartarlos y editar otro perfil?')) return; const next = formFor(item); setSelectedId(item.id); setForm(next); setBaseline(JSON.stringify(next)); setProfileFeedback(null); }
+  function newProfile() { if (profilePhotoUploading) return; if (profileDirty && !window.confirm('Hay cambios sin guardar. ¿Querés descartarlos y crear un perfil nuevo?')) return; const next = emptyForm(); setSelectedId(''); setForm(next); setBaseline(JSON.stringify(next)); setProfileFeedback(null); }
   async function save() {
-    if (profileSaving) return;
+    if (profileSaving || profilePhotoUploading) return;
     if (profileBlockingMessage) { setProfileFeedback({ kind: 'error', text: profileBlockingMessage }); return; }
     setProfileSaving(true);
     setProfileFeedback({ kind: 'status', text: 'Guardando el perfil en la base persistente…' });
     try {
       const attendance = attendanceValues.every(Boolean) ? { value: Number(form.attendanceValue), asOf: form.attendanceAsOf, sourceUrl: form.attendanceSourceUrl } : null;
-      const payload = { fullName: form.fullName, slug: form.slug, party: form.party, bloc: form.bloc, district: form.district, office: form.office, mandateStart: form.mandateStart || null, mandateEnd: form.mandateEnd || null, academicTitle: form.academicTitle, bio: form.bio, attendance, published: form.published };
+      const payload = { fullName: form.fullName, photoUrl: form.photoUrl, slug: form.slug, party: form.party, bloc: form.bloc, district: form.district, office: form.office, mandateStart: form.mandateStart || null, mandateEnd: form.mandateEnd || null, academicTitle: form.academicTitle, bio: form.bio, attendance, published: form.published };
       const body = await call(selectedId ? `/v1/manage/legislators/${selectedId}` : '/v1/manage/legislators', { method: selectedId ? 'PUT' : 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+      if ((body.item?.photoUrl || '') !== form.photoUrl.trim()) throw new Error('El servidor no confirmó la foto. Conservamos los cambios; la API debe actualizarse.');
       const created = !selectedId; const next = formFor(body.item); setSelectedId(body.item.id); setForm(next); setBaseline(JSON.stringify(next)); setProfileFeedback({ kind: 'status', text: created ? 'Perfil creado y guardado correctamente.' : 'Cambios guardados correctamente.' }); notify(created ? 'Perfil creado.' : 'Perfil actualizado.');
       try { await reload(); } catch { setProfileFeedback({ kind: 'status', text: 'Los cambios se guardaron, pero no pudimos refrescar la lista. Recargá la página para verla actualizada.' }); }
     } catch (error) { const text = error instanceof Error ? error.message : 'No pudimos guardar.'; setProfileFeedback({ kind: 'error', text }); notify(text); }
@@ -490,6 +499,7 @@ function Legislators({ data, call, reload, notify, admin }: AdminProps & { admin
       <LegislatorProfiles items={data.legislators} selectedId={selectedId} onEdit={editProfile} />
       <section className="admin-panel legislator-profile-editor" onChangeCapture={() => setProfileFeedback(null)}>
         <div className="panel-title"><div><h2>{selectedProfile ? `Editar ${selectedProfile.fullName}` : 'Nuevo perfil manual'}</h2><p>{profileDirty ? 'Hay cambios sin guardar.' : selectedProfile ? 'El formulario coincide con el perfil guardado.' : 'Completá los datos para crear un perfil.'}</p></div>{selectedProfile && <button className="button ghost" type="button" onClick={newProfile}>Crear otro perfil</button>}</div>
+        <PhotoField value={form.photoUrl} name={form.fullName} onChange={(photoUrl) => setForm((current) => ({ ...current, photoUrl }))} onUpload={uploadProfilePhoto} disabled={profileSaving} />
         <Field label="Nombre completo"><input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value, slug: selectedId ? form.slug : slugify(e.target.value) })} /></Field>
         <Field label="Slug estable"><input value={form.slug} disabled={Boolean(selectedProfile?.published)} onChange={(e) => setForm({ ...form, slug: slugify(e.target.value) })} /></Field>
         <div className="form-grid"><Field label="Cámara"><select value={form.office} onChange={(e) => setForm({ ...form, office: e.target.value as Legislator['office'] })}><option value="diputado">Diputado/a</option><option value="senador">Senador/a</option><option value="otro">Otro</option></select></Field><Field label="Distrito"><input value={form.district} onChange={(e) => setForm({ ...form, district: e.target.value })} /></Field><Field label="Partido"><input value={form.party} onChange={(e) => setForm({ ...form, party: e.target.value })} /></Field><Field label="Bloque"><input value={form.bloc} onChange={(e) => setForm({ ...form, bloc: e.target.value })} /></Field><Field label="Inicio del mandato"><input type="date" value={form.mandateStart} onChange={(e) => setForm({ ...form, mandateStart: e.target.value })} /></Field><Field label="Fin del mandato"><input type="date" value={form.mandateEnd} onChange={(e) => setForm({ ...form, mandateEnd: e.target.value })} /></Field></div>
@@ -504,7 +514,7 @@ function Legislators({ data, call, reload, notify, admin }: AdminProps & { admin
         </fieldset>
         <label className="check-row"><input type="checkbox" checked={form.published} onChange={(e) => setForm({ ...form, published: e.target.checked })} /><span>Publicar perfil</span></label>
         {profileFeedback ? <p className={`message profile-save-feedback${profileFeedback.kind === 'error' ? ' error' : ''}`} id="profile-save-help" role={profileFeedback.kind === 'error' ? 'alert' : 'status'}>{profileFeedback.text}</p> : <p className="profile-save-help" id="profile-save-help">{profileBlockingMessage || 'Todo listo para guardar los cambios en Firestore.'}</p>}
-        <div className="legislator-profile-editor-actions">{selectedProfile && <button className="button ghost" type="button" onClick={() => editProfile(selectedProfile, true)} disabled={!profileDirty}>Descartar cambios</button>}<button className="button primary" aria-describedby="profile-save-help" onClick={() => void save()} disabled={!profileDirty || profileSaving || Boolean(profileBlockingMessage)}>{profileSaving ? 'Guardando…' : selectedProfile ? 'Guardar cambios' : 'Crear perfil'}</button></div>
+        <div className="legislator-profile-editor-actions">{selectedProfile && <button className="button ghost" type="button" onClick={() => editProfile(selectedProfile, true)} disabled={!profileDirty}>Descartar cambios</button>}<button className="button primary" aria-describedby="profile-save-help" onClick={() => void save()} disabled={!profileDirty || profileSaving || profilePhotoUploading || Boolean(profileBlockingMessage)}>{profileSaving ? 'Guardando…' : selectedProfile ? 'Guardar cambios' : 'Crear perfil'}</button></div>
       </section>
     </div>
   </>;
@@ -608,7 +618,7 @@ function Users({ data, call, reload, notify }: AdminProps) {
 }
 
 function History({ data, call, reload, notify, admin }: AdminProps & { admin: boolean }) {
-  const revisions = [...data.revisions].sort((a,b) => b.createdAt.localeCompare(a.createdAt)); return <section className="admin-panel"><h2>Revisiones publicadas</h2><div className="history-list">{revisions.map((item) => <article key={item.id}><div><strong>Revisión {item.number} · {data.projects.find((project) => project.id === item.projectId)?.title}</strong><span>{new Date(item.createdAt).toLocaleString('es-AR')} · {item.actorEmail}</span><p>{item.changeSummary || 'Sin resumen editorial'} · {item.notifyFollowers ? 'Notificó seguidores' : 'Sin notificación'}</p></div>{admin && <button className="button ghost" onClick={async () => { await call(`/v1/manage/projects/${item.projectId}/revisions/${item.id}/restore`, { method: 'POST' }); await reload(); notify('La revisión se restauró como un borrador nuevo. No se notificará hasta volver a publicar.'); }}>Restaurar como borrador</button>}</article>)}</div></section>;
+  const revisions = [...data.revisions].sort((a,b) => b.createdAt.localeCompare(a.createdAt)); return <section className="admin-panel"><h2>Revisiones publicadas</h2><div className="history-list">{revisions.map((item) => <article key={item.id}><div><strong>Revisión {item.number} · {data.projects.find((project) => project.id === item.projectId)?.title}</strong><span>{new Date(item.createdAt).toLocaleString('es-AR')} · {item.actorEmail}</span><p>{item.changeSummary || 'Sin resumen editorial'} · {item.notifyFollowers ? 'Notificó seguidores' : 'Sin notificación'}</p>{item.changeReport && <p>Secciones modificadas: {item.changeReport.sections.map((section) => changeSections[section.id]).join(' · ') || 'Sin cambios de contenido'}</p>}</div>{admin && <button className="button ghost" onClick={async () => { await call(`/v1/manage/projects/${item.projectId}/revisions/${item.id}/restore`, { method: 'POST' }); await reload(); notify('La revisión se restauró como un borrador nuevo. No se notificará hasta volver a publicar.'); }}>Restaurar como borrador</button>}</article>)}</div></section>;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="field"><span>{label}</span>{children}</label>; }

@@ -435,6 +435,18 @@ body:has(.management-root) > .site-header, body:has(.management-root) > .site-fo
 .admin-list strong, .admin-list span { display: block; }
 .admin-list span { margin-top: 3px; color: var(--gris); font-size: .72rem; }
 .editor-form { display: grid; gap: 15px; }
+.photo-field { min-width: 0; border: 1px solid var(--linea); border-radius: 12px; padding: 16px; margin: 0 0 16px; }
+.photo-field legend { font-size: .86rem; font-weight: 750; padding-inline: 6px; }
+.photo-field-content { display: flex; align-items: flex-start; gap: 18px; flex-wrap: wrap; }
+.photo-field-content > div { flex: 1 1 240px; min-width: 0; }
+.person-photo { display: inline-grid; place-items: center; flex: 0 0 auto; width: 36px; height: 36px; overflow: hidden; border-radius: 50%; background: var(--quorum-blue-soft); color: var(--azul); font-size: .8rem; font-weight: 750; vertical-align: middle; }
+.person-photo img { width: 100%; height: 100%; object-fit: cover; }
+.person-photo-large { width: 112px; height: 112px; font-size: 1.8rem; margin-bottom: 12px; }
+.position-delete-dialog { border: 1px solid var(--linea); color: var(--tinta); max-height: calc(100dvh - 32px); overflow-y: auto; }
+.position-delete-dialog::backdrop { background: rgba(20,20,40,.55); }
+.publication-dialog { width: min(860px, calc(100% - 24px)); max-height: calc(100dvh - 24px); overflow-y: auto; border: 1px solid var(--linea); color: var(--tinta); }
+.publication-dialog::backdrop { background: rgba(20,20,40,.55); }
+.publication-dialog h2 { font-size: clamp(1.5rem, 3vw, 2.2rem); overflow-wrap: anywhere; }
 .project-group-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .project-editor-group { min-width: 0; border: 1px solid var(--linea); border-radius: 12px; background: var(--blanco); }
 .project-editor-group > summary { padding: 16px; color: var(--tinta); font-size: .9rem; font-weight: 750; cursor: pointer; }

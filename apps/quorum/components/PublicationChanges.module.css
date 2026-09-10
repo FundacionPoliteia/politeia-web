@@ -1,0 +1,19 @@
+.report { margin-block: 20px; min-width: 0; }
+.report h3 { margin: 0 0 8px; font-size: 1.35rem; }
+.report header p, .help { font-size: .82rem; color: var(--gris); }
+.notice { border-left: 3px solid var(--azul); background: var(--quorum-blue-soft); padding: 12px; font-size: .88rem; }
+.report details { border: 1px solid var(--linea); border-radius: 10px; margin: 10px 0; overflow: hidden; }
+.report summary { padding: 14px; cursor: pointer; }
+.report summary > span { font-weight: 750; margin-right: 12px; }
+.report summary small { color: var(--gris); }
+.significant summary { border-left: 4px solid var(--azul); background: var(--quorum-blue-soft); }
+.report article { padding: 14px; border-top: 1px solid var(--linea); }
+.report h4 { margin: 0 0 12px; font: inherit; font-weight: 750; overflow-wrap: anywhere; }
+.report h4 small { display: block; color: var(--azul); font-size: .75rem; font-weight: 650; margin-top: 4px; }
+.comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.comparison > div { min-width: 0; padding: 10px; background: var(--hueso); border-radius: 6px; }
+.comparison strong { color: var(--gris); font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; }
+.comparison pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: .85rem; line-height: 1.6; max-height: 280px; overflow-y: auto; margin: 8px 0 0; }
+.rich { max-height: 280px; overflow-y: auto; overflow-wrap: anywhere; margin-top: 8px; font-size: .85rem; }
+.rich h2, .rich h3 { font-size: 1.1rem; }
+@media (max-width: 600px) { .comparison { grid-template-columns: 1fr; } }

@@ -27,7 +27,7 @@ const web = spawn(process.execPath, ['.next/standalone/apps/quorum/server.js'], 
 try {
   await waitFor(`http://localhost:${apiPort}/healthz`);
   await waitFor(`http://localhost:${webPort}/gestion`);
-  run(['run', 'test:e2e', '--workspace', '@politeia/quorum-web'], { QUORUM_E2E_EXTERNAL_SERVERS: 'true' });
+  run(['run', 'test:e2e', '--workspace', '@politeia/quorum-web', '--', ...process.argv.slice(2)], { QUORUM_E2E_EXTERNAL_SERVERS: 'true' });
 } finally {
   api.kill(); web.kill();
 }
@@ -37,7 +37,7 @@ function run(args, extraEnv = {}) {
     ? spawnSync(process.execPath, [npmCli, ...args], { cwd: process.cwd(), env: { ...env, ...extraEnv }, stdio: 'inherit' })
     : spawnSync(npm, args, { cwd: process.cwd(), env: { ...env, ...extraEnv }, stdio: 'inherit', shell: process.platform === 'win32' });
   if (result.error) throw result.error;
-  if (result.status !== 0) process.exit(result.status ?? 1);
+  if (result.status !== 0) throw new Error(`Command failed (${result.status}): npm ${args.join(' ')}`);
 }
 
 async function waitFor(url) {

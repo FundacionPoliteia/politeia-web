@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { votingResultSchema } from './votes.js';
+import { projectChangeSummarySchema } from './projectChanges.js';
 export * from './votes.js';
+export * from './projectChanges.js';
 
 export const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 export const isoDateTimeSchema = z.string().datetime({ offset: true });
@@ -106,9 +108,15 @@ export const projectIconNames = [
 export const projectIconSchema = z.enum(projectIconNames);
 export type ProjectIconName = z.infer<typeof projectIconSchema>;
 
+export const photoUrlSchema = z.string().trim().max(2000).refine((value) => {
+  if (!value) return true;
+  try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password; } catch { return false; }
+}, 'Ingresá una URL HTTP o HTTPS válida para la foto, sin credenciales.');
+
 export const projectPositionSchema = z.object({
   id: z.string().min(1),
   stance: z.enum(['for', 'against']),
+  photoUrl: photoUrlSchema.optional(),
   name: z.string().trim().min(1, 'Completá el nombre de quien declara.').max(160),
   role: z.string().trim().max(200).default(''),
   quote: z.string().trim().min(1, 'Completá la declaración.').max(6000),
@@ -203,6 +211,7 @@ export const legislatorSchema = z.object({
   id: z.string().min(1),
   slug: slugSchema,
   fullName: z.string().trim().min(3).max(160),
+  photoUrl: photoUrlSchema.optional(),
   party: z.string().trim().max(120).default(''),
   bloc: z.string().trim().max(120).default(''),
   district: z.string().trim().max(120).default(''),
@@ -225,6 +234,7 @@ export const publicLegislatorAttributionSchema = legislatorSchema.pick({
   id: true,
   slug: true,
   fullName: true,
+  photoUrl: true,
   party: true,
   bloc: true,
   district: true,
@@ -258,6 +268,7 @@ export const contentRevisionSchema = z.object({
   actorEmail: z.string().email(),
   createdAt: isoDateTimeSchema,
   changeSummary: z.string().trim().max(500),
+  changeReport: projectChangeSummarySchema.optional(),
   notifyFollowers: z.boolean(),
   restoredFromRevisionId: z.string().nullable().default(null),
 });

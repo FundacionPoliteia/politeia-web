@@ -12,7 +12,7 @@ import { exportFirestoreBackup } from './backup.js';
 import { config } from './config.js';
 import {
   changeProjectVisibility, createProject, getManageBootstrap, getPublicBootstrap, getPublicProject, listPublicProjects,
-  previewProject, publishProject, restoreRevision, saveCatalog, saveGlossaryTerm, saveLegislator, saveWorkflow, updateProject, updateSettings, saveProjectPosition,
+  previewProject, publishProject, reviewProjectPublication, restoreRevision, saveCatalog, saveGlossaryTerm, saveLegislator, saveWorkflow, updateProject, updateSettings, saveProjectPosition,
 } from './contentService.js';
 import { ApiError } from './errors.js';
 import { streamEditorialImage, streamPdf, uploadEditorialImage, uploadPdf } from './files.js';
@@ -105,6 +105,7 @@ export function createApp() {
   app.patch('/v1/manage/projects/:id', requireRole('quorum_editor'), asyncHandler(async (req, res) => res.json({ item: await updateProject(String(req.params.id), req.body, req.user!.email) })));
   app.put('/v1/manage/projects/:id/positions/:positionId', requireRole('quorum_editor'), asyncHandler(async (req, res) => res.json(await saveProjectPosition(String(req.params.id), String(req.params.positionId), req.body, req.user!.email))));
   app.post('/v1/manage/projects/:id/publish', requireRole('quorum_editor'), asyncHandler(async (req, res) => res.json(await publishProject(String(req.params.id), req.body, req.user!.email))));
+  app.get('/v1/manage/projects/:id/publication-review', requireRole('quorum_editor'), asyncHandler(async (req, res) => res.json(await reviewProjectPublication(String(req.params.id)))));
   app.post('/v1/manage/projects/:id/revisions/:revisionId/restore', requireRole('quorum_admin'), asyncHandler(async (req, res) => res.json({ item: await restoreRevision(String(req.params.id), String(req.params.revisionId), req.user!.email) })));
   app.post('/v1/manage/projects/:id/unpublish', requireRole('quorum_editor'), asyncHandler(async (req, res) => res.json({ item: await changeProjectVisibility(String(req.params.id), 'unpublished', req.user!.email) })));
   app.post('/v1/manage/projects/:id/archive', requireRole('quorum_editor'), asyncHandler(async (req, res) => res.json({ item: await changeProjectVisibility(String(req.params.id), 'archived', req.user!.email) })));

@@ -18,6 +18,56 @@ beforeEach(() => {
 });
 
 describe('Quórum API', () => {
+  it('compara contra lo publicado, registra secciones y rechaza publicar una comparación obsoleta', async () => {
+    const app = createApp();
+    const [project] = await testStore.list<Project>('projects');
+    const path = `/v1/manage/projects/${project.id}`;
+    await request(app).patch(path).send({ docketNumber: '1234-D-2026', entryDate: '2026-09-10', originChamberId: 'diputados', initiativeTypeId: 'poder-legislativo', summary: 'Resumen suficientemente descriptivo para publicar el proyecto de prueba.', impact: 'Impacto suficientemente descriptivo para la ciudadanía y el proyecto.' }).expect(200);
+    const firstReview = (await request(app).get(path + '/publication-review').expect(200)).body;
+    expect(firstReview.report.initial).toBe(true);
+    const first = (await request(app).post(path + '/publish').send({ reviewToken: firstReview.token }).expect(200)).body;
+    expect(first.revision.changeReport.initial).toBe(true);
+    expect((await request(app).get(path + '/publication-review').expect(200)).body.report.fields).toEqual([]);
+    const position = { id: 'voice', name: 'Ana', stance: 'for', quote: 'Declaración nueva' };
+    const vote = { id: 'vote', chamber: 'deputies', date: '2026-09-10', subject: 'Voto en general', type: 'general', method: 'aggregate', outcome: 'approved', counts: { yes: 140, no: 100, abstention: 0, absent: 17, notVoting: 0 }, blocks: [], nominal: [], sourceUrl: '', notes: '' };
+    await request(app).patch(path).send({ title: 'Título corregido del proyecto', positions: [position, { ...position, id: 'voice-2', name: 'Beto', stance: 'against' }], votingResults: [vote] }).expect(200);
+    const reviewed = (await request(app).get(path + '/publication-review').expect(200)).body;
+    expect(reviewed.report.sections).toEqual(['identity', 'votes', 'positions']);
+    expect(reviewed.canNotifyFollowers).toBe(false);
+    expect(reviewed.report.significant).toBe(true);
+    await request(app).patch(path).send({ title: 'Otro título corregido del proyecto' }).expect(200);
+    await request(app).post(path + '/publish').send({ reviewToken: reviewed.token }).expect(409);
+    expect(await testStore.list('revisions')).toHaveLength(1);
+    expect((await request(app).get(`/v1/public/projects/${project.slug}`).expect(200)).body.item.title).toBe(first.project.title);
+    const fresh = (await request(app).get(path + '/publication-review').expect(200)).body;
+    const attempts = await Promise.all([request(app).post(path + '/publish').send({ reviewToken: fresh.token }), request(app).post(path + '/publish').send({ reviewToken: fresh.token })]);
+    expect(attempts.map(r => r.status).sort()).toEqual([200, 409]);
+    const latest = attempts.find(r => r.status === 200)!.body.revision;
+    expect(latest.changeReport.sections.map((s: { id: string }) => s.id)).toEqual(['identity', 'votes', 'positions']);
+    expect((await request(app).get('/v1/manage/bootstrap').expect(200)).body.revisions.find((r: { id: string }) => r.id === latest.id).changeReport).toEqual(latest.changeReport);
+    await request(app).post(`${path}/revisions/${first.revision.id}/restore`).expect(200);
+    const restored = (await request(app).get(path + '/publication-review').expect(200)).body;
+    expect(restored.baselineRevision).toBe(2);
+    expect(restored.report.sections).toEqual(['identity', 'votes', 'positions']);
+  });
+  it('conserva, reemplaza y quita la foto del perfil sin aceptar URLs inseguras', async () => {
+    const app = createApp();
+    const input = { fullName: 'Perfil con foto', slug: 'perfil-con-foto', office: 'diputado', published: true, photoUrl: 'https://example.com/foto.jpg' };
+    const created = (await request(app).post('/v1/manage/legislators').send(input).expect(201)).body.item;
+    const path = `/v1/manage/legislators/${created.id}`;
+    expect(created.photoUrl).toBe(input.photoUrl);
+    const { photoUrl, ...withoutPhoto } = input;
+    expect((await request(app).put(path).send(withoutPhoto).expect(200)).body.item.photoUrl).toBe(photoUrl);
+    for (const invalid of ['javascript:alert(1)', 'data:image/png;base64,AAAA', 'https://user:pass@example.com/photo.jpg']) {
+      await request(app).put(path).send({ ...input, photoUrl: invalid }).expect(422);
+      expect((await testStore.get<Legislator>('legislators', created.id))?.photoUrl).toBe(photoUrl);
+    }
+    const replacement = 'https://example.com/reemplazo.webp';
+    await request(app).put(path).send({ ...input, photoUrl: replacement }).expect(200);
+    expect((await request(app).get('/v1/public/bootstrap').expect(200)).body.legislators.find((item: Legislator) => item.id === created.id).photoUrl).toBe(replacement);
+    await request(app).put(path).send({ ...input, photoUrl: '' }).expect(200);
+    expect((await testStore.get<Legislator>('legislators', created.id))?.photoUrl).toBe('');
+  });
   it('guarda declaraciones individuales, conserva las demás y rechaza ediciones obsoletas', async () => {
     const [project] = await testStore.list<Project>('projects');
     const app = createApp();
@@ -28,12 +78,13 @@ describe('Quórum API', () => {
       request(app).put(`${path}/one`).send({ item: first, previous: null }).expect(200),
       request(app).put(`${path}/two`).send({ item: second, previous: null }).expect(200),
     ]);
-    const edited = { ...first, quote: 'Declaración corregida.' };
+    const edited = { ...first, quote: 'Declaración corregida.', photoUrl: 'https://example.com/portrait.webp' };
     expect((await request(app).put(`${path}/one`).send({ item: edited, previous: first }).expect(200)).body.item).toEqual(edited);
     // A lost response can be retried without duplicating the declaration.
     await request(app).put(`${path}/one`).send({ item: edited, previous: first }).expect(200);
     await request(app).put(`${path}/one`).send({ item: { ...first, quote: 'Versión obsoleta' }, previous: first }).expect(409);
     await request(app).put(`${path}/two`).send({ item: { ...second, name: '' }, previous: second }).expect(422);
+    await request(app).put(`${path}/one`).send({ item: { ...edited, photoUrl: 'javascript:alert(1)' }, previous: edited }).expect(422);
     const stored = (await testStore.get<Project>('projects', project.id))!;
     expect(stored.positions).toEqual([edited, second]);
     expect(stored.summary).toEqual(project.summary);
@@ -62,7 +113,7 @@ describe('Quórum API', () => {
   });
   it('conserva declaraciones en preview y publicación y permite quitarlas sin filtrar borradores', async () => {
     const [project] = await testStore.list<Project>('projects');
-    const position = { id: 'position-test', stance: 'for', name: 'Persona de prueba', role: 'Diputada', quote: 'Declaración de prueba para verificar la persistencia.', sourceLabel: 'Fuente', sourceUrl: 'https://example.com/declaracion', date: '2026-09-08' };
+    const position = { id: 'position-test', stance: 'for', name: 'Persona de prueba', photoUrl: 'https://example.com/portrait.jpg', role: 'Diputada', quote: 'Declaración de prueba para verificar la persistencia.', sourceLabel: 'Fuente', sourceUrl: 'https://example.com/declaracion', date: '2026-09-08' };
     const app = createApp();
     await request(app).patch(`/v1/manage/projects/${project.id}`).send({ docketNumber: '1234-D-2026', entryDate: '2026-08-03', originChamberId: 'diputados', initiativeTypeId: 'poder-legislativo', summary: 'Un resumen editorial validado que explica el contenido del proyecto.', impact: 'Una explicación clara de cómo la propuesta puede afectar a la ciudadanía.', positions: [position] }).expect(200);
     expect((await request(app).get(`/v1/manage/projects/${project.id}/preview`).expect(200)).body.item.positions).toEqual([position]);

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import PersonPhoto from './PersonPhoto';
 import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import type { Legislator, PublicLegislatorAttribution } from '@politeia/quorum-contracts';
 import { formatDate } from '@/lib/api';
@@ -77,7 +78,7 @@ export default function LegislatorDrawer({ author, signatories, profiles }: { au
     {selected && <div className="legislator-modal-backdrop" onMouseDown={close}>
       <section ref={modalRef} className="legislator-modal" role="dialog" aria-modal="true" aria-labelledby="legislator-modal-name" aria-describedby={!selectedProfile ? 'legislator-modal-status' : undefined} onMouseDown={(event) => event.stopPropagation()}>
         <button ref={closeRef} className="legislator-modal-close" type="button" aria-label="Cerrar perfil" onClick={close}>×</button>
-        <header className="legislator-modal-header"><span className="eyebrow">{selectedProfile ? 'Perfil legislativo' : 'Datos de atribución'}</span><h2 id="legislator-modal-name">{selected.fullName}</h2>{selectedProfile && <span className="status-pill">Perfil público verificado</span>}</header>
+        <header className="legislator-modal-header"><PersonPhoto url={selectedProfile?.photoUrl ?? selected.photoUrl} name={selected.fullName} large /><span className="eyebrow">{selectedProfile ? 'Perfil legislativo' : 'Datos de atribución'}</span><h2 id="legislator-modal-name">{selected.fullName}</h2>{selectedProfile && <span className="status-pill">Perfil público verificado</span>}</header>
         <dl className="legislator-modal-data">
           <div><dt>Cargo</dt><dd>{officeLabel(selected.office)}</dd></div>
           <div><dt>Distrito</dt><dd>{selected.district || 'Sin dato disponible'}</dd></div>
