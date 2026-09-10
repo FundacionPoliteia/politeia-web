@@ -673,7 +673,13 @@ function getPublicationIssues(project: Project, input: ProjectInput, isDirty: bo
   return issues;
 }
 function withoutUpdates(input: ProjectInput) { const { updates: _updates, ...rest } = input; return rest; }
-function sameValue(left: unknown, right: unknown) { return JSON.stringify(left) === JSON.stringify(right); }
+function sameValue(left: unknown, right: unknown) {
+  // Firestore can return object keys in a different order after a partial save.
+  const canonical = (_key: string, value: unknown) => value && typeof value === 'object' && !Array.isArray(value)
+    ? Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)))
+    : value;
+  return JSON.stringify(left, canonical) === JSON.stringify(right, canonical);
+}
 function formatDateTime(value: string) { return new Date(value).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }); }
 function emptyProject(workflow?: WorkflowDefinition): ProjectInput { return { title: '', slug: '', workflowId: workflow?.id || 'proceso-legislativo-nacional-v1', workflowVersion: workflow?.version || 1, currentStageId: workflow?.stages.find((item) => !item.branchFromId)?.id || 'mesa-de-entrada', stageExplanationOverrides: [], docketNumber: '', entryDate: null, originChamberId: null, initiativeTypeId: null, summary: '', summaryFormat: 'plain', impact: '', impactFormat: 'plain', authorLegislatorId: null, signatoryIds: [], glossaryTermIds: [], glossaryEnabled: true, glossaryExcludedTermIds: [], glossaryOccurrenceMode: 'all', glossaryExcludedOccurrenceIds: [], documents: [], sources: [], updates: [], icon: 'account_balance', featured: false, order: 0 }; }
 async function uploadRichImage(call: AdminProps['call'], file: File) { const body = new FormData(); body.append('file', file); const response = await call('/v1/manage/media/images', { method: 'POST', body }); return String(response.item.url || ''); }
