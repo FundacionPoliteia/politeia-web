@@ -39,6 +39,17 @@ el endpoint editorial existente. Los bytes van a Storage y su referencia a
 Firestore. El límite del servidor sigue siendo IMAGE_MAX_BYTES (8 MiB por defecto).
 No hay migración ni variables nuevas obligatorias.
 
+Elegir un archivo sólo abre una vista previa local (blob URL), sin llamadas a la
+API. El modal requiere “Confirmar subida” para enviar los bytes; cancelar o Escape
+descarta la selección y conserva la foto anterior. Luego se guarda la declaración
+o el perfil para persistir su referencia. Las URLs internas de medios no se
+muestran como campos editables: aparecen como “Imagen cargada”, con opciones para
+reemplazar por archivo, usar una URL externa o quitar la foto.
+
+Las URLs externas, incluidas las miniaturas encrypted-tbn de Google, se conservan
+sin transformaciones. Los errores del enlace de la fuente se identifican como
+“Enlace a la fuente”, separados de la URL de la foto.
+
 Los retratos internos usan el proxy autenticado de la web cuando la URL pertenece
 al origen configurado de la API. No se abre el acceso privado a los medios.
 Los campos de una declaración guardada se bloquean; sólo quedan edición,

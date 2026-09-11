@@ -1,11 +1,12 @@
 import { expect, test } from '@playwright/test';
 
 const apiBase = `http://localhost:${process.env.QUORUM_E2E_API_PORT || 8890}`;
-const photoUrl = 'https://example.com/portrait.png';
+const photoUrl = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTDoQcAPT3KOJT0ZFPI6ewt9yGk8nxTjJ9Wyzuwryu-fw&s=10';
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aB9sAAAAASUVORK5CYII=', 'base64');
 
 test.beforeEach(async ({ page }) => {
   await page.route('https://example.com/**', (route) => route.fulfill({ contentType: 'image/png', body: png }));
+  await page.route('https://encrypted-tbn0.gstatic.com/**', (route) => route.fulfill({ contentType: 'image/png', body: png }));
 });
 
 test('foto de declaración persiste, se bloquea y sólo se elimina con confirmación', async ({ page, request }, info) => {
@@ -33,6 +34,46 @@ test('foto de declaración persiste, se bloquea y sólo se elimina con confirmac
   await section.screenshot({ path: info.outputPath('locked-declaration.png') });
   const stored = (await (await request.get(`${apiBase}/v1/manage/bootstrap`)).json()).projects.find((item: { id: string }) => item.id === project.id);
   expect(stored.positions[0].photoUrl).toBe(photoUrl);
+  // Reopen the persisted declaration; a bad source must not be blamed on its valid photo.
+  await page.reload();
+  await page.getByRole('button', { name: 'Proyectos', exact: true }).click();
+  await page.locator('.admin-list > button:not(.button)').filter({ hasText: title }).click();
+  await section.getByRole('button', { name: 'Editar declaración de Persona de prueba' }).click();
+  await expect(section.getByLabel('URL de la foto')).toHaveValue(photoUrl);
+  await section.getByLabel('Enlace a la fuente', { exact: true }).fill('Yo mismo');
+  await section.getByRole('button', { name: 'Guardar declaración', exact: true }).click();
+  await expect(section.getByRole('alert')).toContainText('Enlace a la fuente:');
+  await expect(section.getByLabel('Enlace a la fuente', { exact: true })).toBeFocused();
+  await expect(section.getByLabel('URL de la foto')).toHaveAttribute('aria-invalid', 'false');
+  await section.getByLabel('Enlace a la fuente', { exact: true }).fill('');
+  await expect(section.getByRole('alert')).toHaveCount(0);
+  await section.getByRole('button', { name: 'Guardar declaración', exact: true }).click();
+  await expect(name).toBeDisabled();
+  const reopened = (await (await request.get(`${apiBase}/v1/manage/bootstrap`)).json()).projects.find((item: { id: string }) => item.id === project.id);
+  expect(reopened.positions[0].photoUrl).toBe(photoUrl);
+  // Selecting or canceling a local file never uploads anything.
+  await section.getByRole('button', { name: 'Editar declaración de Persona de prueba' }).click();
+  let uploads = 0;
+  const uploaded = `${apiBase}/v1/public/media/declaration-photo`;
+  await page.route('**/v1/manage/media/images', route => { uploads++; return route.fulfill({ json: { item: { url: uploaded } } }); });
+  await section.getByLabel('O subir una imagen').setInputFiles({ name: 'portrait.png', mimeType: 'image/png', buffer: png });
+  const confirmation = page.getByRole('dialog', { name: '¿Subir esta foto?' });
+  await expect(confirmation).toBeVisible();
+  expect(uploads).toBe(0);
+  await expect(confirmation.locator('img')).toHaveAttribute('src', /^blob:/);
+  await confirmation.getByRole('button', { name: 'Cancelar', exact: true }).click();
+  expect(uploads).toBe(0);
+  await expect(section.getByLabel('URL de la foto')).toHaveValue(photoUrl);
+  await section.getByLabel('O subir una imagen').setInputFiles({ name: 'portrait.png', mimeType: 'image/png', buffer: png });
+  await confirmation.getByRole('button', { name: 'Confirmar subida', exact: true }).click();
+  await expect(confirmation).toHaveCount(0);
+  expect(uploads).toBe(1);
+  await expect(section.getByLabel('URL de la foto')).toHaveCount(0);
+  await expect(section.getByText('Imagen cargada', { exact: true })).toBeVisible();
+  await section.getByRole('button', { name: 'Guardar declaración', exact: true }).click();
+  await expect(name).toBeDisabled();
+  const uploadedProject = (await (await request.get(`${apiBase}/v1/manage/bootstrap`)).json()).projects.find((item: { id: string }) => item.id === project.id);
+  expect(uploadedProject.positions[0].photoUrl).toBe(uploaded);
   await section.getByRole('button', { name: 'Eliminar declaración' }).click();
   const dialog = page.getByRole('dialog', { name: '¿Quitar esta declaración?' });
   await expect(dialog).toBeVisible();
@@ -63,15 +104,32 @@ test('perfil guarda foto por URL y por subida; un error conserva la foto anterio
   // Storage is mocked here; API persistence still uses the isolated test backend.
   await page.route('**/v1/manage/media/images', (route) => route.fulfill({ status: 500, json: { error: { message: 'Subida no disponible' } } }));
   await editor.getByLabel('O subir una imagen').setInputFiles({ name: 'portrait.png', mimeType: 'image/png', buffer: png });
-  await expect(editor.getByRole('alert')).toContainText('Subida no disponible');
+  const confirmation = page.getByRole('dialog', { name: '¿Subir esta foto?' });
+  await confirmation.getByRole('button', { name: 'Confirmar subida', exact: true }).click();
+  await expect(confirmation.getByRole('alert')).toContainText('Subida no disponible');
   await expect(url).toHaveValue(photoUrl);
+  await confirmation.getByRole('button', { name: 'Cancelar', exact: true }).click();
   await page.unroute('**/v1/manage/media/images');
-  const uploaded = 'https://example.com/uploaded.png';
+  const uploaded = `${apiBase}/v1/public/media/profile-photo`;
   await page.route('**/v1/manage/media/images', (route) => route.fulfill({ json: { item: { url: uploaded } } }));
   await editor.getByLabel('O subir una imagen').setInputFiles({ name: 'portrait.png', mimeType: 'image/png', buffer: png });
-  await expect(url).toHaveValue(uploaded);
+  await confirmation.getByRole('button', { name: 'Confirmar subida', exact: true }).click();
+  await expect(confirmation).toHaveCount(0);
+  await expect(url).toHaveCount(0);
+  await expect(editor.getByText('Imagen cargada', { exact: true })).toBeVisible();
   await save.click();
   await expect(save).toBeDisabled();
   const stored = (await (await request.get(`${apiBase}/v1/manage/bootstrap`)).json()).legislators.find((item: { id: string }) => item.id === id);
   expect(stored.photoUrl).toBe(uploaded);
+  await page.reload();
+  await page.getByRole('button', { name: 'Legisladores', exact: true }).click();
+  await page.locator('.profiles-panel').getByLabel('Buscar').fill(fullName);
+  await page.getByRole('button', { name: `Editar perfil de ${fullName}` }).click();
+  await expect(editor.getByText('Imagen cargada', { exact: true })).toBeVisible();
+  await expect(url).toHaveCount(0);
+  await editor.getByLabel('O subir una imagen').setInputFiles({ name: 'replacement.png', mimeType: 'image/png', buffer: png });
+  await expect(confirmation).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(confirmation).toHaveCount(0);
+  await expect(save).toBeDisabled();
 });

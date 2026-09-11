@@ -9,6 +9,16 @@ function normalize(value: string) {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 }
 
+const positionFieldLabels: Record<string, string> = {
+  photoUrl: 'URL de la foto', sourceUrl: 'Enlace a la fuente', sourceLabel: 'Nombre de la fuente',
+  name: 'Nombre', role: 'Cargo o espacio político', quote: 'Declaración', date: 'Fecha de la declaración', stance: 'Postura',
+};
+function validationMessage(issue: { path: PropertyKey[]; message: string }) {
+  const field = issue.path.find((part) => typeof part === 'string');
+  const label = typeof field === 'string' ? positionFieldLabels[field] : undefined;
+  return label ? `${label}: ${issue.message}` : issue.message;
+}
+
 function ActionIcon({ kind }: { kind: 'edit' | 'up' | 'down' | 'delete' }) {
   const paths = {
     edit: 'M15 5l4 4M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15v5Z',
@@ -34,9 +44,13 @@ export default function ProjectPositionsEditor({ items, legislators, savedItems,
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const deleteDialog = useRef<HTMLDialogElement>(null);
   useEffect(() => { if (deleteId) deleteDialog.current?.showModal(); }, [deleteId]);
-  async function saveItem(item: ProjectPosition) {
+  async function saveItem(item: ProjectPosition, row: HTMLFieldSetElement | null) {
     const parsed = projectPositionSchema.safeParse(item);
-    if (!parsed.success) { setRowErrors((current) => ({ ...current, [item.id]: parsed.error.issues[0].message })); return; }
+    if (!parsed.success) {
+      setRowErrors((current) => ({ ...current, [item.id]: validationMessage(parsed.error.issues[0]) }));
+      row?.querySelector<HTMLInputElement>('[aria-invalid="true"]')?.focus();
+      return;
+    }
     setSavingId(item.id);
     setRowErrors((current) => ({ ...current, [item.id]: '' }));
     try {
@@ -51,7 +65,10 @@ export default function ProjectPositionsEditor({ items, legislators, savedItems,
   const [activeNameId, setActiveNameId] = useState<string | null>(null);
   const validation = projectPositionsSchema.safeParse(items);
   const errors = validation.success ? [] : validation.error.issues;
-  const update = (id: string, patch: Partial<ProjectPosition>) => onChange(items.map((item) => item.id === id ? { ...item, ...patch } : item));
+  const update = (id: string, patch: Partial<ProjectPosition>) => {
+    setRowErrors((current) => ({ ...current, [id]: '' }));
+    onChange(items.map((item) => item.id === id ? { ...item, ...patch } : item));
+  };
   const suggestionsFor = (value: string) => {
     const query = normalize(value);
     if (!query) return [];
@@ -69,18 +86,19 @@ export default function ProjectPositionsEditor({ items, legislators, savedItems,
   return <section className={styles.editor}>
     <div className={styles.editorCounts}><span>{items.filter((item) => item.stance === 'for').length} a favor</span><span>{items.filter((item) => item.stance === 'against').length} en contra</span></div>
     {removed && <div className={styles.undo} role="status">Declaración eliminada.<button type="button" className="button compact" disabled={busy || savingId !== null || items.length >= 100} onClick={() => { const next = [...items]; next.splice(Math.min(removed.index, items.length), 0, removed.item); onChange(next); setRemoved(null); }}>Deshacer</button></div>}
-    {errors.length > 0 && <ul className={styles.errors} aria-live="polite">{errors.map((error, index) => <li key={index}>{typeof error.path[0] === 'number' ? `Declaración ${error.path[0] + 1}: ` : ''}{error.message}</li>)}</ul>}
+    {errors.length > 0 && <ul className={styles.errors} aria-live="polite">{errors.map((error, index) => <li key={index}>{typeof error.path[0] === 'number' ? `Declaración ${error.path[0] + 1}: ` : ''}{validationMessage(error)}</li>)}</ul>}
     <div className="panel-title"><h3>A favor / En contra</h3><button type="button" className="button compact" disabled={busy || savingId !== null || items.length >= 100} onClick={() => onChange([...items, { id: crypto.randomUUID(), stance: 'for', name: '', role: '', quote: '', sourceLabel: '', sourceUrl: '', date: null }])}>Agregar declaración</button></div>
     {!canSave && <p className={styles.nameHint}>Guardá primero los datos básicos del proyecto para habilitar el guardado individual.</p>}
     {items.map((item, index) => {
       const saved = savedItems.find((entry) => entry.id === item.id);
       const parsedItem = projectPositionSchema.safeParse(item);
+      const sourceError = parsedItem.success ? undefined : parsedItem.error.issues.find((issue) => issue.path[0] === 'sourceUrl');
       const locked = Boolean(saved && parsedItem.success && JSON.stringify(projectPositionSchema.safeParse(saved).data) === JSON.stringify(parsedItem.data) && !editing.has(item.id));
       return <fieldset key={item.id} className={`${styles.editorRow} ${locked ? styles.lockedRow : ''}`} disabled={busy || savingId !== null}>
       <legend>{item.name || `Declaración ${index + 1}`}</legend>
       <div className={styles.rowSaveBar}>
         <span role="status">{locked ? 'Guardada en el borrador' : 'En edición'}</span>
-        {locked ? <button type="button" className={styles.iconButton} aria-label={`Editar declaración de ${item.name}`} title="Editar declaración" onClick={() => { setEditing((current) => new Set(current).add(item.id)); setSavedId(null); }}><ActionIcon kind="edit" /></button> : <button type="button" className="button primary compact" disabled={!canSave} onClick={() => void saveItem(item)}>{savingId === item.id ? 'Guardando…' : 'Guardar declaración'}</button>}
+        {locked ? <button type="button" className={styles.iconButton} aria-label={`Editar declaración de ${item.name}`} title="Editar declaración" onClick={() => { setEditing((current) => new Set(current).add(item.id)); setSavedId(null); }}><ActionIcon kind="edit" /></button> : <button type="button" className="button primary compact" disabled={!canSave} onClick={(event) => void saveItem(item, event.currentTarget.closest('fieldset'))}>{savingId === item.id ? 'Guardando…' : 'Guardar declaración'}</button>}
       </div>
       {rowErrors[item.id] && <p className="message error" role="alert">{rowErrors[item.id]}</p>}
       {savedId === item.id && locked && <p className={styles.nameHint} role="status">Guardada. Se hará pública al publicar la revisión del proyecto.</p>}
@@ -105,7 +123,7 @@ export default function ProjectPositionsEditor({ items, legislators, savedItems,
         <label className="field">Fecha de la declaración<input type="date" value={item.date || ''} onChange={(e) => update(item.id, { date: e.target.value || null })} /></label>
       </div>
       <label className="field">Declaración<textarea required rows={5} maxLength={6000} value={item.quote} onChange={(e) => update(item.id, { quote: e.target.value })} /></label>
-      <div className="form-grid"><label className="field">Nombre de la fuente<input maxLength={160} value={item.sourceLabel} onChange={(e) => update(item.id, { sourceLabel: e.target.value })} /></label><label className="field">Enlace a la fuente<input type="url" value={item.sourceUrl} onChange={(e) => update(item.id, { sourceUrl: e.target.value })} /></label></div>
+      <div className="form-grid"><label className="field">Nombre de la fuente<input maxLength={160} value={item.sourceLabel} onChange={(e) => update(item.id, { sourceLabel: e.target.value })} /></label><div className="field"><label htmlFor={`position-source-${item.id}`}>Enlace a la fuente</label><input id={`position-source-${item.id}`} type="url" value={item.sourceUrl} aria-invalid={Boolean(sourceError)} aria-describedby={sourceError ? `position-source-error-${item.id}` : undefined} onChange={(e) => update(item.id, { sourceUrl: e.target.value })} />{sourceError && <small id={`position-source-error-${item.id}`} className="message error">{validationMessage(sourceError)}</small>}</div></div>
       </fieldset>
     </fieldset>; })}
     <dialog ref={deleteDialog} className="dialog position-delete-dialog" aria-labelledby="position-delete-title" onCancel={() => setDeleteId(null)} onClose={() => setDeleteId(null)}>

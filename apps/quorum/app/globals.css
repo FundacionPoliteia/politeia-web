@@ -442,6 +442,9 @@ body:has(.management-root) > .site-header, body:has(.management-root) > .site-fo
 .editor-form { display: grid; gap: 15px; }
 .photo-field { min-width: 0; border: 1px solid var(--linea); border-radius: 12px; padding: 16px; margin: 0 0 16px; }
 .photo-field legend { font-size: .86rem; font-weight: 750; padding-inline: 6px; }
+.photo-confirm-dialog { max-width: calc(100vw - 28px); max-height: calc(100dvh - 28px); overflow-y: auto; overflow-wrap: anywhere; border: 1px solid var(--linea); }
+.photo-confirm-dialog::backdrop { background: rgba(26,26,55,.45); }
+.photo-confirm-preview { display: block; width: 100%; height: 220px; object-fit: contain; border-radius: 12px; background: var(--hueso); margin-bottom: 16px; }
 .photo-field-content { display: flex; align-items: flex-start; gap: 18px; flex-wrap: wrap; }
 .photo-field-content > div { flex: 1 1 240px; min-width: 0; }
 .person-photo { display: inline-grid; place-items: center; flex: 0 0 auto; width: 36px; height: 36px; overflow: hidden; border-radius: 50%; background: var(--quorum-blue-soft); color: var(--azul); font-size: .8rem; font-weight: 750; vertical-align: middle; }
@@ -452,7 +455,9 @@ body:has(.management-root) > .site-header, body:has(.management-root) > .site-fo
 .publication-dialog { width: min(860px, calc(100% - 24px)); max-height: calc(100dvh - 24px); overflow-y: auto; border: 1px solid var(--linea); color: var(--tinta); }
 .publication-dialog::backdrop { background: rgba(20,20,40,.55); }
 .publication-dialog h2 { font-size: clamp(1.5rem, 3vw, 2.2rem); overflow-wrap: anywhere; }
-.project-group-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.project-editor-nav > .project-group-actions { display: grid; grid-template-columns: 1fr; gap: 4px; padding: 0 0 10px; margin-bottom: 4px; border-bottom: 1px solid var(--linea); overflow: visible; }
+.project-editor-nav .project-group-actions button { min-height: 36px; border: 1px solid var(--linea); border-radius: 6px; background: var(--blanco); color: var(--tinta); text-align: center; white-space: normal; }
+.project-editor-nav .project-group-actions button:hover, .project-editor-nav .project-group-actions button:focus-visible { border-color: var(--azul); background: var(--quorum-blue-soft); }
 .project-editor-group { min-width: 0; border: 1px solid var(--linea); border-radius: 12px; background: var(--blanco); }
 .project-editor-group > summary { padding: 16px; color: var(--tinta); font-size: .9rem; font-weight: 750; cursor: pointer; }
 .project-editor-group > summary:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; border-radius: 12px; }
