@@ -1,7 +1,7 @@
 import {
   apiErrorSchema, catalogItemSchema, contentRevisionSchema, glossaryTermSchema, legislatorImportSuggestionSchema, legislatorRevisionSchema, legislatorSchema,
   projectSchema, publicProjectSchema, roleAssignmentSchema, siteSettingsSchema, subscriptionSchema, workflowDefinitionSchema,
-  votingResultSchema,
+  votingResultSchema, teamMemberSchema, teamMemberInputSchema,
 } from '@politeia/quorum-contracts';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
@@ -17,6 +17,7 @@ export const openApiSpec = {
   components: {
     securitySchemes: { sessionCookie: { type: 'apiKey', in: 'cookie', name: 'quorum_session' }, csrf: { type: 'apiKey', in: 'header', name: 'x-csrf-token' } },
     schemas: {
+      TeamMember: json(teamMemberSchema), TeamMemberInput: json(teamMemberInputSchema),
       Project: json(projectSchema), PublicProject: json(publicProjectSchema), Legislator: json(legislatorSchema), GlossaryTerm: json(glossaryTermSchema),
       WorkflowDefinition: json(workflowDefinitionSchema), CatalogItem: json(catalogItemSchema), ContentRevision: json(contentRevisionSchema),
       Subscription: json(subscriptionSchema), SiteSettings: json(siteSettingsSchema), RoleAssignment: json(roleAssignmentSchema), ApiError: json(apiErrorSchema),
@@ -24,6 +25,11 @@ export const openApiSpec = {
     },
   },
   paths: {
+    '/public/team': { get: { tags: ['Public'], summary: 'Sólo perfiles publicados de Quórum, sin borradores ni datos de administración', responses: { '200': ok('Integrantes publicados') } } },
+    '/manage/team': { get: { tags: ['Manage'], summary: 'Lista privada de integrantes; sólo quorum_admin', security: [{ sessionCookie: [] }], responses: { '200': ok('Perfiles con borrador y publicación'), ...errorResponses } }, post: { tags: ['Manage'], summary: 'Crea un perfil de Quórum como borrador; sólo quorum_admin', security: [{ sessionCookie: [], csrf: [] }], requestBody: { required: true, content: { 'application/json': { schema: json(teamMemberInputSchema) } } }, responses: { '201': ok('Perfil creado'), ...errorResponses } } },
+    '/manage/team/{id}': { put: { tags: ['Manage'], summary: 'Guarda draft con version obligatoria; sólo quorum_admin', security: [{ sessionCookie: [], csrf: [] }], responses: { '200': ok('Borrador guardado'), '409': ok('Versión obsoleta'), ...errorResponses } } },
+    '/manage/team/{id}/publish': { post: { tags: ['Manage'], summary: 'Publica el borrador guardado con version obligatoria; sólo quorum_admin', security: [{ sessionCookie: [], csrf: [] }], responses: { '200': ok('Perfil publicado'), '409': ok('Versión obsoleta'), ...errorResponses } } },
+    '/manage/team/{id}/unpublish': { post: { tags: ['Manage'], summary: 'Retira la publicación sin borrar el borrador; requiere version y quorum_admin', security: [{ sessionCookie: [], csrf: [] }], responses: { '200': ok('Perfil despublicado'), '409': ok('Versión obsoleta'), ...errorResponses } } },
     '/public/bootstrap': { get: { tags: ['Public'], summary: 'Contenido público y catálogos visibles', responses: { '200': ok('Bootstrap público') } } },
     '/public/projects': { get: { tags: ['Public'], summary: 'Lista proyectos publicados', responses: { '200': ok('Proyectos') } } },
     '/public/projects/{slug}': { get: { tags: ['Public'], summary: 'Obtiene una ficha pública', parameters: [{ in: 'path', name: 'slug', required: true, schema: { type: 'string' } }], responses: { '200': ok('Proyecto', { $ref: '#/components/schemas/PublicProject' }), '404': ok('No encontrado') } } },

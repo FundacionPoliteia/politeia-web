@@ -517,6 +517,15 @@ body:has(.management-root) > .site-header, body:has(.management-root) > .site-fo
 .project-icon-selection small { color: var(--gris); }
 .field-helper { display: block; color: var(--gris); font-size: .7rem; font-weight: 500; letter-spacing: 0; line-height: 1.45; text-transform: none; }
 .publish-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; border-top: 1px solid var(--linea); padding-top: 20px; }
+.project-publication-title { margin: 0; padding: 16px; border-bottom: 1px solid var(--linea); font: inherit; font-size: .9rem; font-weight: 750; }
+.publish-row.project-publication-dock { position: sticky; bottom: max(12px, env(safe-area-inset-bottom)); z-index: 15; padding: 16px; border: 1px solid var(--linea); border-top: 3px solid var(--azul); border-radius: 14px; background: var(--blanco); box-shadow: 0 -6px 24px rgba(26,26,55,.12); }
+.project-publication-dock .publication-state { flex: 1 1 200px; }
+@media (max-width: 600px) {
+  .publish-row.project-publication-dock { gap: 8px; padding: 10px; bottom: max(6px, env(safe-area-inset-bottom)); }
+  .project-publication-dock .publication-state { flex-basis: 100%; }
+  .project-publication-dock .publication-state span { display: none; }
+  .project-publication-dock .button { flex: 1 1 auto; min-height: 40px; padding: 10px 12px; font-size: .8rem; }
+}
 .publish-row .button.danger, .project-action-dialog.archive .dialog-actions .button.danger { border-color: #971b32; background: #971b32; color: white; }
 .publish-row .button.danger:hover, .project-action-dialog.archive .dialog-actions .button.danger:hover { border-color: #741126; background: #741126; }
 .project-action-dialog { border-top: 5px solid var(--linea); }
@@ -857,7 +866,7 @@ body:has(.management-root) > .site-header, body:has(.management-root) > .site-fo
   .site-header nav { display: none; }
   html:has(.mobile-public-tabs) { scroll-padding-bottom: calc(90px + env(safe-area-inset-bottom, 0px)); }
   body:has(.mobile-public-tabs) .site-footer { padding-bottom: calc(118px + env(safe-area-inset-bottom, 0px)); }
-  .mobile-public-tabs { position: fixed; right: 10px; bottom: max(10px, env(safe-area-inset-bottom, 0px)); left: 10px; z-index: 80; display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 1px; min-height: 66px; padding: 6px; border: 1px solid rgba(26,26,55,.12); border-radius: 16px; background: rgba(255,255,255,.96); box-shadow: 0 16px 40px rgba(26,26,55,.2); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); isolation: isolate; }
+  .mobile-public-tabs { position: fixed; right: 10px; bottom: max(10px, env(safe-area-inset-bottom, 0px)); left: 10px; z-index: 80; display: grid; grid-template-columns: repeat(6,minmax(0,1fr)); gap: 1px; min-height: 66px; padding: 6px; border: 1px solid rgba(26,26,55,.12); border-radius: 16px; background: rgba(255,255,255,.96); box-shadow: 0 16px 40px rgba(26,26,55,.2); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); isolation: isolate; }
   .mobile-public-tabs::after { position: absolute; top: 100%; right: -10px; left: -10px; z-index: 0; height: max(10px,env(safe-area-inset-bottom,0px)); content: ''; pointer-events: auto; }
   .mobile-public-tab { position: relative; z-index: 1; display: grid; min-width: 0; min-height: 52px; grid-template-rows: 24px 22px; place-items: center; align-content: center; gap: 3px; border-radius: 10px; padding: 3px 2px; color: var(--gris); font-size: .6rem; font-weight: 700; line-height: 1.15; text-align: center; transition: color .2s ease, background .2s ease; }
   .mobile-public-tab > span:last-child { display: flex; align-items: center; justify-content: center; align-self: stretch; }

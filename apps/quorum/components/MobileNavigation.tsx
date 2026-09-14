@@ -9,6 +9,7 @@ const items = [
   { href: '/#proyectos', label: 'Proyectos', icon: 'account_balance' },
   { href: '/camino-de-la-ley', label: 'Camino de la ley', icon: 'route' },
   { href: '/glosario', label: 'Glosario', icon: 'menu_book' },
+  { href: '/nosotros', label: 'Nosotros', icon: 'groups' },
   { href: '/privacidad', label: 'Privacidad', icon: 'shield' },
 ];
 
@@ -37,7 +38,7 @@ export default function MobileNavigation() {
           : pathname === href || pathname.startsWith(`${href}/`);
       return <Link href={href} key={href} className={`mobile-public-tab${active ? ' is-active' : ''}`}
         aria-current={active ? (href === '/#proyectos' && pathname === '/' ? 'location' : 'page') : undefined}>
-        <span className="material-symbols-outlined" aria-hidden="true">{icon}</span>
+        {href === '/nosotros' ? <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><circle cx="9" cy="7" r="3" /><path d="M3 21v-3a6 6 0 0 1 12 0v3M16 4a3 3 0 0 1 0 6M18 14a5 5 0 0 1 3 4v3" /></svg> : <span className="material-symbols-outlined" aria-hidden="true">{icon}</span>}
         <span>{label}</span>
       </Link>;
     })}

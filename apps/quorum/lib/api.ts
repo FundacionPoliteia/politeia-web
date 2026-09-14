@@ -4,6 +4,14 @@ export const publicApiBase = process.env.NEXT_PUBLIC_QUORUM_API_BASE_URL || 'htt
 const serverApiBase = process.env.QUORUM_API_BASE_URL || publicApiBase;
 const publicProjectionVersion = 'stage-transitions-v2';
 
+export async function fetchPublicTeam(): Promise<import('@politeia/quorum-contracts').PublicTeamMember[]> {
+  const response = await fetch(`${serverApiBase}/v1/public/team`, { headers: serverPublicAccessHeaders(), cache: 'no-store' });
+  if (!response.ok) throw new Error('No pudimos cargar el equipo de Quórum.');
+  const body = await response.json();
+  if (!Array.isArray(body.items)) throw new Error('Respuesta de equipo inválida.');
+  return body.items;
+}
+
 function serverPublicAccessHeaders() {
   const secret = process.env.PUBLIC_ACCESS_GATE_SECRET?.trim();
   return secret ? { 'x-quorum-public-access-key': secret } : undefined;

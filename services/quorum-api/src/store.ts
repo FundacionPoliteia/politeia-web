@@ -9,8 +9,10 @@ import type {
 import { config } from './config.js';
 import { initialCatalogs, initialProjects, initialSettings, initialWorkflow } from './seedData.js';
 import { clearDataCache, invalidateCollectionCache } from './dataCache.js';
+import type { TeamMember } from '@politeia/quorum-contracts';
 
 export const collections = {
+  teamMembers: 'quorumTeamMembers',
   projects: 'quorumProjects',
   publicProjects: 'quorumPublicProjects',
   legislators: 'quorumLegislators',
@@ -59,6 +61,7 @@ export interface LegislatorReviewBundle {
 }
 
 export interface DataStore {
+  mutateTeamMember(id: string, mutate: (member: TeamMember) => TeamMember): Promise<TeamMember | null>;
   list<T>(collection: CollectionKey): Promise<T[]>;
   get<T>(collection: CollectionKey, id: string): Promise<T | null>;
   set<T extends RecordValue>(collection: CollectionKey, id: string, value: T): Promise<T>;
@@ -72,6 +75,13 @@ export interface DataStore {
 }
 
 class MemoryStore implements DataStore {
+  async mutateTeamMember(id: string, mutate: (member: TeamMember) => TeamMember) {
+    const current = this.records.get('teamMembers')!.get(id);
+    if (!current) return null;
+    const next = mutate(structuredClone(current) as TeamMember);
+    this.records.get('teamMembers')!.set(id, structuredClone(next));
+    return structuredClone(next);
+  }
   private records = new Map<CollectionKey, Map<string, RecordValue>>();
 
   constructor(seed = true) {
@@ -160,6 +170,16 @@ class MemoryStore implements DataStore {
 }
 
 class FirestoreStore implements DataStore {
+  async mutateTeamMember(id: string, mutate: (member: TeamMember) => TeamMember) {
+    const ref = this.collection('teamMembers').doc(id);
+    return this.firestore.runTransaction(async (transaction) => {
+      const snapshot = await transaction.get(ref);
+      if (!snapshot.exists) return null;
+      const next = mutate({ ...snapshot.data(), id } as TeamMember);
+      transaction.set(ref, next, { merge: false });
+      return next;
+    });
+  }
   private firestore: Firestore;
 
   constructor() {

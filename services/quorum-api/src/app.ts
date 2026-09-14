@@ -15,6 +15,7 @@ import {
   previewProject, publishProject, reviewProjectPublication, restoreRevision, saveCatalog, saveGlossaryTerm, saveLegislator, saveWorkflow, updateProject, updateSettings, saveProjectPosition,
 } from './contentService.js';
 import { ApiError } from './errors.js';
+import { changeTeamMember, createTeamMember, listTeam, publicTeam } from './teamService.js';
 import { streamEditorialImage, streamPdf, uploadEditorialImage, uploadPdf } from './files.js';
 import { dispatchPendingMail } from './mail.js';
 import { openApiSpec } from './openapi.js';
@@ -58,6 +59,9 @@ export function createApp() {
   app.get('/openapi.json', (_req, res) => res.json(openApiSpec));
 
   app.use('/v1/public', requirePublicAccess);
+  app.get('/v1/public/team', publicLimiter, asyncHandler(async (_req, res) => {
+    res.set('Cache-Control', 'no-store').json({ items: await publicTeam() });
+  }));
   app.get('/v1/public/bootstrap', publicLimiter, publicContentCache, asyncHandler(async (_req, res) => res.json(await getPublicBootstrap())));
   app.get('/v1/public/projects', publicLimiter, publicContentCache, asyncHandler(async (_req, res) => res.json({ items: await listPublicProjects() })));
   app.get('/v1/public/projects/:slug', publicLimiter, publicContentCache, asyncHandler(async (req, res) => res.json({ item: await getPublicProject(String(req.params.slug)) })));
@@ -93,6 +97,11 @@ export function createApp() {
   app.get('/v1/me', requireAuth, (req, res) => res.json({ user: req.user }));
 
   app.use('/v1/manage', requireAuth, requireCsrf);
+  app.get('/v1/manage/team', requireRole('quorum_admin'), asyncHandler(async (_req, res) => res.json({ items: await listTeam() })));
+  app.post('/v1/manage/team', requireRole('quorum_admin'), asyncHandler(async (req, res) => res.status(201).json({ item: await createTeamMember(req.body, req.user!.email) })));
+  app.put('/v1/manage/team/:id', requireRole('quorum_admin'), asyncHandler(async (req, res) => res.json({ item: await changeTeamMember(String(req.params.id), req.body, req.user!.email, 'save') })));
+  app.post('/v1/manage/team/:id/publish', requireRole('quorum_admin'), asyncHandler(async (req, res) => res.json({ item: await changeTeamMember(String(req.params.id), req.body, req.user!.email, 'publish') })));
+  app.post('/v1/manage/team/:id/unpublish', requireRole('quorum_admin'), asyncHandler(async (req, res) => res.json({ item: await changeTeamMember(String(req.params.id), req.body, req.user!.email, 'unpublish') })));
   app.get('/v1/manage/bootstrap', requireRole('quorum_editor'), asyncHandler(async (_req, res) => res.json(await getManageBootstrap())));
   app.post('/v1/manage/integrations/votings/import', requireRole('quorum_editor'), sensitiveLimiter, asyncHandler(async (req, res) => res.json(await importOfficialVoting(String(req.body?.url || ''), req.user!.email))));
   app.get('/v1/manage/integrations/votings/snapshots/:id', requireRole('quorum_editor'), asyncHandler(async (req, res) => {

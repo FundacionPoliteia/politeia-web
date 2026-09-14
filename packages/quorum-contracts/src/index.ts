@@ -113,6 +113,25 @@ export const photoUrlSchema = z.string().trim().max(2000).refine((value) => {
   try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password; } catch { return false; }
 }, 'Ingresá una URL HTTP o HTTPS válida para la foto, sin credenciales.');
 
+// Editorial team profiles are independent of blog accounts and legislators.
+export const teamMemberInputSchema = z.object({
+  fullName: z.string().trim().min(1, 'Completá el nombre.').max(160),
+  role: z.string().trim().min(1, 'Completá la función en Quórum.').max(160),
+  organization: z.string().trim().max(160).default('Fundación Politeia'),
+  area: z.string().trim().max(160).default(''),
+  bio: z.string().trim().max(6000).default(''),
+  photoUrl: photoUrlSchema.default(''),
+  order: z.number().int().min(0).max(10000).default(0),
+}).strict();
+export type TeamMemberInput = z.infer<typeof teamMemberInputSchema>;
+export const teamMemberSchema = z.object({
+  id: z.string(), project: z.literal('quorum'), version: z.number().int().positive(),
+  draft: teamMemberInputSchema, published: teamMemberInputSchema.nullable(),
+  updatedAt: z.string(), updatedBy: z.string(), publishedAt: z.string().nullable(),
+});
+export type TeamMember = z.infer<typeof teamMemberSchema>;
+export type PublicTeamMember = TeamMemberInput & { id: string };
+
 export const projectPositionSchema = z.object({
   id: z.string().min(1),
   stance: z.enum(['for', 'against']),

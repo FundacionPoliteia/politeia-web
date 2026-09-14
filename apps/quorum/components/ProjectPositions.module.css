@@ -1,9 +1,12 @@
-.columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
-.column { min-width: 0; border-top: 3px solid var(--stance); container-type: inline-size; }
+.columns { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+.masonry { columns: 280px 2; column-gap: 24px; }
+.masonry .statement { display: inline-block; width: 100%; box-sizing: border-box; break-inside: avoid; vertical-align: top; border-top: 3px solid var(--stance); }
+.stanceLabel { display: inline-block; margin-bottom: 14px; padding: 4px 10px; border-radius: 30px; background: color-mix(in srgb, var(--stance) 8%, var(--blanco)); color: var(--stance); font-size: .75rem; font-weight: 750; }
+.column { min-width: 0; }
 .support { --stance: var(--quorum-green); }
 .opposition { --stance: var(--quorum-coral); }
-.heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 12px; margin-bottom: 16px; background: color-mix(in srgb, var(--stance) 6%, transparent); color: var(--stance); }
-.heading h3 { margin: 0; font-size: 1.35rem; letter-spacing: 0; }
+.heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-radius: 8px; background: color-mix(in srgb, var(--stance) 6%, transparent); color: var(--stance); }
+.heading h3 { margin: 0; font-size: 1rem; letter-spacing: 0; }
 .heading > span { font-size: .8rem; font-weight: 700; }
 .statement { margin-bottom: 16px; padding: 18px; border: 1px solid var(--linea); border-radius: 8px; background: var(--blanco); overflow-wrap: anywhere; }
 .statement header { display: grid; gap: 4px; margin-bottom: 16px; }
