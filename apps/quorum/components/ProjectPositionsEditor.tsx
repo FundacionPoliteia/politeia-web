@@ -95,7 +95,7 @@ export default function ProjectPositionsEditor({ items, legislators, savedItems,
       const sourceError = parsedItem.success ? undefined : parsedItem.error.issues.find((issue) => issue.path[0] === 'sourceUrl');
       const locked = Boolean(saved && parsedItem.success && JSON.stringify(projectPositionSchema.safeParse(saved).data) === JSON.stringify(parsedItem.data) && !editing.has(item.id));
       return <fieldset key={item.id} className={`${styles.editorRow} ${locked ? styles.lockedRow : ''}`} disabled={busy || savingId !== null}>
-      <legend>{item.name || `Declaración ${index + 1}`}</legend>
+      <legend><span className={styles.declarationHeading}><span>{item.name || `Declaración ${index + 1}`}</span><span className={`${styles.editorStance} ${item.stance === 'for' ? styles.support : styles.opposition}`}>{item.stance === 'for' ? 'A favor' : 'En contra'}</span></span></legend>
       <div className={styles.rowSaveBar}>
         <span role="status">{locked ? 'Guardada en el borrador' : 'En edición'}</span>
         {locked ? <button type="button" className={styles.iconButton} aria-label={`Editar declaración de ${item.name}`} title="Editar declaración" onClick={() => { setEditing((current) => new Set(current).add(item.id)); setSavedId(null); }}><ActionIcon kind="edit" /></button> : <button type="button" className="button primary compact" disabled={!canSave} onClick={(event) => void saveItem(item, event.currentTarget.closest('fieldset'))}>{savingId === item.id ? 'Guardando…' : 'Guardar declaración'}</button>}

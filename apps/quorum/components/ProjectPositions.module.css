@@ -36,6 +36,9 @@
 .editor { margin-block: 32px; padding-block: 24px; border-block: 1px solid var(--linea); }
 .editorRow { min-width: 0; margin: 18px 0 0; border: 1px solid var(--linea); border-radius: 8px; padding: 18px; }
 .editorRow legend { padding-inline: 6px; font-weight: 700; }
+.declarationHeading { display: inline-flex; align-items: center; flex-wrap: wrap; column-gap: 24px; row-gap: 8px; max-width: 100%; }
+.declarationHeading > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.editorStance { display: inline-block; padding: 4px 12px; border: 1px solid color-mix(in srgb, var(--stance) 35%, transparent); border-radius: 30px; background: color-mix(in srgb, var(--stance) 8%, var(--blanco)); color: var(--stance); font-size: .75rem; white-space: nowrap; }
 .fields { min-width: 0; border: 0; padding: 0; margin: 0; }
 .lockedRow { border-left: 3px solid var(--azul); background: color-mix(in srgb, var(--tinta) 12%, var(--blanco)); }
 .lockedRow .fields { opacity: .8; }

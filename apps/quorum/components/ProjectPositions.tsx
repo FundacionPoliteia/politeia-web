@@ -5,6 +5,7 @@ import PersonPhoto from './PersonPhoto';
 
 export default function ProjectPositions({ items }: { items: ProjectPosition[] }) {
   if (!items.length) return null;
+  const orderedItems = [...items.filter((item) => item.stance === 'for'), ...items.filter((item) => item.stance === 'against')];
   return <section className="content-block">
     <span className="eyebrow">Voces del debate</span>
     <h2>A favor / En contra</h2>
@@ -18,7 +19,7 @@ export default function ProjectPositions({ items }: { items: ProjectPosition[] }
       })}
     </div>
     <div className={styles.masonry}>
-          {items.map((item) => <article className={`${styles.statement} ${item.stance === 'for' ? styles.support : styles.opposition}`} key={item.id}>
+          {orderedItems.map((item) => <article className={`${styles.statement} ${item.stance === 'for' ? styles.support : styles.opposition}`} key={item.id}>
             <span className={styles.stanceLabel}>{item.stance === 'for' ? 'A favor' : 'En contra'}</span>
             <header className={styles.person}><PersonPhoto url={item.photoUrl} name={item.name} /><div><strong>{item.name}</strong>{item.role && <span>{item.role}</span>}{item.date && <time dateTime={item.date}>{formatDate(item.date)}</time>}</div></header>
             {item.quote.length > 240 ? <details className={styles.quoteDetails}><summary><span className={styles.excerpt}>{item.quote.slice(0, 240).replace(/\s+\S*$/, '')}…</span><span className={styles.expand}>Leer declaración completa</span><span className={styles.collapse}>Cerrar declaración</span></summary><blockquote>{item.quote}</blockquote></details> : <blockquote>{item.quote}</blockquote>}
