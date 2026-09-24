@@ -1,6 +1,10 @@
 'use client';
 
 import Script from 'next/script';
+import ProjectLeaveDialog from './ProjectLeaveDialog';
+import { PendingProjectEdits, usePendingProjectEdit } from './PendingProjectEdits';
+import { projectInputSchema } from '@politeia/quorum-contracts';
+import { PREPARATION_STAGE_ID, withPreparationStage } from '@politeia/quorum-contracts';
 import VotingEditor from '@/components/VotingEditor';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MutableRefObject } from 'react';
@@ -39,6 +43,8 @@ const tabs: Array<{ id: Tab; label: string; admin?: boolean }> = [
 ];
 
 export default function ManagementApp() {
+  const projectNavigation = useRef<((action: () => void) => void) | null>(null);
+  function navigate(action: () => void) { if (projectNavigation.current) projectNavigation.current(action); else action(); }
   const [teamDirty, setTeamDirty] = useState(false);
   const [user, setUser] = useState<User | null>(null); const [data, setData] = useState<Bootstrap | null>(null); const [tab, setTab] = useState<Tab>('tablero');
   const [busy, setBusy] = useState(true); const [message, setMessage] = useState('');
@@ -71,7 +77,7 @@ export default function ManagementApp() {
   if (busy || !data) return <section className="management-login"><div className="login-card"><span className="eyebrow">Gestión Quórum</span><h2>Cargando espacio editorial…</h2></div></section>;
 
   const visibleTabs = tabs.filter((item) => !item.admin || admin);
-  return <div className="management-shell"><aside className="management-nav"><div className="wordmark"><strong>Quórum</strong><span>Gestión</span></div><nav>{visibleTabs.map((item) => <button key={item.id} className={tab === item.id ? 'active' : ''} onClick={() => { if (tab === 'nosotros' && item.id !== tab && teamDirty && !window.confirm('Hay cambios de Nosotros sin guardar. ¿Salir de esta sección?')) return; setTab(item.id); }}>{item.label}</button>)}</nav><div className="manager-user"><strong>{user.name}</strong><span>{user.email}</span><button onClick={logout}>Cerrar sesión</button></div></aside><section className="management-content"><header className="management-top"><div><span className="eyebrow">Gestión editorial</span><h1>{visibleTabs.find((item) => item.id === tab)?.label}</h1></div><span className="environment-pill">Entorno: {process.env.NEXT_PUBLIC_ENVIRONMENT || 'local'}</span></header>{message && <p className="message" role="status">{message}</p>}{tab === 'nosotros' && admin && <TeamManager call={call} uploadImage={file => uploadRichImage(call, file)} onDirtyChange={setTeamDirty} />}{tab === 'tablero' && <Dashboard data={data} />}{tab === 'proyectos' && <Projects data={data} call={call} reload={reload} notify={setMessage} />}{tab === 'legisladores' && <Legislators data={data} call={call} reload={reload} notify={setMessage} admin={admin} />}{tab === 'glosario' && <Glossary data={data} call={call} reload={reload} notify={setMessage} />}{tab === 'catalogos' && <Catalogs data={data} call={call} reload={reload} notify={setMessage} />}{tab === 'seguidores' && <Followers data={data} />}{tab === 'configuracion' && <Settings data={data} call={call} reload={reload} notify={setMessage} />}{tab === 'usuarios' && <Users data={data} call={call} reload={reload} notify={setMessage} />}{tab === 'historial' && <History data={data} call={call} reload={reload} notify={setMessage} admin={admin} />}</section></div>;
+  return <div className="management-shell"><aside className="management-nav"><div className="wordmark"><strong>Quórum</strong><span>Gestión</span></div><nav>{visibleTabs.map((item) => <button key={item.id} className={tab === item.id ? 'active' : ''} onClick={() => { if (tab === 'nosotros' && item.id !== tab && teamDirty && !window.confirm('Hay cambios de Nosotros sin guardar. ¿Salir de esta sección?')) return; if (item.id !== tab) navigate(() => setTab(item.id)); }}>{item.label}</button>)}</nav><div className="manager-user"><strong>{user.name}</strong><span>{user.email}</span><button onClick={() => navigate(() => { void logout(); })}>Cerrar sesión</button></div></aside><section className="management-content"><header className="management-top"><div><span className="eyebrow">Gestión editorial</span><h1>{visibleTabs.find((item) => item.id === tab)?.label}</h1></div><span className="environment-pill">Entorno: {process.env.NEXT_PUBLIC_ENVIRONMENT || 'local'}</span></header>{message && <p className="message" role="status">{message}</p>}{tab === 'nosotros' && admin && <TeamManager call={call} uploadImage={file => uploadRichImage(call, file)} onDirtyChange={setTeamDirty} />}{tab === 'tablero' && <Dashboard data={data} />}{tab === 'proyectos' && <Projects navigation={projectNavigation} data={data} call={call} reload={reload} notify={setMessage} />}{tab === 'legisladores' && <Legislators data={data} call={call} reload={reload} notify={setMessage} admin={admin} />}{tab === 'glosario' && <Glossary data={data} call={call} reload={reload} notify={setMessage} />}{tab === 'catalogos' && <Catalogs data={data} call={call} reload={reload} notify={setMessage} />}{tab === 'seguidores' && <Followers data={data} />}{tab === 'configuracion' && <Settings data={data} call={call} reload={reload} notify={setMessage} />}{tab === 'usuarios' && <Users data={data} call={call} reload={reload} notify={setMessage} />}{tab === 'historial' && <History data={data} call={call} reload={reload} notify={setMessage} admin={admin} />}</section></div>;
 }
 
 function Dashboard({ data }: { data: Bootstrap }) {
@@ -83,18 +89,64 @@ function Check({ ok, label }: { ok: boolean; label: string }) { return <div clas
 
 type AdminProps = { data: Bootstrap; call: (path: string, init?: RequestInit) => Promise<any>; reload: () => Promise<void>; notify: (value: string) => void };
 
-function Projects({ data, call, reload, notify }: AdminProps) {
+function Projects({ data, call, reload, notify, navigation }: AdminProps & { navigation: MutableRefObject<((action: () => void) => void) | null> }) {
   const [selectedId, setSelectedId] = useState(data.projects[0]?.id || 'new');
   const [editorDirty, setEditorDirty] = useState(false);
-  const [pendingSelection, setPendingSelection] = useState<string | null>(null);
+  const [pendingSelection, setPendingSelection] = useState<(() => void) | null>(null);
   const [switching, setSwitching] = useState(false);
   const [switchError, setSwitchError] = useState('');
   const editorHandle = useRef<{ save: () => Promise<boolean> } | null>(null);
   const selected = data.projects.find((item) => item.id === selectedId);
-  function select(nextId: string) { if (nextId === selectedId) return; if (editorDirty) { setSwitchError(''); setPendingSelection(nextId); } else setSelectedId(nextId); }
-  function discardAndSwitch() { if (!pendingSelection) return; setSelectedId(pendingSelection); setPendingSelection(null); setSwitchError(''); setEditorDirty(false); }
-  async function saveAndSwitch() { if (!pendingSelection || !editorHandle.current) return; setSwitchError(''); setSwitching(true); const saved = await editorHandle.current.save(); setSwitching(false); if (!saved) { setSwitchError('No pudimos guardar el proyecto. Seguí editando y corregí los campos indicados antes de cambiar.'); return; } setSelectedId(pendingSelection); setPendingSelection(null); setEditorDirty(false); }
-  return <><div className="admin-split"><section className="admin-list"><button className="button primary full" onClick={() => select('new')}>Nuevo proyecto</button>{data.projects.map((item) => <button key={item.id} className={item.id === selectedId ? 'selected' : ''} onClick={() => select(item.id)}><strong>{item.title}</strong><span>{statusLabel(item.status)} · {item.docketNumber || 'Sin expediente'}</span></button>)}</section><ProjectEditor key={selected?.id || 'new'} project={selected} data={data} call={call} reload={reload} notify={notify} onCreated={setSelectedId} editorHandle={editorHandle} onDirtyChange={setEditorDirty} /></div>{pendingSelection && <div className="dialog-backdrop" onMouseDown={() => { if (!switching) { setPendingSelection(null); setSwitchError(''); } }}><section className="dialog warning-dialog" role="alertdialog" aria-labelledby="unsaved-title" aria-describedby="unsaved-description" onMouseDown={(event) => event.stopPropagation()}><span className="eyebrow">Cambios sin guardar</span><h2 id="unsaved-title">¿Querés salir de este proyecto?</h2><p id="unsaved-description">Los cambios que hiciste en esta pantalla todavía no se guardaron. Si continuás sin guardar, se van a perder.</p>{switchError && <p className="message error" role="alert">{switchError}</p>}<div className="dialog-actions three-actions"><button className="button ghost" disabled={switching} onClick={() => { setPendingSelection(null); setSwitchError(''); }}>Seguir editando</button><button className="button danger" disabled={switching} onClick={discardAndSwitch}>Descartar y cambiar</button><button className="button primary" disabled={switching} onClick={() => void saveAndSwitch()}>{switching ? 'Guardando…' : 'Guardar y cambiar'}</button></div></section></div>}</>;
+  const bypassUnload = useRef(false);
+  const dirtyRef = useRef(editorDirty); dirtyRef.current = editorDirty;
+  const historyGuard = useRef({ marker: '', mounted: false });
+  const leaveRef = useRef<(action: () => void) => void>(() => {});
+  function allowBrowserUnload(action: () => void) {
+    bypassUnload.current = true;
+    action();
+    window.setTimeout(() => { bypassUnload.current = false; }, 5000);
+  }
+  function requestLeave(action: () => void) { if (editorDirty) { setSwitchError(''); setPendingSelection(() => action); } else action(); }
+  navigation.current = requestLeave;
+  leaveRef.current = requestLeave;
+  useEffect(() => {
+    const guard = historyGuard.current;
+    guard.marker ||= crypto.randomUUID();
+    guard.mounted = true;
+    const marker = guard.marker;
+    let leaving = false;
+    // A same-URL entry lets Back show the modal before Next unmounts the editor.
+    if (history.state?.projectEditorGuard !== marker) history.pushState({ ...history.state, projectEditorGuard: marker }, '', location.href);
+    const back = () => {
+      if (leaving || history.state?.projectEditorGuard === marker) return;
+      if (!dirtyRef.current) { leaving = true; history.back(); return; }
+      history.forward();
+      leaveRef.current(() => allowBrowserUnload(() => { leaving = true; history.go(-2); }));
+    };
+    window.addEventListener('popstate', back);
+    return () => {
+      window.removeEventListener('popstate', back);
+      guard.mounted = false;
+      window.setTimeout(() => { if (!guard.mounted && !leaving && history.state?.projectEditorGuard === marker) history.back(); }, 0);
+    };
+  }, []);
+  useEffect(() => () => { navigation.current = null; }, [navigation]);
+  useEffect(() => {
+    const warn = (event: BeforeUnloadEvent) => { if (bypassUnload.current) { bypassUnload.current = false; return; } if (!editorDirty) return; event.preventDefault(); event.returnValue = ''; };
+    const link = (event: MouseEvent) => {
+      const anchor = (event.target as Element)?.closest?.('a[href]') as HTMLAnchorElement | null;
+      if (!editorDirty || !anchor || event.defaultPrevented || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0 || anchor.target === '_blank' || anchor.hasAttribute('download')) return;
+      const url = new URL(anchor.href, location.href);
+      if (url.origin === location.origin && url.pathname === location.pathname && url.search === location.search) return;
+      event.preventDefault(); event.stopPropagation(); requestLeave(() => allowBrowserUnload(() => location.assign(url.href)));
+    };
+    window.addEventListener('beforeunload', warn); document.addEventListener('click', link, true);
+    return () => { window.removeEventListener('beforeunload', warn); document.removeEventListener('click', link, true); };
+  }, [editorDirty]);
+  function select(nextId: string) { if (nextId !== selectedId) requestLeave(() => setSelectedId(nextId)); }
+  function discardAndSwitch() { if (!pendingSelection) return; pendingSelection(); setPendingSelection(null); setSwitchError(''); setEditorDirty(false); }
+  async function saveAndSwitch() { if (!pendingSelection || !editorHandle.current) return; setSwitchError(''); setSwitching(true); const saved = await editorHandle.current.save(); setSwitching(false); if (!saved) { setSwitchError('No se completó el guardado. Tus cambios siguen en pantalla; revisá los campos o las cargas pendientes antes de salir.'); return; } discardAndSwitch(); }
+  return <><div className="admin-split"><section className="admin-list"><button className="button primary full" onClick={() => select('new')}>Nuevo proyecto</button>{data.projects.map((item) => <button key={item.id} className={item.id === selectedId ? 'selected' : ''} onClick={() => select(item.id)}><strong>{item.title}</strong><span>{statusLabel(item.status)} · {item.docketNumber || 'Sin expediente'}</span></button>)}</section><ProjectEditor key={selected?.id || 'new'} project={selected} data={data} call={call} reload={reload} notify={notify} onCreated={setSelectedId} editorHandle={editorHandle} onDirtyChange={setEditorDirty} /></div>{pendingSelection && <ProjectLeaveDialog busy={switching} error={switchError} cancel={() => { setPendingSelection(null); setSwitchError(''); }} discard={discardAndSwitch} save={() => void saveAndSwitch()} />}</>;
 }
 
 const projectEditorSections = [
@@ -116,20 +168,25 @@ function ProjectEditorNav() {
 }
 
 function ProjectEditor({ project, data, call, reload, notify, onCreated, editorHandle, onDirtyChange }: AdminProps & { project?: Project; onCreated: (id: string) => void; editorHandle: MutableRefObject<{ save: () => Promise<boolean> } | null>; onDirtyChange: (dirty: boolean) => void }) {
-  const workflow = data.workflows.find((item) => item.id === project?.workflowId) || data.workflows.find((item) => item.active) || data.workflows[0];
+  const storedWorkflow = data.workflows.find((item) => item.id === project?.workflowId) || data.workflows.find((item) => item.active) || data.workflows[0];
+  const workflow = storedWorkflow ? withPreparationStage(storedWorkflow) : undefined;
   const [form, setForm] = useState<ProjectInput>(() => project ? projectToInput(project) : emptyProject(workflow));
+  const latestForm = useRef(form); latestForm.current = form;
+  const [confirmedForm, setConfirmedForm] = useState(form);
+  const [pendingInputs, setPendingInputs] = useState<Set<string>>(() => new Set());
+  const registerPending = useCallback((id: string, pending: boolean) => setPendingInputs((current) => { if (current.has(id) === pending) return current; const next = new Set(current); if (pending) next.add(id); else next.delete(id); return next; }), []);
   const [savedPositions, setSavedPositions] = useState(project?.positions);
   const [savingPosition, setSavingPosition] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
   const positionSaveInFlight = useRef(false);
   const [preview, setPreview] = useState(false); const [publish, setPublish] = useState(false); const [publishGate, setPublishGate] = useState<'unsaved' | 'blocked' | null>(null); const [publishGateError, setPublishGateError] = useState(''); const [saving, setSaving] = useState(false); const [savingChronology, setSavingChronology] = useState(false);
   const [projectAction, setProjectAction] = useState<'unpublish' | 'archive' | null>(null); const [projectActionBusy, setProjectActionBusy] = useState(false); const [projectActionError, setProjectActionError] = useState('');
-  const storedForm = project ? { ...projectToInput(project), ...(savedPositions ? { positions: savedPositions } : {}) } : emptyProject(workflow);
+  const storedForm = confirmedForm;
   const revisions = data.revisions.filter((item) => item.projectId === project?.id).sort((a, b) => b.number - a.number);
   const latestRevision = revisions[0];
   const publishedForm = latestRevision ? projectToInput(latestRevision.snapshot) : null;
   const isDirty = !sameValue(form, storedForm);
-  const chronologyDirty = !sameValue(form.updates || [], project?.updates || []);
+  const chronologyDirty = !sameValue(form.updates || [], storedForm.updates || []);
   const savedChangesPending = Boolean(project && (!publishedForm || !sameValue(storedForm, publishedForm)));
   const onlyChronologyPending = Boolean(publishedForm && !sameValue(storedForm.updates || [], publishedForm.updates || []) && sameValue(withoutUpdates(storedForm), withoutUpdates(publishedForm)));
   const publicationIssues = project ? getPublicationIssues(project, form, false, isDirty || savedChangesPending, data) : [];
@@ -137,36 +194,44 @@ function ProjectEditor({ project, data, call, reload, notify, onCreated, editorH
   const stageChanged = Boolean(latestRevision && effectiveProjectStageId(latestRevision.snapshot) !== effectiveProjectStageId({ currentStageId: form.currentStageId, updates: form.updates || [] }));
   const set = (key: keyof ProjectInput, value: unknown) => setForm((current) => ({ ...current, [key]: value }));
   async function save(): Promise<boolean> {
+    if (pendingInputs.size) { notify('Terminá de incorporar o descartá las fotos, documentos o actas pendientes antes de guardar.'); return false; }
+    if (savingChronology || projectActionBusy) { notify('Esperá a que termine la operación en curso.'); return false; }
     if (photoUploading) { notify('Esperá a que termine de subir la foto.'); return false; }
     if (positionSaveInFlight.current) { notify('Esperá a que termine de guardarse la declaración.'); return false; }
     if (!isDirty || saving) return !isDirty;
     const positionsCheck = projectPositionsSchema.safeParse(form.positions || []);
     if (!positionsCheck.success) { notify(`A favor / En contra: ${positionsCheck.error.issues[0].message}`); return false; }
     setSaving(true);
+    const submitted = form;
     try {
       const body = await call(project ? `/v1/manage/projects/${project.id}` : '/v1/manage/projects', { method: project ? 'PATCH' : 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(form) });
       const omitted = Object.keys(form).filter((key) => form[key as keyof ProjectInput] !== undefined && !Object.prototype.hasOwnProperty.call(body?.item || {}, key));
       if (omitted.length) throw new Error(`El servidor no confirmó todos los campos (${omitted.join(', ')}). Conservamos tus cambios en pantalla. No publiques todavía: la API necesita actualizarse.`);
       if (!sameValue(body.item.positions || [], positionsCheck.data)) throw new Error('El servidor no confirmó las declaraciones completas, incluidas sus fotos. Conservamos tus cambios; actualizá la API antes de publicar.');
-      setForm(projectToInput(body.item));
+      const confirmed = projectToInput(body.item);
+      if (!sameValue(projectInputSchema.parse(confirmed), projectInputSchema.parse(submitted))) throw new Error('El servidor no confirmó todos los valores enviados. Conservamos tus cambios para reintentar.');
+      setConfirmedForm(confirmed);
+      const editedWhileSaving = latestForm.current !== submitted;
+      if (!editedWhileSaving) setForm(confirmed);
       setSavedPositions(body.item.positions);
       notify('Borrador guardado. Los cambios todavía no son públicos.');
-      await reload();
+      try { await reload(); } catch { notify('Borrador guardado. No se pudo refrescar el listado; los datos confirmados se conservaron.'); }
       if (!project) onCreated(body.item.id);
-      return true;
+      return !editedWhileSaving && (latestForm.current === submitted || sameValue(latestForm.current, confirmed));
     } catch (error) { notify(error instanceof Error ? error.message : 'No pudimos guardar.'); return false; }
     finally { setSaving(false); }
   }
   editorHandle.current = { save };
-  useEffect(() => { onDirtyChange(isDirty || photoUploading); return () => onDirtyChange(false); }, [isDirty, photoUploading, onDirtyChange]);
-  useEffect(() => { const warn = (event: BeforeUnloadEvent) => { if (!isDirty && !photoUploading) return; event.preventDefault(); event.returnValue = ''; }; window.addEventListener('beforeunload', warn); return () => window.removeEventListener('beforeunload', warn); }, [isDirty, photoUploading]);
+  useEffect(() => { onDirtyChange(isDirty || photoUploading || pendingInputs.size > 0 || saving || savingChronology || savingPosition || projectActionBusy); }, [isDirty, photoUploading, pendingInputs, saving, savingChronology, savingPosition, projectActionBusy, onDirtyChange]);
   async function saveChronology() {
     if (photoUploading || positionSaveInFlight.current) return;
-    if (!project || !chronologyDirty || savingChronology) return;
+    if (!project || !chronologyDirty || savingChronology || saving) return;
     setSavingChronology(true);
     try {
       const body = await call(`/v1/manage/projects/${project.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ updates: form.updates || [] }) });
-      setForm((current) => ({ ...current, updates: body.item.updates }));
+      if (!sameValue(body.item.updates, form.updates || [])) throw new Error('El servidor no confirmó la cronología completa. Conservamos tus cambios.');
+      setConfirmedForm((current) => ({ ...current, updates: body.item.updates }));
+      setForm((current) => sameValue(current.updates, form.updates) ? { ...current, updates: body.item.updates } : current);
       notify('Cronología guardada en el borrador. Publicá la revisión desde el sector global cuando esté aprobada.');
       await reload();
     } catch (error) { notify(error instanceof Error ? error.message : 'No pudimos guardar la cronología.'); }
@@ -188,12 +253,14 @@ function ProjectEditor({ project, data, call, reload, notify, onCreated, editorH
       const body = await call(`/v1/manage/projects/${project.id}/positions/${item.id}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ item, previous }) });
       if (!body?.item || !sameValue(body.item, item)) throw new Error('El servidor no confirmó la declaración completa. Conservamos tu texto para reintentar.');
       setSavedPositions((current) => current?.some((position) => position.id === item.id) ? current.map((position) => position.id === item.id ? body.item : position) : [...(current || []), body.item]);
-      setForm((current) => ({ ...current, positions: current.positions?.map((position) => position.id === item.id ? body.item : position) }));
+      setConfirmedForm((current) => ({ ...current, positions: current.positions?.some((position) => position.id === item.id) ? current.positions.map((position) => position.id === item.id ? body.item : position) : [...(current.positions || []), body.item] }));
+      setForm((current) => ({ ...current, positions: current.positions?.map((position) => position.id === item.id && sameValue(position, item) ? body.item : position) }));
       try { await reload(); } catch { notify('Declaración guardada. No se pudo actualizar el listado; tu texto está conservado.'); }
       return body.item;
     } finally { positionSaveInFlight.current = false; setSavingPosition(false); }
   }
   function requestPublication() {
+    if (pendingInputs.size) { notify('Terminá de incorporar o descartá las cargas pendientes antes de publicar.'); return; }
     if (photoUploading) { notify('Esperá a que termine de subir la foto.'); return; }
     if (positionSaveInFlight.current) { notify('Esperá a que termine de guardarse la declaración.'); return; }
     setPublishGateError('');
@@ -228,10 +295,10 @@ function ProjectEditor({ project, data, call, reload, notify, onCreated, editorH
     }
   }
   if (!workflow) return <section className="admin-panel"><h2>Falta un flujo activo</h2><p>Creá o activá una definición de etapas antes de dar de alta proyectos.</p></section>;
-  return <div className="project-editor-layout"><aside className="project-editor-aside"><ProjectEditorNav /></aside><section className="admin-panel editor-form">
+  return <PendingProjectEdits.Provider value={registerPending}><div className="project-editor-layout" inert={saving || savingChronology || projectActionBusy}><aside className="project-editor-aside"><ProjectEditorNav /></aside><section className="admin-panel editor-form">
     <div className="project-editor-toolbar"><div className="project-editor-heading"><div className="panel-title"><div><div className="status-line"><span className="status-pill">{project ? statusLabel(project.status) : 'Nuevo borrador'}</span>{isDirty && <span className="unsaved-pill">Cambios sin guardar</span>}</div><h2>{project?.title || 'Nuevo proyecto'}</h2></div><div className="editor-actions"><button className="button ghost" onClick={() => setPreview(true)} disabled={!project}>Previsualizar</button><button className="button primary" onClick={save} disabled={!isDirty || saving || savingChronology}>{saving ? 'Guardando…' : 'Guardar'}</button></div></div></div></div>
-    <details id="project-info" className="project-editor-group project-editor-anchor" open><summary>Datos básicos</summary><div className="project-editor-group-body"><div className="form-grid"><Field label="Título"><input value={form.title} onChange={(e) => { set('title', e.target.value); if (!project) set('slug', slugify(e.target.value)); }} /></Field><Field label="Slug estable"><input value={form.slug} onChange={(e) => set('slug', slugify(e.target.value))} disabled={Boolean(project?.publishedAt)} /></Field><Field label="Expediente"><input value={form.docketNumber || ''} onChange={(e) => set('docketNumber', e.target.value)} /></Field><Field label="Fecha de ingreso"><input type="date" value={form.entryDate || ''} onChange={(e) => set('entryDate', e.target.value || null)} /></Field><Field label="Cámara de origen"><select value={form.originChamberId || ''} onChange={(e) => set('originChamberId', e.target.value || null)}><option value="">Seleccionar</option>{data.catalogs.filter((item) => item.kind === 'chamber' && item.active).map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></Field><Field label="Iniciativa"><select value={form.initiativeTypeId || ''} onChange={(e) => set('initiativeTypeId', e.target.value || null)}><option value="">Seleccionar</option>{data.catalogs.filter((item) => item.kind === 'initiative' && item.active).map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></Field><Field label="Etapa inicial o histórica"><select value={form.currentStageId} onChange={(e) => set('currentStageId', e.target.value)}>{workflow.stages.filter((item) => item.active).sort((a, b) => a.order - b.order).map((item) => <option key={item.id} value={item.id}>{item.label}{item.branchFromId ? ' (rama)' : ''}</option>)}</select></Field><SingleLegislatorPicker items={data.legislators} value={form.authorLegislatorId || null} onChange={(value) => set('authorLegislatorId', value)} /></div></div></details>
-    <details id="project-presentation" className="project-editor-group project-editor-anchor" open><summary>Identidad y jerarquía</summary><div className="project-editor-group-body"><ProjectPresentationSettings featured={form.featured || false} icon={projectIcon(form)} order={form.order || 0} onFeaturedChange={(value) => set('featured', value)} onIconChange={(value) => set('icon', value)} onOrderChange={(value) => set('order', value)} /></div></details>
+    <details id="project-info" className="project-editor-group project-editor-anchor" open><summary>Datos básicos</summary><div className="project-editor-group-body"><div className="form-grid"><Field label="Estado inicial del proyecto"><select value={form.currentStageId} onChange={(e) => set('currentStageId', e.target.value)}>{workflow.stages.filter((item) => item.active).sort((a, b) => a.order - b.order).map((item) => <option key={item.id} value={item.id}>{item.label}{item.branchFromId ? ' (rama)' : ''}</option>)}</select></Field><Field label="Título"><input value={form.title} onChange={(e) => { set('title', e.target.value); if (!project) set('slug', slugify(e.target.value)); }} /></Field><Field label="Slug estable"><input value={form.slug} onChange={(e) => set('slug', slugify(e.target.value))} disabled={Boolean(project?.publishedAt)} /></Field><Field label="Expediente"><input value={form.docketNumber || ''} onChange={(e) => set('docketNumber', e.target.value)} /></Field><Field label="Fecha de ingreso"><input type="date" value={form.entryDate || ''} onChange={(e) => set('entryDate', e.target.value || null)} /></Field><Field label="Cámara de origen"><select value={form.originChamberId || ''} onChange={(e) => set('originChamberId', e.target.value || null)}><option value="">Seleccionar</option>{data.catalogs.filter((item) => item.kind === 'chamber' && item.active).map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></Field><Field label="Iniciativa"><select value={form.initiativeTypeId || ''} onChange={(e) => set('initiativeTypeId', e.target.value || null)}><option value="">Seleccionar</option>{data.catalogs.filter((item) => item.kind === 'initiative' && item.active).map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></Field><SingleLegislatorPicker items={data.legislators} value={form.authorLegislatorId || null} onChange={(value) => set('authorLegislatorId', value)} /></div></div></details>
+    {effectiveProjectStageId({ currentStageId: form.currentStageId, updates: form.updates || [] }) === PREPARATION_STAGE_ID && <aside className="preparation-editor-note"><strong>En preparación · todavía sin presentación formal</strong><p>Podés publicar borradores o propuestas en circulación sin expediente, fecha, cámara ni iniciativa confirmados. Completá los datos que conozcas y citá las fuentes en Documentos o Fuentes.</p><p>Cuando se presente, completá los datos de ingreso y agregá una actualización en Cronología con la nueva etapa. Conservá el estado inicial para mantener el historial de esta misma ficha.</p></aside>}<details id="project-presentation" className="project-editor-group project-editor-anchor" open><summary>Identidad y jerarquía</summary><div className="project-editor-group-body"><ProjectPresentationSettings featured={form.featured || false} icon={projectIcon(form)} order={form.order || 0} onFeaturedChange={(value) => set('featured', value)} onIconChange={(value) => set('icon', value)} onOrderChange={(value) => set('order', value)} /></div></details>
     <details id="project-summary" className="project-editor-group project-editor-anchor" open><summary>Resumen</summary><div className="project-editor-group-body"><AdvancedTextField label="Resumen en lenguaje claro" value={form.summary || ''} format={form.summaryFormat} onChange={(value) => set('summary', value)} onFormatChange={(value) => set('summaryFormat', value)} onUploadImage={uploadEditorImage} /></div></details>
     <details id="project-impact" className="project-editor-group project-editor-anchor" open><summary>¿Cómo me afecta?</summary><div className="project-editor-group-body"><AdvancedTextField label="¿Cómo me afecta?" value={form.impact || ''} format={form.impactFormat} onChange={(value) => set('impact', value)} onFormatChange={(value) => set('impactFormat', value)} onUploadImage={uploadEditorImage} /></div></details>
     <details id="project-signatories" className="project-editor-group project-editor-anchor" open><summary>Firmantes</summary><div className="project-editor-group-body"><LegislatorRelationPicker items={data.legislators} selected={form.signatoryIds || []} onChange={(items) => set('signatoryIds', items)} /></div></details>
@@ -248,7 +315,7 @@ function ProjectEditor({ project, data, call, reload, notify, onCreated, editorH
     {publishGate === 'blocked' && <div className="dialog-backdrop" onMouseDown={() => setPublishGate(null)}><section className="dialog warning-dialog" role="alertdialog" aria-modal="true" aria-labelledby="publish-blocked-title" onMouseDown={(event) => event.stopPropagation()}><span className="eyebrow">Antes de publicar</span><h2 id="publish-blocked-title">Faltan datos para publicar</h2><p>Corregí estos puntos en el proyecto y volvé a elegir “Publicar revisión”:</p><ul className="publication-blockers">{publicationIssues.map((issue) => <li key={issue}>{issue}</li>)}</ul><div className="dialog-actions"><button className="button primary" type="button" onClick={() => setPublishGate(null)}>Volver a editar</button></div></section></div>}
     {projectAction && project && <div className="dialog-backdrop" onMouseDown={() => { if (!projectActionBusy) setProjectAction(null); }}><section className={`dialog warning-dialog project-action-dialog ${projectAction}`} role="alertdialog" aria-modal="true" aria-labelledby="project-action-title" aria-describedby="project-action-description" onMouseDown={(event) => event.stopPropagation()}><span className="eyebrow">Confirmación requerida</span><h2 id="project-action-title">¿{projectAction === 'unpublish' ? 'Despublicar' : 'Archivar'} {project.title}?</h2><div className="confirmation-card"><strong>{projectAction === 'unpublish' ? 'La ficha dejará de estar disponible públicamente' : 'El proyecto saldrá del circuito activo'}</strong><p id="project-action-description">{projectAction === 'unpublish' ? 'Se retirará inmediatamente de la web pública. El borrador, los archivos y el historial de revisiones se conservarán para poder trabajar y publicarlo nuevamente.' : 'Se retirará inmediatamente de la web pública y quedará marcado como archivado. No se eliminarán el contenido, los archivos ni el historial editorial.'}</p></div>{projectActionError && <p className="message error" role="alert">{projectActionError}</p>}<div className="dialog-actions"><button className="button ghost" type="button" disabled={projectActionBusy} onClick={() => setProjectAction(null)}>Cancelar</button><button className={projectAction === 'unpublish' ? 'button warning' : 'button danger'} type="button" disabled={projectActionBusy} onClick={() => void confirmProjectAction()}>{projectActionBusy ? 'Procesando…' : projectAction === 'unpublish' ? 'Sí, despublicar' : 'Sí, archivar'}</button></div></section></div>}
     {preview && project && <PreviewDialog project={project} form={form} settings={data.settings} call={call} close={() => setPreview(false)} />}{publish && project && <PublishDialog project={project} names={Object.fromEntries([...data.legislators.map((item) => [item.id, item.fullName]), ...data.glossary.map((item) => [item.id, item.term]), ...data.catalogs.map((item) => [item.id, item.label]), ...data.workflows.flatMap((item) => [[item.id, item.name], ...item.stages.map((stage) => [stage.id, stage.label])])])} suggestedNotify={stageChanged} call={call} reload={reload} notify={notify} close={() => setPublish(false)} />}
-  </section></div>;
+  </section></div></PendingProjectEdits.Provider>;
 }
 
 function ProjectPresentationSettings({ featured, icon, order, onFeaturedChange, onIconChange, onOrderChange }: {
@@ -334,9 +401,12 @@ function SourcesEditor({ items, onChange }: { items: Source[]; onChange: (items:
 }
 
 function DocumentsEditor({ items, onChange, project, call, notify }: { items: OfficialDocument[]; onChange: (items: OfficialDocument[]) => void; project?: Project; call: AdminProps['call']; notify: (value: string) => void }) {
+  const [pdfPending, setPdfPending] = useState(false);
+  const [pdfUploading, setPdfUploading] = useState(false);
+  usePendingProjectEdit(pdfPending || pdfUploading);
   const add = () => onChange([...items, { id: crypto.randomUUID(), title: '', kind: 'link', url: '', sourceLabel: '', documentDate: null }]);
-  async function upload(event: React.FormEvent<HTMLFormElement>) { event.preventDefault(); const form = event.currentTarget; const payload = new FormData(form); try { const body = await call('/v1/manage/documents', { method: 'POST', body: payload }); onChange([...items, { id: body.item.id, title: body.item.title, kind: 'pdf', url: body.item.url, sourceLabel: body.item.sourceLabel, documentDate: body.item.documentDate }]); form.reset(); notify('PDF cargado y agregado al borrador. Guardá el proyecto para conservar la relación.'); } catch (error) { notify(error instanceof Error ? error.message : 'No pudimos cargar el PDF.'); } }
-  return <section className="nested-editor"><div className="panel-title"><h3>Documentos oficiales</h3><button className="button ghost" type="button" onClick={add}>Agregar enlace</button></div>{items.map((item, index) => <div className="nested-row" key={item.id}><Field label="Título"><input value={item.title} onChange={(e) => onChange(replaceAt(items, index, { ...item, title: e.target.value }))} /></Field><Field label="URL"><input type="url" value={item.url} onChange={(e) => onChange(replaceAt(items, index, { ...item, url: e.target.value }))} /></Field><Field label="Fuente"><input value={item.sourceLabel} onChange={(e) => onChange(replaceAt(items, index, { ...item, sourceLabel: e.target.value }))} /></Field><Field label="Fecha"><input type="date" value={item.documentDate || ''} onChange={(e) => onChange(replaceAt(items, index, { ...item, documentDate: e.target.value || null }))} /></Field><button className="button danger" type="button" onClick={() => onChange(items.filter((_, itemIndex) => itemIndex !== index))}>Quitar</button></div>)}{project && <form className="pdf-upload" onSubmit={upload}><strong>Cargar PDF privado</strong><input name="title" placeholder="Título" required /><input name="sourceLabel" placeholder="Fuente" required /><input name="documentDate" type="date" required /><input name="file" type="file" accept="application/pdf" required /><button className="button ghost">Subir PDF</button></form>}</section>;
+  async function upload(event: React.FormEvent<HTMLFormElement>) { event.preventDefault(); const form = event.currentTarget; const payload = new FormData(form); if (pdfUploading) return; setPdfUploading(true); try { const body = await call('/v1/manage/documents', { method: 'POST', body: payload }); onChange([...items, { id: body.item.id, title: body.item.title, kind: 'pdf', url: body.item.url, sourceLabel: body.item.sourceLabel, documentDate: body.item.documentDate }]); form.reset(); setPdfPending(false); notify('PDF cargado y agregado al borrador. Guardá el proyecto para conservar la relación.'); } catch (error) { notify(error instanceof Error ? error.message : 'No pudimos cargar el PDF.'); } finally { setPdfUploading(false); } }
+  return <section className="nested-editor"><div className="panel-title"><h3>Documentos oficiales</h3><button className="button ghost" type="button" onClick={add}>Agregar enlace</button></div>{items.map((item, index) => <div className="nested-row" key={item.id}><Field label="Título"><input value={item.title} onChange={(e) => onChange(replaceAt(items, index, { ...item, title: e.target.value }))} /></Field><Field label="URL"><input type="url" value={item.url} onChange={(e) => onChange(replaceAt(items, index, { ...item, url: e.target.value }))} /></Field><Field label="Fuente"><input value={item.sourceLabel} onChange={(e) => onChange(replaceAt(items, index, { ...item, sourceLabel: e.target.value }))} /></Field><Field label="Fecha"><input type="date" value={item.documentDate || ''} onChange={(e) => onChange(replaceAt(items, index, { ...item, documentDate: e.target.value || null }))} /></Field><button className="button danger" type="button" onClick={() => onChange(items.filter((_, itemIndex) => itemIndex !== index))}>Quitar</button></div>)}{project && <form className="pdf-upload" onSubmit={upload} onChange={(event) => { const fields = new FormData(event.currentTarget); setPdfPending([...fields.values()].some((value) => typeof value === 'string' ? value.length > 0 : value.size > 0)); }}><strong>Cargar PDF privado</strong><input name="title" placeholder="Título" required /><input name="sourceLabel" placeholder="Fuente" required /><input name="documentDate" type="date" required /><input name="file" type="file" accept="application/pdf" required /><button className="button ghost" disabled={pdfUploading}>Subir PDF</button><button className="button ghost" type="reset" disabled={pdfUploading} onClick={() => setPdfPending(false)}>Descartar carga</button></form>}</section>;
 }
 
 function UpdatesEditor({ items, publishedItems, onChange, workflow, canSave, saving, onSave }: { items: ProjectUpdate[]; publishedItems: ProjectUpdate[]; onChange: (items: ProjectUpdate[]) => void; workflow: WorkflowDefinition; canSave: boolean; saving: boolean; onSave: () => Promise<void> }) {
@@ -669,18 +739,19 @@ function groupLegislators(items: Legislator[]) {
 function projectToInput(project: Project): ProjectInput { const { id: _id, status: _status, publishedRevisionId: _revision, publishedAt: _published, updatedAt: _updated, updatedBy: _by, ...input } = project; return { ...input, icon: projectIcon(project) }; }
 function getPublicationIssues(project: Project, input: ProjectInput, isDirty: boolean, savedChangesPending: boolean, data: Bootstrap) {
   const issues: string[] = [];
+  const preparing = effectiveProjectStageId({ currentStageId: input.currentStageId, updates: input.updates || [] }) === PREPARATION_STAGE_ID;
   if (isDirty) issues.push('Guardá o descartá los cambios que todavía están sólo en esta pantalla.');
   if (project.status === 'published' && !savedChangesPending) issues.push('No hay cambios guardados respecto de la revisión que ya está publicada.');
-  if (!input.docketNumber?.trim()) issues.push('Falta completar el número de expediente.');
-  if (!input.entryDate) issues.push('Falta completar la fecha de ingreso.');
-  if (!input.originChamberId) issues.push('Falta seleccionar la cámara de origen.');
-  else if (!data.catalogs.some((item) => item.id === input.originChamberId && item.active)) issues.push('La cámara seleccionada ya no está activa.');
-  if (!input.initiativeTypeId) issues.push('Falta seleccionar el tipo de iniciativa.');
-  else if (!data.catalogs.some((item) => item.id === input.initiativeTypeId && item.active)) issues.push('La iniciativa seleccionada ya no está activa.');
+  if (!preparing && !input.docketNumber?.trim()) issues.push('Falta completar el número de expediente.');
+  if (!preparing && !input.entryDate) issues.push('Falta completar la fecha de ingreso.');
+  if (!preparing && !input.originChamberId) issues.push('Falta seleccionar la cámara de origen.');
+  if (input.originChamberId && !data.catalogs.some((item) => item.id === input.originChamberId && item.active)) issues.push('La cámara seleccionada ya no está activa.');
+  if (!preparing && !input.initiativeTypeId) issues.push('Falta seleccionar el tipo de iniciativa.');
+  if (input.initiativeTypeId && !data.catalogs.some((item) => item.id === input.initiativeTypeId && item.active)) issues.push('La iniciativa seleccionada ya no está activa.');
   if ((input.summary || '').trim().length < 20) issues.push('El resumen en lenguaje claro debe tener al menos 20 caracteres.');
   if ((input.impact || '').trim().length < 20) issues.push('“¿Cómo me afecta?” debe tener al menos 20 caracteres.');
   const workflow = data.workflows.find((item) => item.id === input.workflowId && item.version === input.workflowVersion);
-  if (!workflow?.stages.some((stage) => stage.id === input.currentStageId && stage.active)) issues.push('El flujo o la etapa seleccionada ya no son válidos.');
+  if (!workflow || !withPreparationStage(workflow).stages.some((stage) => stage.id === effectiveProjectStageId({ currentStageId: input.currentStageId, updates: input.updates || [] }) && stage.active)) issues.push('El flujo o la etapa seleccionada ya no son válidos.');
   const positions = projectPositionsSchema.safeParse(input.positions || []);
   if (!positions.success) issues.push(...positions.error.issues.map((issue) => `A favor / En contra: ${issue.message}`));
   return issues;
@@ -694,5 +765,5 @@ function sameValue(left: unknown, right: unknown) {
   return JSON.stringify(left, canonical) === JSON.stringify(right, canonical);
 }
 function formatDateTime(value: string) { return new Date(value).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }); }
-function emptyProject(workflow?: WorkflowDefinition): ProjectInput { return { title: '', slug: '', workflowId: workflow?.id || 'proceso-legislativo-nacional-v1', workflowVersion: workflow?.version || 1, currentStageId: workflow?.stages.find((item) => !item.branchFromId)?.id || 'mesa-de-entrada', stageExplanationOverrides: [], docketNumber: '', entryDate: null, originChamberId: null, initiativeTypeId: null, summary: '', summaryFormat: 'plain', impact: '', impactFormat: 'plain', authorLegislatorId: null, signatoryIds: [], glossaryTermIds: [], glossaryEnabled: true, glossaryExcludedTermIds: [], glossaryOccurrenceMode: 'all', glossaryExcludedOccurrenceIds: [], documents: [], sources: [], updates: [], icon: 'account_balance', featured: false, order: 0 }; }
+function emptyProject(workflow?: WorkflowDefinition): ProjectInput { return { title: '', slug: '', workflowId: workflow?.id || 'proceso-legislativo-nacional-v1', workflowVersion: workflow?.version || 1, currentStageId: workflow?.stages.find((item) => !item.branchFromId && item.id !== PREPARATION_STAGE_ID)?.id || 'mesa-de-entrada', stageExplanationOverrides: [], docketNumber: '', entryDate: null, originChamberId: null, initiativeTypeId: null, summary: '', summaryFormat: 'plain', impact: '', impactFormat: 'plain', authorLegislatorId: null, signatoryIds: [], glossaryTermIds: [], glossaryEnabled: true, glossaryExcludedTermIds: [], glossaryOccurrenceMode: 'all', glossaryExcludedOccurrenceIds: [], documents: [], sources: [], updates: [], icon: 'account_balance', featured: false, order: 0 }; }
 async function uploadRichImage(call: AdminProps['call'], file: File) { const body = new FormData(); body.append('file', file); const response = await call('/v1/manage/media/images', { method: 'POST', body }); return String(response.item.url || ''); }

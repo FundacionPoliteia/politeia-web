@@ -4,6 +4,8 @@ import { useMemo, useState, type CSSProperties } from 'react';
 import { stageProgress, type CatalogItem, type LegislativeStageExplanation, type ProjectStageExplanation, type WorkflowDefinition, type WorkflowStage } from '@politeia/quorum-contracts';
 import { getLegislativeStageContext } from '@/lib/legislativeStageContext';
 import type { StageVisualState } from '@/lib/projectStages';
+import PreparationState from './PreparationState';
+import { PREPARATION_STAGE_ID, preparationStage } from '@politeia/quorum-contracts';
 
 type StageTrackerProps = {
   workflow: WorkflowDefinition;
@@ -42,6 +44,11 @@ export default function StageTracker({ workflow, currentStageId, previousStageId
     setPinnedStageId(null);
     setHoveredStageId(null);
   };
+
+  if (currentStageId === PREPARATION_STAGE_ID) {
+    const preparationContext = getLegislativeStageContext({ stage: current || preparationStage, workflow, chamber, initiative, explanations, projectExplanations });
+    return <PreparationState summary={preparationContext.summary} detail={preparationContext.contextualDetail} />;
+  }
 
   return <div
     className={`tracker stage-visual-${visualState}`}

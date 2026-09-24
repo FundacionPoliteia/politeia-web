@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PublicProject, WorkflowDefinition } from '@politeia/quorum-contracts';
+import { stageProgress, withPreparationStage } from '@politeia/quorum-contracts';
 import { chronologyStageVisuals, projectStageVisualState } from '../../lib/projectStages';
 
 const workflow = { stages: [
@@ -15,6 +16,15 @@ function project(updates: PublicProject['updates'], currentStageId = 'dictamen')
 }
 
 describe('señales visuales de etapa', () => {
+  it('separa preparación del trámite y reconoce el ingreso como avance', () => {
+    expect(projectStageVisualState(project([], 'en-preparacion'))).toBe('preparation');
+    const extended = withPreparationStage(workflow);
+    expect(withPreparationStage(extended)).toBe(extended);
+    expect(workflow.stages[0].id).toBe('ingreso');
+    expect(stageProgress(extended, 'en-preparacion').every((stage) => stage.state === 'upcoming')).toBe(true);
+    expect(stageProgress(extended, 'ingreso').filter((stage) => stage.state === 'complete')).toHaveLength(0);
+    expect(projectStageVisualState(project([{ id: 'entry', date: '2026-09-14', title: 'Ingreso', body: 'Presentado', stageId: 'ingreso', sources: [] }], 'en-preparacion'))).toBe('forward');
+  });
   it('detecta un retroceso entre cambios cronológicos consecutivos', () => {
     const visuals = chronologyStageVisuals(project([
       { id: 'one', date: '2026-08-01', title: 'Dictamen', body: 'Avance', stageId: 'dictamen', sources: [] },

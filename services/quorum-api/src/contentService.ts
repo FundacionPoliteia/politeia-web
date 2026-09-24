@@ -3,7 +3,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { z } from 'zod';
 import {
   canonicalProjectValue, compareProjectChanges, summarizeProjectChanges,
-  catalogItemSchema,
+  catalogItemSchema, PREPARATION_STAGE_ID, withPreparationStage,
   effectiveProjectStageId,
   glossaryTermInputSchema,
   glossaryTermSchema,
@@ -72,7 +72,7 @@ export async function getPublicBootstrap() {
     return {
       projects,
       catalogs: catalogs.filter((item) => item.active).sort((a, b) => a.order - b.order),
-      workflows: workflows.filter((item) => item.active),
+      workflows: workflows.filter((item) => item.active).map(withPreparationStage),
       settings: siteSettingsSchema.parse(settings),
       legislators: legislators.filter((item) => item.published).sort((a, b) => a.fullName.localeCompare(b.fullName, 'es')),
       glossary: glossary.map(normalizeGlossaryTerm).filter((item) => item.published).sort((a, b) => a.term.localeCompare(b.term, 'es')),
@@ -94,7 +94,7 @@ export async function getManageBootstrap() {
     store().list<ContentRevision>('revisions'),
   ]);
   return {
-    projects: projects.sort(sortProjects), catalogs, workflows, settings, legislators, glossary: glossary.map(normalizeGlossaryTerm),
+    projects: projects.sort(sortProjects), catalogs, workflows: workflows.map(withPreparationStage), settings, legislators, glossary: glossary.map(normalizeGlossaryTerm),
     subscriptions, roles, audits, revisions,
   };
 }
@@ -335,7 +335,7 @@ export async function updateSettings(input: unknown, actorEmail: string) {
     if (explanationKeys.has(key)) throw new ApiError(409, 'stage_explanation_duplicate', 'Ya existe una explicación para esa combinación de flujo, etapa, cámara e iniciativa');
     explanationKeys.add(key);
     const workflow = workflows.find((item) => item.id === explanation.workflowId && item.version === explanation.workflowVersion);
-    if (!workflow || !workflow.stages.some((stage) => stage.id === explanation.stageId)) throw new ApiError(409, 'stage_explanation_reference_invalid', 'Una explicación referencia un flujo o una etapa que no existe');
+    if (!workflow || !withPreparationStage(workflow).stages.some((stage) => stage.id === explanation.stageId)) throw new ApiError(409, 'stage_explanation_reference_invalid', 'Una explicación referencia un flujo o una etapa que no existe');
     if (explanation.chamberId && !catalogs.some((item) => item.id === explanation.chamberId && item.kind === 'chamber')) throw new ApiError(409, 'stage_explanation_chamber_invalid', 'Una explicación referencia una cámara que no existe');
     if (explanation.initiativeTypeId && !catalogs.some((item) => item.id === explanation.initiativeTypeId && item.kind === 'initiative')) throw new ApiError(409, 'stage_explanation_initiative_invalid', 'Una explicación referencia un tipo de iniciativa que no existe');
   }
@@ -347,26 +347,27 @@ export async function updateSettings(input: unknown, actorEmail: string) {
 
 async function validatePublishable(project: Project) {
   await validateProjectStageExplanations(project);
-  if (!project.docketNumber || !project.entryDate || !project.originChamberId || !project.initiativeTypeId) {
+  const preparing = effectiveProjectStageId(project) === PREPARATION_STAGE_ID;
+  if (!preparing && (!project.docketNumber || !project.entryDate || !project.originChamberId || !project.initiativeTypeId)) {
     throw new ApiError(422, 'project_incomplete', 'Completá expediente, fecha, cámara e iniciativa antes de publicar');
   }
   if (project.summary.trim().length < 20 || project.impact.trim().length < 20) {
     throw new ApiError(422, 'project_copy_incomplete', 'El resumen y “Cómo me afecta” deben estar completos');
   }
-  const workflow = await store().get<WorkflowDefinition>('workflows', project.workflowId);
+  const workflow = await store().get<WorkflowDefinition>('workflows', project.workflowId).then((item) => item ? withPreparationStage(item) : null);
   const effectiveStageId = effectiveProjectStageId(project);
   if (!workflow || workflow.version !== project.workflowVersion || !workflow.stages.some((stage) => stage.id === effectiveStageId && stage.active)) {
     throw new ApiError(422, 'workflow_invalid', 'El flujo o la etapa seleccionada ya no son válidos');
   }
   const catalogs = await store().list<CatalogItem>('catalogs');
-  if (!catalogs.some((item) => item.id === project.originChamberId && item.active) || !catalogs.some((item) => item.id === project.initiativeTypeId && item.active)) {
+  if ((project.originChamberId && !catalogs.some((item) => item.id === project.originChamberId && item.active)) || (project.initiativeTypeId && !catalogs.some((item) => item.id === project.initiativeTypeId && item.active))) {
     throw new ApiError(422, 'catalog_invalid', 'La cámara o iniciativa seleccionada ya no están activas');
   }
 }
 
 async function validateProjectStageExplanations(project: Project) {
   if (!project.stageExplanationOverrides?.length) return;
-  const workflow = await store().get<WorkflowDefinition>('workflows', project.workflowId);
+  const workflow = await store().get<WorkflowDefinition>('workflows', project.workflowId).then((item) => item ? withPreparationStage(item) : null);
   if (!workflow || workflow.version !== project.workflowVersion) throw new ApiError(409, 'project_workflow_missing', 'El flujo versionado del proyecto no existe');
   const stageIds = new Set<string>();
   for (const explanation of project.stageExplanationOverrides) {
@@ -415,6 +416,7 @@ function withCanonicalRelations(project: PublicProject, legislators: Legislator[
   ));
   return {
     ...withPeople,
+    workflow: withPreparationStage(project.workflow),
     currentStageId: effectiveProjectStageId(project),
     glossaryEnabled: project.glossaryEnabled !== false,
     glossaryExcludedTermIds: project.glossaryExcludedTermIds || [],

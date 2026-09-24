@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { photoUrlSchema } from '@politeia/quorum-contracts';
 import PersonPhoto from './PersonPhoto';
+import { usePendingProjectEdit } from './PendingProjectEdits';
 
 function isStoredPhoto(value: string) {
   try { return /^\/(?:api\/quorum\/)?v1\/public\/media\/[^/]+$/.test(new URL(value).pathname); }
@@ -18,6 +19,7 @@ export default function PhotoField({ value, name, onChange, onUpload, disabled =
   const [error, setError] = useState('');
   const [pending, setPending] = useState<{ file: File; preview: string } | null>(null);
   const [replaceUrl, setReplaceUrl] = useState(false);
+  usePendingProjectEdit(Boolean(pending) || busy);
   const dialog = useRef<HTMLDialogElement>(null);
   const uploadInFlight = useRef(false);
   const titleId = useId();

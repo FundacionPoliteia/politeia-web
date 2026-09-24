@@ -87,7 +87,7 @@ function ProjectCard({ project }: { project: PublicProject }) {
     <Link className={`project-card stage-visual-${stageVisual}`} href={`/proyectos/${project.slug}`} onClick={() => metric('project-opened')}>
       <div className="card-top"><span className="project-card-identity"><span className="project-card-icon material-symbols-outlined" aria-hidden="true">{projectIconGlyph(projectIcon(project))}</span><span className="status-pill">{current?.shortLabel || 'En seguimiento'}</span></span><span className="docket">{project.docketNumber}</span></div>
       <h3>{project.title}</h3><p>{richTextExcerpt(project.summary, project.summaryFormat, 220)}</p>
-      <div className="mini-progress" aria-label={stageAria}>{progress.map((stage, index) => <span className={`${stage.state}${showDirectionalPath && index >= transitionStart && index < transitionEnd ? ' transition-path' : ''}${showDirectionalPath && stage.id === previousStageId ? ' transitioned-from' : ''}`} key={stage.id} />)}</div>
+      {stageVisual === 'preparation' ? <div className="preparation-card-note"><span aria-hidden="true">✎</span><span>Borrador en circulación<small>Aún sin presentación formal</small></span></div> : <div className="mini-progress" aria-label={stageAria}>{progress.map((stage, index) => <span className={`${stage.state}${showDirectionalPath && index >= transitionStart && index < transitionEnd ? ' transition-path' : ''}${showDirectionalPath && stage.id === previousStageId ? ' transitioned-from' : ''}`} key={stage.id} />)}</div>}
       <span className="card-link">Ver ficha <span aria-hidden="true">→</span></span>
     </Link>
   );

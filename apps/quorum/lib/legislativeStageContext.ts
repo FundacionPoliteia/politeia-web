@@ -148,6 +148,11 @@ function applyEditorialExplanation(
 
 export function getLegislativeStageContext(input: StageContextInput): LegislativeStageContext {
   const { stage, chamber, initiative } = input;
+  if (stage.id === 'en-preparacion') return applyEditorialExplanation({
+    title: stage.label, summary: stage.description,
+    contextualDetail: 'Este es un estado de seguimiento editorial previo al ingreso formal. La cámara y el tipo de iniciativa pueden no estar confirmados. La ficha se actualizará cuando haya una presentación verificable.',
+    alert: null, sources: [],
+  }, input);
   const kind = stageKind(stage);
   const chamberData = chamberContext(chamber);
   const initiativeKind = initiativeContext(initiative);

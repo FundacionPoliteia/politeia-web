@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import { usePendingProjectEdit } from './PendingProjectEdits';
 import { emptyVoteCounts, voteChoices, voteLabels, votingResultSchema, type VotingResult, type VoteCounts, type Legislator } from '@politeia/quorum-contracts';
 import VotingResults, { VoteChart } from './VotingResults';
 
@@ -18,6 +19,7 @@ export default function VotingEditor({ items, legislators, onChange, call }: { i
   const [busy, setBusy] = useState(false);
   const [importError, setImportError] = useState('');
   const [importInfo, setImportInfo] = useState('');
+  usePendingProjectEdit(Boolean(sourceUrl || imported || busy));
   async function loadOfficial() {
     setBusy(true); setImportError(''); setImported(null);
     try {
@@ -38,11 +40,11 @@ export default function VotingEditor({ items, legislators, onChange, call }: { i
   return <section className="nested-editor"><h3>Resultado de votaciones</h3><p>Cargá cada votación por separado. Se guarda con el proyecto y se hace pública al publicar una revisión. Los firmantes no determinan quién votó a favor.</p>
     <details className="vote-import"><summary>Importar acta oficial de Diputados o Senado</summary><p>Pegá el enlace directo al acta. La descarga se realiza en el backend; conservamos el original y podés editar la copia. No se publica automáticamente. Las actas ya consultadas se reutilizan durante 30 minutos.</p>
       <label>Enlace al acta oficial<input type="url" value={sourceUrl} onChange={e => setSourceUrl(e.target.value)} placeholder="https://www.senado.gob.ar/votaciones/detalleActa/…" /></label>
-      <button type="button" className="button ghost" disabled={busy || !sourceUrl.trim() || Boolean(editing)} onClick={loadOfficial}>{busy ? 'Consultando acta…' : 'Consultar acta'}</button>
+      <button type="button" className="button ghost" disabled={busy || !sourceUrl.trim() || Boolean(editing)} onClick={loadOfficial}>{busy ? 'Consultando acta…' : 'Consultar acta'}</button>{sourceUrl && !imported && <button type="button" className="button ghost" disabled={busy} onClick={() => setSourceUrl('')}>Limpiar consulta</button>}
       {importError && <p className="message error" role="alert">{importError}</p>}
       {imported && <div><p role="status">{importInfo}</p><VotingResults items={[imported]} />
-        {items.some(v => v.id === imported.id || v.official?.sourceUrl === imported.official?.sourceUrl) ? <p>Esta acta ya está incorporada. Editá la votación existente: no se reemplazan tus correcciones.</p> : <button type="button" className="button primary" disabled={Boolean(editing)} onClick={() => { open(imported); setImported(null); }}>Incorporar al borrador y revisar</button>}
-        <button type="button" className="button ghost" onClick={() => setImported(null)}>Descartar consulta</button>
+        {items.some(v => v.id === imported.id || v.official?.sourceUrl === imported.official?.sourceUrl) ? <p>Esta acta ya está incorporada. Editá la votación existente: no se reemplazan tus correcciones.</p> : <button type="button" className="button primary" disabled={Boolean(editing)} onClick={() => { open(imported); setImported(null); setSourceUrl(''); }}>Incorporar al borrador y revisar</button>}
+        <button type="button" className="button ghost" onClick={() => { setImported(null); setSourceUrl(''); }}>Descartar consulta</button>
       </div>}
     </details>
     {items.map(vote => <div className="vote-editor-summary" key={vote.id}><span>{vote.chamber === 'deputies' ? 'Diputados' : 'Senado'} · {vote.date} · {vote.subject}</span><button className="button ghost" type="button" onClick={() => open(vote)}>Editar</button><button className="button danger" type="button" onClick={() => { if (window.confirm('¿Quitar esta votación del borrador? El cambio será público al publicar una revisión.')) onChange(items.filter(v => v.id !== vote.id)); }}>Quitar</button></div>)}

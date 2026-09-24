@@ -43,6 +43,19 @@ export const workflowDefinitionSchema = z.object({
 });
 export type WorkflowDefinition = z.infer<typeof workflowDefinitionSchema>;
 
+export const PREPARATION_STAGE_ID = 'en-preparacion';
+export const preparationStage: WorkflowStage = {
+  id: PREPARATION_STAGE_ID, label: 'En preparación', shortLabel: 'En preparación',
+  description: 'Circulan borradores, apuntes o propuestas públicas. Todavía no se presentó formalmente en el Congreso; el texto puede cambiar antes de su ingreso.',
+  order: 0, branchFromId: null, terminal: false, active: true,
+};
+
+// Supply the pre-entry state to existing versioned workflows without migrating stored projects.
+export function withPreparationStage(workflow: WorkflowDefinition): WorkflowDefinition {
+  if (workflow.stages.some((stage) => stage.id === PREPARATION_STAGE_ID)) return workflow;
+  return { ...workflow, stages: [preparationStage, ...workflow.stages.map((stage) => ({ ...stage, order: stage.order + 1 }))] };
+}
+
 export const projectStageExplanationSchema = z.object({
   stageId: slugSchema,
   summary: z.string().trim().min(20).max(1000),
@@ -581,10 +594,10 @@ export function glossaryTermAppearsInTexts(
 }
 
 export function stageProgress(workflow: WorkflowDefinition, currentStageId: string) {
-  const mainStages = workflow.stages.filter((stage) => !stage.branchFromId && stage.active).sort((a, b) => a.order - b.order);
+  const mainStages = workflow.stages.filter((stage) => stage.id !== PREPARATION_STAGE_ID && !stage.branchFromId && stage.active).sort((a, b) => a.order - b.order);
   const current = workflow.stages.find((stage) => stage.id === currentStageId);
   const branchOrigin = current?.branchFromId ? workflow.stages.find((stage) => stage.id === current.branchFromId) : current;
-  const activeOrder = branchOrigin?.order ?? -1;
+  const activeOrder = currentStageId === PREPARATION_STAGE_ID ? -1 : branchOrigin?.order ?? -1;
   return mainStages.map((stage) => ({
     ...stage,
     state: stage.order < activeOrder ? 'complete' : stage.order === activeOrder ? 'current' : 'upcoming',

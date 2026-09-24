@@ -11,6 +11,7 @@ import { Table, TableCell, TableHeader, TableRow } from '@tiptap/extension-table
 import { marked } from 'marked';
 import TurndownService from 'turndown';
 import { gfm } from 'turndown-plugin-gfm';
+import { usePendingProjectEdit } from './PendingProjectEdits';
 
 type Props = { value: string; onChange: (markdown: string) => void; onUploadImage: (file: File) => Promise<string>; placeholder?: string; ariaLabel?: string; disabled?: boolean };
 type Tool = { label: string; title: string; action: (editor: NonNullable<ReturnType<typeof useEditor>>) => void; active?: (editor: NonNullable<ReturnType<typeof useEditor>>) => boolean; enabled?: (editor: NonNullable<ReturnType<typeof useEditor>>) => boolean };
@@ -25,6 +26,7 @@ const groups: Tool[][] = [
 export default function QuorumRichTextEditor({ value, onChange, onUploadImage, placeholder = 'Escribí el contenido…', ariaLabel = 'Editor de contenido avanzado', disabled = false }: Props) {
   const [uploading, setUploading] = useState(false); const [tableOpen, setTableOpen] = useState(false); const [error, setError] = useState(''); const fileRef = useRef<HTMLInputElement>(null);
   const lastValue = useRef(value || ''); const turndown = useMemo(createTurndown, []);
+  usePendingProjectEdit(uploading);
   const editor = useEditor({ immediatelyRender: false, editable: !disabled, editorProps: { attributes: { 'aria-label': ariaLabel } }, extensions: [StarterKit.configure({ heading: { levels: [2, 3] }, link: false }), Link.configure({ openOnClick: false, autolink: true, defaultProtocol: 'https', HTMLAttributes: { rel: 'noopener noreferrer', target: '_blank' } }), Image.configure({ allowBase64: false, HTMLAttributes: { loading: 'lazy' } }), Table.configure({ resizable: true, HTMLAttributes: { class: 'content-table' } }), TableRow, TableHeader, TableCell, Placeholder.configure({ placeholder })], content: markdownToHtml(value), onUpdate: ({ editor: current }) => { const markdown = turndown.turndown(current.getHTML()).replace(/\n{3,}/g, '\n\n').trim(); lastValue.current = markdown; onChange(markdown); } });
   useEffect(() => { editor?.setEditable(!disabled); }, [disabled, editor]);
   useEffect(() => { if (!editor || value === lastValue.current) return; lastValue.current = value || ''; editor.commands.setContent(markdownToHtml(value), { emitUpdate: false }); }, [editor, value]);

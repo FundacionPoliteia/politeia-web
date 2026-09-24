@@ -18,6 +18,28 @@ beforeEach(() => {
 });
 
 describe('Quórum API', () => {
+  it('publica una propuesta en preparación y exige ingreso formal al avanzar sin cambiar de ficha', async () => {
+    const app = createApp();
+    const [project] = await testStore.list<Project>('projects');
+    const path = `/v1/manage/projects/${project.id}`;
+    await request(app).patch(path).send({ currentStageId: 'en-preparacion', updates: [], docketNumber: '', entryDate: null, originChamberId: null, initiativeTypeId: null,
+      summary: 'Un borrador público todavía sujeto a modificaciones antes de su ingreso.', impact: 'El alcance propuesto está en discusión y puede cambiar antes de presentarse.' }).expect(200);
+    const first = (await request(app).post(path + '/publish').send({}).expect(200)).body;
+    expect(first.publicProject.currentStageId).toBe('en-preparacion');
+    expect(first.publicProject.workflow.stages[0].id).toBe('en-preparacion');
+    const bootstrap = (await request(app).get('/v1/manage/bootstrap').expect(200)).body;
+    expect(bootstrap.workflows[0].stages[0].id).toBe('en-preparacion');
+    await request(app).patch(path).send({ updates: [{ id: 'formal-entry', date: '2026-09-14', title: 'Presentación formal', body: 'El texto ingresó al Congreso.', stageId: 'mesa-de-entrada' }] }).expect(200);
+    await request(app).post(path + '/publish').send({}).expect(422);
+    expect((await request(app).get(`/v1/public/projects/${project.slug}`).expect(200)).body.item.currentStageId).toBe('en-preparacion');
+    await request(app).patch(path).send({ docketNumber: '1234-D-2026', entryDate: '2026-09-14', originChamberId: 'diputados', initiativeTypeId: 'poder-legislativo' }).expect(200);
+    const next = (await request(app).post(path + '/publish').send({}).expect(200)).body;
+    expect(next.publicProject.id).toBe(project.id);
+    expect(next.publicProject.slug).toBe(project.slug);
+    expect(next.publicProject.currentStageId).toBe('mesa-de-entrada');
+    expect(next.publicProject.historicalStageId).toBe('en-preparacion');
+    expect(next.revision.number).toBe(2);
+  });
   it('compara contra lo publicado, registra secciones y rechaza publicar una comparación obsoleta', async () => {
     const app = createApp();
     const [project] = await testStore.list<Project>('projects');
@@ -190,7 +212,7 @@ describe('Quórum API', () => {
     expect(published.body.revision.number).toBe(1);
     const publicList = await request(createApp()).get('/v1/public/projects').expect(200);
     expect(publicList.body.items[0].slug).toBe(project.slug);
-    expect(publicList.body.items[0].workflow.stages).toHaveLength(8);
+    expect(publicList.body.items[0].workflow.stages).toHaveLength(9);
   });
 
   it('materializa como etapa vigente el último cambio indicado por la cronología', async () => {

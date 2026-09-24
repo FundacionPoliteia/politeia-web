@@ -1,6 +1,7 @@
 import type { PublicProject, WorkflowDefinition } from '@politeia/quorum-contracts';
+import { PREPARATION_STAGE_ID, withPreparationStage } from '@politeia/quorum-contracts';
 
-export type StageVisualState = 'normal' | 'forward' | 'backward' | 'closed' | 'promulgated';
+export type StageVisualState = 'normal' | 'forward' | 'backward' | 'closed' | 'promulgated' | 'preparation';
 
 export type ProjectStageTransition = {
   currentStageId: string;
@@ -39,6 +40,8 @@ export function latestProjectStageTransition(project: Pick<PublicProject, 'curre
 }
 
 function stageVisualState(workflow: WorkflowDefinition, stageId: string, previousStageId: string | null): StageVisualState {
+  if (stageId === PREPARATION_STAGE_ID) return 'preparation';
+  workflow = withPreparationStage(workflow);
   const stage = workflow.stages.find((item) => item.id === stageId);
   if (!stage) return 'normal';
   const normalized = `${stage.id} ${stage.label}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
