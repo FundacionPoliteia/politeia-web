@@ -3,11 +3,12 @@
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMemo, useState } from 'react';
-import { effectiveProjectStageId, stageProgress, type PublicProject } from '@politeia/quorum-contracts';
+import { effectiveProjectStageId, type PublicProject } from '@politeia/quorum-contracts';
 import { publicApiBase, type PublicBootstrap } from '@/lib/api';
 import { richTextExcerpt, richTextPlainText } from '@/lib/richText';
 import { latestProjectStageTransition, projectStageVisualState } from '@/lib/projectStages';
 import { projectIcon, projectIconGlyph } from '@/lib/projectIcons';
+import ProjectStageMovement from './ProjectStageMovement';
 
 export default function ProjectExplorer({ data }: { data: PublicBootstrap }) {
   const router = useRouter();
@@ -69,26 +70,24 @@ export default function ProjectExplorer({ data }: { data: PublicBootstrap }) {
 
 function ProjectCard({ project }: { project: PublicProject }) {
   const currentStageId = effectiveProjectStageId(project);
-  const progress = stageProgress(project.workflow, currentStageId);
   const current = project.workflow.stages.find((stage) => stage.id === currentStageId);
   const stageVisual = projectStageVisualState(project);
   const transition = latestProjectStageTransition(project);
-  const hasDirectionalTransition = stageVisual === 'backward' || stageVisual === 'forward';
-  const previousStageId = hasDirectionalTransition ? transition?.previousStageId || null : null;
-  const currentIndex = progress.findIndex((stage) => stage.id === currentStageId);
-  const previousIndex = progress.findIndex((stage) => stage.id === previousStageId);
-  const showDirectionalPath = hasDirectionalTransition && currentIndex >= 0 && previousIndex >= 0;
-  const transitionStart = Math.min(currentIndex, previousIndex);
-  const transitionEnd = Math.max(currentIndex, previousIndex);
-  const stageAria = hasDirectionalTransition && previousStageId
-    ? `Etapa actual: ${current?.label || currentStageId}. El proyecto ${stageVisual === 'backward' ? 'retrocedió' : 'avanzó'} desde ${project.workflow.stages.find((stage) => stage.id === previousStageId)?.label || previousStageId}`
-    : `Etapa actual: ${current?.label || currentStageId}`;
+  const previousStage = project.workflow.stages.find((stage) => stage.id === transition?.previousStageId);
+  const hasDirectionalTransition = (stageVisual === 'backward' || stageVisual === 'forward')
+    && Boolean(previousStage && current && previousStage.id !== current.id);
   return (
     <Link className={`project-card stage-visual-${stageVisual}`} href={`/proyectos/${project.slug}`} onClick={() => metric('project-opened')}>
       <div className="card-top"><span className="project-card-identity"><span className="project-card-icon material-symbols-outlined" aria-hidden="true">{projectIconGlyph(projectIcon(project))}</span><span className="status-pill">{current?.shortLabel || 'En seguimiento'}</span></span><span className="docket">{project.docketNumber}</span></div>
       <h3>{project.title}</h3><p>{richTextExcerpt(project.summary, project.summaryFormat, 220)}</p>
-      {stageVisual === 'preparation' ? <div className="preparation-card-note"><span aria-hidden="true">✎</span><span>Borrador en circulación<small>Aún sin presentación formal</small></span></div> : <div className="mini-progress" aria-label={stageAria}>{progress.map((stage, index) => <span className={`${stage.state}${showDirectionalPath && index >= transitionStart && index < transitionEnd ? ' transition-path' : ''}${showDirectionalPath && stage.id === previousStageId ? ' transitioned-from' : ''}`} key={stage.id} />)}</div>}
-      <span className="card-link">Ver ficha <span aria-hidden="true">→</span></span>
+      <div className="project-card-footer">
+        {stageVisual === 'preparation'
+          ? <div className="preparation-card-note"><span aria-hidden="true">✎</span><span>Borrador en circulación<small>Aún sin presentación formal</small></span></div>
+          : hasDirectionalTransition && previousStage && current
+            ? <ProjectStageMovement direction={stageVisual === 'backward' ? 'backward' : 'forward'} previousStage={previousStage} currentStage={current} />
+            : null}
+        <span className="card-link">Ver ficha <span aria-hidden="true">→</span></span>
+      </div>
     </Link>
   );
 }
