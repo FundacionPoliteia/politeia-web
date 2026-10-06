@@ -81,22 +81,24 @@ export async function getPublicBootstrap() {
 }
 
 export async function getManageBootstrap() {
-  const [projects, catalogs, workflows, settings, legislators, glossary, subscriptions, roles, audits, revisions] = await Promise.all([
-    store().list<Project>('projects'),
-    store().list<CatalogItem>('catalogs'),
-    store().list<WorkflowDefinition>('workflows'),
-    getSettings(),
-    store().list<Legislator>('legislators'),
-    store().list<GlossaryTerm>('glossary'),
-    store().list('subscriptions'),
-    store().list('roles'),
-    store().list('audits'),
-    store().list<ContentRevision>('revisions'),
-  ]);
-  return {
-    projects: projects.sort(sortProjects), catalogs, workflows: workflows.map(withPreparationStage), settings, legislators, glossary: glossary.map(normalizeGlossaryTerm),
-    subscriptions, roles, audits, revisions,
-  };
+  return cachedValue('derived:manage:bootstrap', cacheTtl.manageBootstrap, async () => {
+    const [projects, catalogs, workflows, settings, legislators, glossary, subscriptions, roles, audits, revisions] = await Promise.all([
+      store().list<Project>('projects'),
+      store().list<CatalogItem>('catalogs'),
+      store().list<WorkflowDefinition>('workflows'),
+      getSettings(),
+      store().list<Legislator>('legislators'),
+      store().list<GlossaryTerm>('glossary'),
+      store().list('subscriptions'),
+      store().list('roles'),
+      store().list('audits'),
+      store().list<ContentRevision>('revisions'),
+    ]);
+    return {
+      projects: projects.sort(sortProjects), catalogs, workflows: workflows.map(withPreparationStage), settings, legislators, glossary: glossary.map(normalizeGlossaryTerm),
+      subscriptions, roles, audits, revisions,
+    };
+  });
 }
 
 export async function previewProject(id: string, input?: unknown) {
@@ -130,9 +132,10 @@ export async function createProject(input: unknown, actorEmail: string) {
   return project;
 }
 
-export async function updateProject(id: string, input: unknown, actorEmail: string) {
+export async function updateProject(id: string, input: unknown, actorEmail: string, expectedUpdatedAt?: string) {
   const existing = await store().get<Project>('projects', id);
   if (!existing) throw notFound('Proyecto');
+  if (expectedUpdatedAt && expectedUpdatedAt !== existing.updatedAt) throw new ApiError(409, 'project_draft_changed', 'El borrador cambió en otra sesión. Conservamos tus cambios en pantalla; recargá el proyecto y compará antes de volver a guardar.');
   const parsed = projectInputSchema.partial().strict().parse(input);
   if (parsed.slug && parsed.slug !== existing.slug && existing.publishedAt) {
     throw new ApiError(409, 'published_slug_locked', 'El slug de un proyecto publicado no puede modificarse');
@@ -141,9 +144,13 @@ export async function updateProject(id: string, input: unknown, actorEmail: stri
   const project = projectSchema.parse({ ...existing, ...parsed, updatedAt: now(), updatedBy: actorEmail });
   if (project.votingResults) project.votingResults = await validateVotingProvenance(project.votingResults);
   await validateProjectStageExplanations(project);
-  await store().set('projects', id, project);
+  const saved = await store().mutateProject(id, (current) => {
+    if (!isDeepStrictEqual(current, existing)) throw new ApiError(409, 'project_draft_changed', 'El borrador cambió mientras guardabas. Conservamos tus cambios en pantalla; compará la versión guardada antes de reintentar.');
+    return project;
+  });
+  if (!saved) throw notFound('Proyecto');
   await audit('project.updated', actorEmail, id, { slug: project.slug });
-  return project;
+  return saved;
 }
 
 export async function saveProjectPosition(id: string, positionId: string, body: unknown, actorEmail: string) {
@@ -159,7 +166,7 @@ export async function saveProjectPosition(id: string, positionId: string, body: 
   });
   if (!project) throw notFound('Proyecto');
   await audit('project.position-saved', actorEmail, id, { positionId });
-  return { item: project.positions!.find((position) => position.id === positionId) };
+  return { item: project.positions!.find((position) => position.id === positionId), projectUpdatedAt: project.updatedAt };
 }
 
 function publicationReviewToken(project: Project, previous?: ContentRevision) {

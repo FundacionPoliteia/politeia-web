@@ -111,7 +111,7 @@ export function createApp() {
   app.get('/v1/manage/projects/:id/preview', requireRole('quorum_editor'), asyncHandler(async (req, res) => res.json({ item: await previewProject(String(req.params.id)) })));
   app.post('/v1/manage/projects/:id/preview', requireRole('quorum_editor'), asyncHandler(async (req, res) => res.json({ item: await previewProject(String(req.params.id), req.body) })));
   app.post('/v1/manage/projects', requireRole('quorum_editor'), asyncHandler(async (req, res) => res.status(201).json({ item: await createProject(req.body, req.user!.email) })));
-  app.patch('/v1/manage/projects/:id', requireRole('quorum_editor'), asyncHandler(async (req, res) => res.json({ item: await updateProject(String(req.params.id), req.body, req.user!.email) })));
+  app.patch('/v1/manage/projects/:id', requireRole('quorum_editor'), asyncHandler(async (req, res) => res.json({ item: await updateProject(String(req.params.id), req.body, req.user!.email, req.header('if-match') || undefined) })));
   app.put('/v1/manage/projects/:id/positions/:positionId', requireRole('quorum_editor'), asyncHandler(async (req, res) => res.json(await saveProjectPosition(String(req.params.id), String(req.params.positionId), req.body, req.user!.email))));
   app.post('/v1/manage/projects/:id/publish', requireRole('quorum_editor'), asyncHandler(async (req, res) => res.json(await publishProject(String(req.params.id), req.body, req.user!.email))));
   app.get('/v1/manage/projects/:id/publication-review', requireRole('quorum_editor'), asyncHandler(async (req, res) => res.json(await reviewProjectPublication(String(req.params.id)))));

@@ -14,6 +14,7 @@ export const cacheTtl = {
   publicProjection: 60_000,
   referenceData: 5 * 60_000,
   operationalOverview: 15_000,
+  manageBootstrap: 2_000,
   externalSnapshot: 5 * 60_000,
   immutableAsset: 60 * 60_000,
 } as const;
@@ -46,6 +47,7 @@ export function cachedGet<T>(dataStore: DataStore, collection: CollectionKey, id
 export function invalidateCollectionCache(collection: CollectionKey) {
   invalidatePrefix(`collection:list:${collection}`);
   invalidatePrefix(`collection:get:${collection}:`);
+  invalidatePrefix('derived:manage:');
   if (['publicProjects', 'legislators', 'glossary', 'catalogs', 'workflows', 'settings'].includes(collection)) invalidatePrefix('derived:public:');
 }
 

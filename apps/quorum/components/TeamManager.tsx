@@ -4,9 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 import { teamMemberInputSchema, teamMemberSchema, type TeamMember, type TeamMemberInput } from '@politeia/quorum-contracts';
 import PhotoField from './PhotoField';
 import TeamProfiles from './TeamProfiles';
+import UnsavedChangesDialog from './UnsavedChangesDialog';
 
 const empty: TeamMemberInput = { fullName: '', role: '', organization: 'Fundación Politeia', area: '', bio: '', photoUrl: '', order: 0 };
-type Props = { call: (path: string, init?: RequestInit) => Promise<any>; uploadImage: (file: File) => Promise<string>; onDirtyChange: (dirty: boolean) => void };
+type Props = { call: (path: string, init?: RequestInit) => Promise<any>; uploadImage: (file: File) => Promise<string>; onDirtyChange: (dirty: boolean, busy?: boolean) => void };
 export default function TeamManager({ call, uploadImage, onDirtyChange }: Props) {
   const [items, setItems] = useState<TeamMember[]>([]);
   const [selected, setSelected] = useState<TeamMember | null>(null);
@@ -17,9 +18,10 @@ export default function TeamManager({ call, uploadImage, onDirtyChange }: Props)
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [preview, setPreview] = useState(false);
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const inFlight = useRef(false);
   const dirty = JSON.stringify(form) !== JSON.stringify(selected?.draft || empty);
-  useEffect(() => { onDirtyChange(dirty || uploading || busy); return () => onDirtyChange(false); }, [dirty, uploading, busy, onDirtyChange]);
+  useEffect(() => { onDirtyChange(dirty, uploading || busy); return () => onDirtyChange(false, false); }, [dirty, uploading, busy, onDirtyChange]);
   useEffect(() => {
     if (!dirty) return;
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
@@ -31,15 +33,18 @@ export default function TeamManager({ call, uploadImage, onDirtyChange }: Props)
     return () => { active = false; };
   }, [call]);
   function choose(item: TeamMember | null) {
-    if (busy || uploading || (dirty && !window.confirm('Hay cambios sin guardar. ¿Descartarlos para cambiar de perfil?'))) return;
-    setSelected(item); setForm(item?.draft || { ...empty }); setError(''); setMessage(''); setPreview(false);
+    if (busy || uploading) return;
+    const load = () => { setSelected(item); setForm(item?.draft || { ...empty }); setError(''); setMessage(''); setPreview(false); };
+    if (dirty) { setPendingAction(() => load); return; }
+    load();
   }
   function accept(item: TeamMember) {
     setSelected(item); setForm(item.draft);
     setItems(current => current.some(entry => entry.id === item.id) ? current.map(entry => entry.id === item.id ? item : entry) : [...current, item]);
   }
-  async function refresh() {
-    if (busy || uploading || (dirty && !window.confirm('¿Descartar los cambios de esta pantalla y cargar los perfiles guardados?'))) return;
+  async function refresh(discard = false) {
+    if (busy || uploading) return;
+    if (dirty && !discard) { setPendingAction(() => () => { void refresh(true); }); return; }
     setBusy(true); setError('');
     try {
       const body = await call('/v1/manage/team');
@@ -94,5 +99,6 @@ export default function TeamManager({ call, uploadImage, onDirtyChange }: Props)
       <div className="dialog-actions"><button className="button ghost" onClick={() => setPreview(!preview)}>Vista previa</button><button className="button primary" disabled={busy || uploading || (!dirty && !!selected)} onClick={() => void act('save')}>Guardar borrador</button><button className="button dark" disabled={busy || uploading} onClick={() => void act('publish')}>Guardar y publicar</button>{selected?.published && <button className="button danger" disabled={busy || uploading} onClick={() => void act('unpublish')}>Despublicar</button>}</div>
       {preview && <section aria-label="Vista previa privada"><p>Vista previa privada del formulario; todavía no implica publicación.</p><TeamProfiles members={[{ ...form, id: selected?.id || 'preview' }]} /></section>}
     </section></div>
+    {pendingAction && <UnsavedChangesDialog title="¿Descartar los cambios de Nosotros?" busy={busy || uploading} cancel={() => setPendingAction(null)} discard={() => { const action = pendingAction; setPendingAction(null); action(); }} />}
   </section>;
 }

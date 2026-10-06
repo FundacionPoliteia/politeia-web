@@ -2,11 +2,12 @@
 
 import Script from 'next/script';
 import ProjectLeaveDialog from './ProjectLeaveDialog';
+import UnsavedChangesDialog from './UnsavedChangesDialog';
 import { PendingProjectEdits, usePendingProjectEdit } from './PendingProjectEdits';
 import { projectInputSchema } from '@politeia/quorum-contracts';
 import { PREPARATION_STAGE_ID, withPreparationStage } from '@politeia/quorum-contracts';
 import VotingEditor from '@/components/VotingEditor';
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { MutableRefObject } from 'react';
 import { effectiveProjectStageId, glossaryTermAppearsInTexts, hasChronologyChanges, type CatalogItem, type ContentRevision, type ExternalEntityLink, type ExternalLegislatorRecord, type ExternalSource, type GlossaryTerm, type Legislator, type LegislatorImportField, type LegislatorImportSuggestion, type OfficialDocument, type Project, type ProjectIconName, type ProjectInput, type ProjectUpdate, type PublicProject, type RoleAssignment, type SiteSettings, type Source, type Subscription, type WorkflowDefinition } from '@politeia/quorum-contracts';
 import { publicApiBase } from '@/lib/api';
@@ -32,6 +33,8 @@ type IntegrationSource = ExternalSource & { freshness: 'fresh' | 'expiring' | 'd
 type IntegrationOverview = { enabled: boolean; autoSyncEnabled: boolean; syncIntervalDays: number; sources: IntegrationSource[]; counts: { runs: number; snapshots: number; legislators: number; links: number; pendingChanges: number } };
 type ExternalLegislatorSearchItem = { record: ExternalLegislatorRecord; link: ExternalEntityLink | null; possibleMatches: Array<Pick<Legislator, 'id' | 'fullName' | 'district' | 'bloc' | 'published'>> };
 type Tab = 'tablero' | 'proyectos' | 'legisladores' | 'glosario' | 'catalogos' | 'seguidores' | 'configuracion' | 'usuarios' | 'historial' | 'nosotros';
+type SectionStatus = { dirty: boolean; busy: boolean };
+type SectionStatusReporter = (dirty: boolean, busy?: boolean) => void;
 
 declare global { interface Window { google?: { accounts: { id: { initialize: (options: Record<string, unknown>) => void; renderButton: (element: HTMLElement, options: Record<string, unknown>) => void } } } } }
 
@@ -45,10 +48,86 @@ const tabs: Array<{ id: Tab; label: string; admin?: boolean }> = [
 export default function ManagementApp() {
   const projectNavigation = useRef<((action: () => void) => void) | null>(null);
   function navigate(action: () => void) { if (projectNavigation.current) projectNavigation.current(action); else action(); }
-  const [teamDirty, setTeamDirty] = useState(false);
+  const [sectionStatus, setSectionStatus] = useState<Partial<Record<Tab, SectionStatus>>>({});
+  const [pendingNavigation, setPendingNavigation] = useState<(() => void) | null>(null);
   const [user, setUser] = useState<User | null>(null); const [data, setData] = useState<Bootstrap | null>(null); const [tab, setTab] = useState<Tab>('tablero');
   const [busy, setBusy] = useState(true); const [message, setMessage] = useState('');
   const admin = user?.roles.includes('quorum_admin') === true;
+  const activeSectionStatus = sectionStatus[tab] || { dirty: false, busy: false };
+  const sectionStatusRef = useRef(sectionStatus); sectionStatusRef.current = sectionStatus;
+  const activeTabRef = useRef(tab); activeTabRef.current = tab;
+  const bypassBrowserUnload = useRef(false);
+  const historyMarker = useRef('');
+  const navigationHandler = useRef<(action: () => void) => void>(() => {});
+  const sectionStatusReporters = useMemo(() => Object.fromEntries(tabs.map(({ id }) => [id, (dirty: boolean, isBusy = false) => {
+    setSectionStatus((current) => {
+      const previous = current[id];
+      if (previous?.dirty === dirty && previous?.busy === isBusy) return current;
+      return { ...current, [id]: { dirty, busy: isBusy } };
+    });
+  }])) as Record<Tab, SectionStatusReporter>, []);
+  function requestAppNavigation(action: () => void) {
+    if (tab === 'proyectos') { navigate(action); return; }
+    if (activeSectionStatus.dirty || activeSectionStatus.busy) { setPendingNavigation(() => action); return; }
+    action();
+  }
+  navigationHandler.current = requestAppNavigation;
+  function discardAndNavigate() {
+    const action = pendingNavigation;
+    setSectionStatus((current) => ({ ...current, [tab]: { dirty: false, busy: false } }));
+    setPendingNavigation(null);
+    action?.();
+  }
+
+  useEffect(() => {
+    historyMarker.current ||= `quorum-management-${crypto.randomUUID()}`;
+    const marker = historyMarker.current;
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      const activeTab = activeTabRef.current;
+      if (activeTab === 'proyectos') return;
+      const status = sectionStatusRef.current[activeTab];
+      if (!status?.dirty && !status?.busy) return;
+      if (bypassBrowserUnload.current) { bypassBrowserUnload.current = false; return; }
+      event.preventDefault(); event.returnValue = '';
+    };
+    const interceptLink = (event: MouseEvent) => {
+      if (activeTabRef.current === 'proyectos') return;
+      const status = sectionStatusRef.current[activeTabRef.current];
+      if (!status?.dirty && !status?.busy) return;
+      const anchor = (event.target as Element)?.closest?.('a[href]') as HTMLAnchorElement | null;
+      if (!anchor || event.defaultPrevented || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0 || anchor.target === '_blank' || anchor.hasAttribute('download')) return;
+      const url = new URL(anchor.href, location.href);
+      if (url.origin === location.origin && url.pathname === location.pathname && url.search === location.search) return;
+      event.preventDefault(); event.stopPropagation();
+      navigationHandler.current(() => { bypassBrowserUnload.current = true; location.assign(url.href); });
+    };
+    const interceptBack = (event: PopStateEvent) => {
+      const activeTab = activeTabRef.current;
+      if (activeTab === 'proyectos') return;
+      // Returning forward to our guard entry is expected; only the first
+      // back-step should ask whether the user wants to leave.
+      if (event.state?.quorumManagementGuard === marker) return;
+      const status = sectionStatusRef.current[activeTab];
+      if (!status?.dirty && !status?.busy) return;
+      history.forward();
+      navigationHandler.current(() => window.setTimeout(() => history.go(-2), 0));
+    };
+    window.addEventListener('beforeunload', beforeUnload);
+    window.addEventListener('popstate', interceptBack);
+    document.addEventListener('click', interceptLink, true);
+    return () => {
+      window.removeEventListener('beforeunload', beforeUnload);
+      window.removeEventListener('popstate', interceptBack);
+      document.removeEventListener('click', interceptLink, true);
+    };
+  }, []);
+  useLayoutEffect(() => {
+    if (tab === 'proyectos' || (!activeSectionStatus.dirty && !activeSectionStatus.busy)) return;
+    const marker = historyMarker.current;
+    if (marker && history.state?.quorumManagementGuard !== marker) {
+      history.pushState({ ...history.state, quorumManagementGuard: marker }, '', location.href);
+    }
+  }, [tab, activeSectionStatus.dirty, activeSectionStatus.busy]);
 
   const call = useCallback(async (path: string, init: RequestInit = {}) => {
     const headers = new Headers(init.headers); if (user?.csrfToken && !['GET', 'HEAD'].includes(init.method || 'GET')) headers.set('x-csrf-token', user.csrfToken);
@@ -77,7 +156,30 @@ export default function ManagementApp() {
   if (busy || !data) return <section className="management-login"><div className="login-card"><span className="eyebrow">Gestión Quórum</span><h2>Cargando espacio editorial…</h2></div></section>;
 
   const visibleTabs = tabs.filter((item) => !item.admin || admin);
-  return <div className="management-shell"><aside className="management-nav"><div className="wordmark"><strong>Quórum</strong><span>Gestión</span></div><nav>{visibleTabs.map((item) => <button key={item.id} className={tab === item.id ? 'active' : ''} onClick={() => { if (tab === 'nosotros' && item.id !== tab && teamDirty && !window.confirm('Hay cambios de Nosotros sin guardar. ¿Salir de esta sección?')) return; if (item.id !== tab) navigate(() => setTab(item.id)); }}>{item.label}</button>)}</nav><div className="manager-user"><strong>{user.name}</strong><span>{user.email}</span><button onClick={() => navigate(() => { void logout(); })}>Cerrar sesión</button></div></aside><section className="management-content"><header className="management-top"><div><span className="eyebrow">Gestión editorial</span><h1>{visibleTabs.find((item) => item.id === tab)?.label}</h1></div><span className="environment-pill">Entorno: {process.env.NEXT_PUBLIC_ENVIRONMENT || 'local'}</span></header>{message && <p className="message" role="status">{message}</p>}{tab === 'nosotros' && admin && <TeamManager call={call} uploadImage={file => uploadRichImage(call, file)} onDirtyChange={setTeamDirty} />}{tab === 'tablero' && <Dashboard data={data} />}{tab === 'proyectos' && <Projects navigation={projectNavigation} data={data} call={call} reload={reload} notify={setMessage} />}{tab === 'legisladores' && <Legislators data={data} call={call} reload={reload} notify={setMessage} admin={admin} />}{tab === 'glosario' && <Glossary data={data} call={call} reload={reload} notify={setMessage} />}{tab === 'catalogos' && <Catalogs data={data} call={call} reload={reload} notify={setMessage} />}{tab === 'seguidores' && <Followers data={data} />}{tab === 'configuracion' && <Settings data={data} call={call} reload={reload} notify={setMessage} />}{tab === 'usuarios' && <Users data={data} call={call} reload={reload} notify={setMessage} />}{tab === 'historial' && <History data={data} call={call} reload={reload} notify={setMessage} admin={admin} />}</section></div>;
+  return <>
+    <div className="management-shell">
+      <aside className="management-nav">
+        <div className="wordmark"><strong>Quórum</strong><span>Gestión</span></div>
+        <nav>{visibleTabs.map((item) => <button key={item.id} className={tab === item.id ? 'active' : ''} onClick={() => { if (item.id !== tab) requestAppNavigation(() => setTab(item.id)); }}>{item.label}</button>)}</nav>
+        <div className="manager-user"><strong>{user.name}</strong><span>{user.email}</span><button onClick={() => requestAppNavigation(() => { void logout(); })}>Cerrar sesión</button></div>
+      </aside>
+      <section className="management-content">
+        <header className="management-top"><div><span className="eyebrow">Gestión editorial</span><h1>{visibleTabs.find((item) => item.id === tab)?.label}</h1></div><span className="environment-pill">Entorno: {process.env.NEXT_PUBLIC_ENVIRONMENT || 'local'}</span></header>
+        {message && <p className="message" role="status">{message}</p>}
+        {tab === 'nosotros' && admin && <TeamManager call={call} uploadImage={file => uploadRichImage(call, file)} onDirtyChange={sectionStatusReporters.nosotros} />}
+        {tab === 'tablero' && <Dashboard data={data} />}
+        {tab === 'proyectos' && <Projects navigation={projectNavigation} data={data} call={call} reload={reload} notify={setMessage} />}
+        {tab === 'legisladores' && <Legislators data={data} call={call} reload={reload} notify={setMessage} admin={admin} onStatusChange={sectionStatusReporters.legisladores} />}
+        {tab === 'glosario' && <Glossary data={data} call={call} reload={reload} notify={setMessage} onStatusChange={sectionStatusReporters.glosario} />}
+        {tab === 'catalogos' && <Catalogs data={data} call={call} reload={reload} notify={setMessage} onStatusChange={sectionStatusReporters.catalogos} />}
+        {tab === 'seguidores' && <Followers data={data} />}
+        {tab === 'configuracion' && <Settings data={data} call={call} reload={reload} notify={setMessage} onStatusChange={sectionStatusReporters.configuracion} />}
+        {tab === 'usuarios' && <Users data={data} call={call} reload={reload} notify={setMessage} onStatusChange={sectionStatusReporters.usuarios} />}
+        {tab === 'historial' && <History data={data} call={call} reload={reload} notify={setMessage} admin={admin} />}
+      </section>
+    </div>
+    {pendingNavigation && <UnsavedChangesDialog title={`¿Salir de ${visibleTabs.find((item) => item.id === tab)?.label || 'esta sección'}?`} dirty={activeSectionStatus.dirty} busy={activeSectionStatus.busy} cancel={() => setPendingNavigation(null)} discard={discardAndNavigate} />}
+  </>;
 }
 
 function Dashboard({ data }: { data: Bootstrap }) {
@@ -173,6 +275,7 @@ function ProjectEditor({ project, data, call, reload, notify, onCreated, editorH
   const [form, setForm] = useState<ProjectInput>(() => project ? projectToInput(project) : emptyProject(workflow));
   const latestForm = useRef(form); latestForm.current = form;
   const [confirmedForm, setConfirmedForm] = useState(form);
+  const projectVersion = useRef(project?.updatedAt || '');
   const [pendingInputs, setPendingInputs] = useState<Set<string>>(() => new Set());
   const registerPending = useCallback((id: string, pending: boolean) => setPendingInputs((current) => { if (current.has(id) === pending) return current; const next = new Set(current); if (pending) next.add(id); else next.delete(id); return next; }), []);
   const [savedPositions, setSavedPositions] = useState(project?.positions);
@@ -204,12 +307,13 @@ function ProjectEditor({ project, data, call, reload, notify, onCreated, editorH
     setSaving(true);
     const submitted = form;
     try {
-      const body = await call(project ? `/v1/manage/projects/${project.id}` : '/v1/manage/projects', { method: project ? 'PATCH' : 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(form) });
+      const body = await call(project ? `/v1/manage/projects/${project.id}` : '/v1/manage/projects', { method: project ? 'PATCH' : 'POST', headers: { 'content-type': 'application/json', ...(projectVersion.current ? { 'if-match': projectVersion.current } : {}) }, body: JSON.stringify(form) });
       const omitted = Object.keys(form).filter((key) => form[key as keyof ProjectInput] !== undefined && !Object.prototype.hasOwnProperty.call(body?.item || {}, key));
       if (omitted.length) throw new Error(`El servidor no confirmó todos los campos (${omitted.join(', ')}). Conservamos tus cambios en pantalla. No publiques todavía: la API necesita actualizarse.`);
       if (!sameValue(body.item.positions || [], positionsCheck.data)) throw new Error('El servidor no confirmó las declaraciones completas, incluidas sus fotos. Conservamos tus cambios; actualizá la API antes de publicar.');
       const confirmed = projectToInput(body.item);
       if (!sameValue(projectInputSchema.parse(confirmed), projectInputSchema.parse(submitted))) throw new Error('El servidor no confirmó todos los valores enviados. Conservamos tus cambios para reintentar.');
+      projectVersion.current = body.item.updatedAt;
       setConfirmedForm(confirmed);
       const editedWhileSaving = latestForm.current !== submitted;
       if (!editedWhileSaving) setForm(confirmed);
@@ -228,12 +332,12 @@ function ProjectEditor({ project, data, call, reload, notify, onCreated, editorH
     if (!project || !chronologyDirty || savingChronology || saving) return;
     setSavingChronology(true);
     try {
-      const body = await call(`/v1/manage/projects/${project.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ updates: form.updates || [] }) });
+      const body = await call(`/v1/manage/projects/${project.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json', 'if-match': projectVersion.current }, body: JSON.stringify({ updates: form.updates || [] }) });
+      projectVersion.current = body.item.updatedAt;
       if (!sameValue(body.item.updates, form.updates || [])) throw new Error('El servidor no confirmó la cronología completa. Conservamos tus cambios.');
       setConfirmedForm((current) => ({ ...current, updates: body.item.updates }));
       setForm((current) => sameValue(current.updates, form.updates) ? { ...current, updates: body.item.updates } : current);
       notify('Cronología guardada en el borrador. Publicá la revisión desde el sector global cuando esté aprobada.');
-      await reload();
     } catch (error) { notify(error instanceof Error ? error.message : 'No pudimos guardar la cronología.'); }
     finally { setSavingChronology(false); }
   }
@@ -252,10 +356,10 @@ function ProjectEditor({ project, data, call, reload, notify, onCreated, editorH
       const previous = savedPositions?.find((position) => position.id === item.id) || null;
       const body = await call(`/v1/manage/projects/${project.id}/positions/${item.id}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ item, previous }) });
       if (!body?.item || !sameValue(body.item, item)) throw new Error('El servidor no confirmó la declaración completa. Conservamos tu texto para reintentar.');
+      if (body.projectUpdatedAt) projectVersion.current = body.projectUpdatedAt;
       setSavedPositions((current) => current?.some((position) => position.id === item.id) ? current.map((position) => position.id === item.id ? body.item : position) : [...(current || []), body.item]);
       setConfirmedForm((current) => ({ ...current, positions: current.positions?.some((position) => position.id === item.id) ? current.positions.map((position) => position.id === item.id ? body.item : position) : [...(current.positions || []), body.item] }));
       setForm((current) => ({ ...current, positions: current.positions?.map((position) => position.id === item.id && sameValue(position, item) ? body.item : position) }));
-      try { await reload(); } catch { notify('Declaración guardada. No se pudo actualizar el listado; tu texto está conservado.'); }
       return body.item;
     } finally { positionSaveInFlight.current = false; setSavingPosition(false); }
   }
@@ -499,7 +603,7 @@ function PreviewDialog({ project, form, settings, call, close }: { project: Proj
 }
 
 
-function Legislators({ data, call, reload, notify, admin }: AdminProps & { admin: boolean }) {
+function Legislators({ data, call, reload, notify, admin, onStatusChange }: AdminProps & { admin: boolean; onStatusChange: SectionStatusReporter }) {
   type LegislatorForm = { fullName: string; photoUrl: string; slug: string; party: string; bloc: string; district: string; office: Legislator['office']; mandateStart: string; mandateEnd: string; academicTitle: string; bio: string; attendanceValue: string; attendanceAsOf: string; attendanceSourceUrl: string; published: boolean };
   type ProfileFeedback = { kind: 'status' | 'error'; text: string };
   const emptyForm = (): LegislatorForm => ({ fullName: '', photoUrl: '', slug: '', party: '', bloc: '', district: '', office: 'diputado', mandateStart: '', mandateEnd: '', academicTitle: '', bio: '', attendanceValue: '', attendanceAsOf: '', attendanceSourceUrl: '', published: false });
@@ -507,6 +611,7 @@ function Legislators({ data, call, reload, notify, admin }: AdminProps & { admin
   const [profilePhotoUploading, setProfilePhotoUploading] = useState(false);
   async function uploadProfilePhoto(file: File) { setProfilePhotoUploading(true); try { return await uploadRichImage(call, file); } finally { setProfilePhotoUploading(false); } }
   const [profileFeedback, setProfileFeedback] = useState<ProfileFeedback | null>(null);
+  const [pendingProfileChange, setPendingProfileChange] = useState<(() => void) | null>(null);
   const [integration, setIntegration] = useState<IntegrationOverview | null>(null); const [query, setQuery] = useState(''); const [results, setResults] = useState<ExternalLegislatorSearchItem[]>([]); const [sourceBusy, setSourceBusy] = useState(false);
   const [changes, setChanges] = useState<LegislatorImportSuggestion[]>([]); const [changeStatus, setChangeStatus] = useState('pending');
   const [bulkConfirm, setBulkConfirm] = useState(false); const [bulkBusy, setBulkBusy] = useState(false); const [bulkError, setBulkError] = useState('');
@@ -523,7 +628,8 @@ function Legislators({ data, call, reload, notify, admin }: AdminProps & { admin
       : !form.slug ? 'Completá un slug válido para guardar el perfil.'
         : attendanceIncomplete ? 'La asistencia es un dato trazable: completá porcentaje, fecha de corte y fuente, o dejá los tres campos vacíos.'
           : attendanceInvalid ? 'La asistencia debe ser un porcentaje entre 0 y 100.'
-            : attendanceSourceInvalid ? 'La fuente de asistencia debe ser una URL válida que comience con http:// o https://.' : '';
+          : attendanceSourceInvalid ? 'La fuente de asistencia debe ser una URL válida que comience con http:// o https://.' : '';
+  useEffect(() => { onStatusChange(profileDirty, profileSaving || profilePhotoUploading || sourceBusy || bulkBusy); }, [profileDirty, profileSaving, profilePhotoUploading, sourceBusy, bulkBusy, onStatusChange]);
   const sources = integration?.sources || [];
   const enabledSources = sources.filter((item) => item.enabled);
   const importReady = enabledSources.length === 2 && enabledSources.every((item) => item.lastSnapshotId && item.mode !== 'shadow');
@@ -538,8 +644,14 @@ function Legislators({ data, call, reload, notify, admin }: AdminProps & { admin
   useEffect(() => { automaticRefresh(); }, [automaticRefresh]);
   useEffect(() => { const timer = window.setInterval(automaticRefresh, 60_000); window.addEventListener('focus', automaticRefresh); document.addEventListener('visibilitychange', automaticRefresh); return () => { window.clearInterval(timer); window.removeEventListener('focus', automaticRefresh); document.removeEventListener('visibilitychange', automaticRefresh); }; }, [automaticRefresh]);
   function formFor(item: Legislator): LegislatorForm { return { fullName: item.fullName, photoUrl: item.photoUrl || '', slug: item.slug, party: item.party || '', bloc: item.bloc || '', district: item.district || '', office: item.office, mandateStart: item.mandateStart || '', mandateEnd: item.mandateEnd || '', academicTitle: item.academicTitle || '', bio: item.bio || '', attendanceValue: item.attendance ? String(item.attendance.value) : '', attendanceAsOf: item.attendance?.asOf || '', attendanceSourceUrl: item.attendance?.sourceUrl || '', published: item.published }; }
-  function editProfile(item: Legislator, discardCurrent = false) { if (profilePhotoUploading) return; if (!discardCurrent && profileDirty && !window.confirm('Hay cambios sin guardar en el perfil actual. ¿Querés descartarlos y editar otro perfil?')) return; const next = formFor(item); setSelectedId(item.id); setForm(next); setBaseline(JSON.stringify(next)); setProfileFeedback(null); }
-  function newProfile() { if (profilePhotoUploading) return; if (profileDirty && !window.confirm('Hay cambios sin guardar. ¿Querés descartarlos y crear un perfil nuevo?')) return; const next = emptyForm(); setSelectedId(''); setForm(next); setBaseline(JSON.stringify(next)); setProfileFeedback(null); }
+  function performProfileChange(action: () => void) {
+    if (profileSaving || profilePhotoUploading) return;
+    if (profileDirty) { setPendingProfileChange(() => action); return; }
+    action();
+  }
+  function editProfile(item: Legislator) { performProfileChange(() => { const next = formFor(item); setSelectedId(item.id); setForm(next); setBaseline(JSON.stringify(next)); setProfileFeedback(null); }); }
+  function newProfile() { performProfileChange(() => { const next = emptyForm(); setSelectedId(''); setForm(next); setBaseline(JSON.stringify(next)); setProfileFeedback(null); }); }
+  function resetCurrentProfile() { if (!selectedProfile) return; performProfileChange(() => { const next = formFor(selectedProfile); setForm(next); setBaseline(JSON.stringify(next)); setProfileFeedback(null); }); }
   async function save() {
     if (profileSaving || profilePhotoUploading) return;
     if (profileBlockingMessage) { setProfileFeedback({ kind: 'error', text: profileBlockingMessage }); return; }
@@ -587,9 +699,10 @@ function Legislators({ data, call, reload, notify, admin }: AdminProps & { admin
         </fieldset>
         <label className="check-row"><input type="checkbox" checked={form.published} onChange={(e) => setForm({ ...form, published: e.target.checked })} /><span>Publicar perfil</span></label>
         {profileFeedback ? <p className={`message profile-save-feedback${profileFeedback.kind === 'error' ? ' error' : ''}`} id="profile-save-help" role={profileFeedback.kind === 'error' ? 'alert' : 'status'}>{profileFeedback.text}</p> : <p className="profile-save-help" id="profile-save-help">{profileBlockingMessage || 'Todo listo para guardar los cambios en Firestore.'}</p>}
-        <div className="legislator-profile-editor-actions">{selectedProfile && <button className="button ghost" type="button" onClick={() => editProfile(selectedProfile, true)} disabled={!profileDirty}>Descartar cambios</button>}<button className="button primary" aria-describedby="profile-save-help" onClick={() => void save()} disabled={!profileDirty || profileSaving || profilePhotoUploading || Boolean(profileBlockingMessage)}>{profileSaving ? 'Guardando…' : selectedProfile ? 'Guardar cambios' : 'Crear perfil'}</button></div>
+        <div className="legislator-profile-editor-actions">{selectedProfile && <button className="button ghost" type="button" onClick={resetCurrentProfile} disabled={!profileDirty}>Descartar cambios</button>}<button className="button primary" aria-describedby="profile-save-help" onClick={() => void save()} disabled={!profileDirty || profileSaving || profilePhotoUploading || Boolean(profileBlockingMessage)}>{profileSaving ? 'Guardando…' : selectedProfile ? 'Guardar cambios' : 'Crear perfil'}</button></div>
       </section>
     </div>
+    {pendingProfileChange && <UnsavedChangesDialog title="¿Descartar los cambios del perfil?" busy={profileSaving || profilePhotoUploading} cancel={() => setPendingProfileChange(null)} discard={() => { const action = pendingProfileChange; setPendingProfileChange(null); action(); }} />}
   </>;
 }
 
@@ -640,19 +753,22 @@ function ExternalLegislatorResult({ item, locals, call, reload, notify, refresh,
   return <article className="external-result"><div className="external-result-heading"><div><strong>{item.record.fullName}</strong><span>{item.record.sourceId === 'senate-legislators' ? 'Senado' : 'Diputados'} · {item.record.externalId} · {item.record.district}</span></div>{item.link && <span className="status-pill">Vinculado</span>}</div><div className="external-fields">{options.map((option) => <label key={option.id}><input type="checkbox" checked={fields.includes(option.id)} disabled={creating && option.id === 'fullName'} onChange={(event) => toggle(option.id, event.target.checked)} /><span><small>{option.label}</small>{option.value}</span></label>)}</div>{!item.link && <Field label="Destino en Quórum"><select value={target} onChange={(event) => { const value = event.target.value; setTarget(value); if (value === 'new' && !fields.includes('fullName')) setFields([...fields, 'fullName']); }}><option value="">Revisar coincidencias antes de continuar</option><option value="new">Crear perfil privado nuevo</option>{locals.map((local) => <option value={local.id} key={local.id}>{local.fullName} · {local.district || 'Sin distrito'}{local.published ? ' · público' : ''}</option>)}</select></Field>}{item.possibleMatches.length > 0 && !item.link && <p className="match-warning">Encontramos {item.possibleMatches.length} perfil(es) parecido(s). Elegí el destino para evitar duplicados.</p>}{targetLocal?.published && <p className="match-warning">El perfil elegido ya es público. Esta fase no lo sobrescribe automáticamente.</p>}<div className="external-result-actions"><a href={item.record.officialUrl || '#'} target="_blank" rel="noreferrer">Ver ficha oficial ↗</a><button className="button primary" disabled={!canImport || busy || !target || !fields.length || targetLocal?.published} onClick={apply}>{busy ? 'Aplicando…' : canImport ? (item.link ? 'Actualizar perfil privado' : 'Importar selección') : 'Importación en observación'}</button></div></article>;
 }
 
-function Glossary({ data, call, reload, notify }: AdminProps) {
+function Glossary({ data, call, reload, notify, onStatusChange }: AdminProps & { onStatusChange: SectionStatusReporter }) {
   type GlossaryForm = { term: string; slug: string; shortDefinition: string; definition: string; definitionFormat: 'plain' | 'markdown'; aliases: string[]; inlineEnabled: boolean; published: boolean; references: Source[] };
   const empty: GlossaryForm = { term: '', slug: '', shortDefinition: '', definition: '', definitionFormat: 'markdown', aliases: [], inlineEnabled: false, published: false, references: [] };
   const [selectedId, setSelectedId] = useState(''); const [form, setForm] = useState<GlossaryForm>(empty); const [baseline, setBaseline] = useState(JSON.stringify(empty));
-  const [query, setQuery] = useState(''); const [visibility, setVisibility] = useState(''); const [inline, setInline] = useState(''); const [pendingId, setPendingId] = useState<string | null>(null); const [busy, setBusy] = useState(false); const [saveFeedback, setSaveFeedback] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
+  const [query, setQuery] = useState(''); const [visibility, setVisibility] = useState(''); const [inline, setInline] = useState(''); const [pendingId, setPendingId] = useState<string | null>(null); const [busy, setBusy] = useState(false); const [uploading, setUploading] = useState(false); const [saveFeedback, setSaveFeedback] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
   const dirty = JSON.stringify(form) !== baseline;
+  useEffect(() => { onStatusChange(dirty, busy || uploading); }, [dirty, busy, uploading, onStatusChange]);
   const filtered = data.glossary.filter((item) => (!query || searchKey(`${item.term} ${(item.aliases || []).join(' ')}`).includes(searchKey(query))) && (!visibility || (visibility === 'public' ? item.published : !item.published)) && (!inline || (inline === 'enabled' ? item.inlineEnabled : !item.inlineEnabled)));
   const selected = data.glossary.find((item) => item.id === selectedId) || null;
   const matchingProjects = selected ? data.projects.filter((project) => glossaryTermAppearsInTexts(selected, [project.summary, project.impact, ...project.updates.map((item) => item.body)])) : [];
   function formFor(item: GlossaryTerm): GlossaryForm { return { term: item.term, slug: item.slug, shortDefinition: item.shortDefinition || '', definition: item.definition, definitionFormat: item.definitionFormat || 'plain', aliases: item.aliases || [], inlineEnabled: item.inlineEnabled || false, published: item.published, references: item.references || [] }; }
-  function choose(id: string) { if (dirty) { setPendingId(id); return; } load(id); }
+  async function uploadImage(file: File) { setUploading(true); try { return await uploadRichImage(call, file); } finally { setUploading(false); } }
+  function choose(id: string) { if (busy || uploading) return; if (dirty) { setPendingId(id); return; } load(id); }
   function load(id: string) { const item = data.glossary.find((candidate) => candidate.id === id); const next = item ? formFor(item) : empty; setSelectedId(id); setForm(next); setBaseline(JSON.stringify(next)); setSaveFeedback(null); setPendingId(null); }
   async function save() {
+    if (!dirty || busy || uploading) return;
     const updating = Boolean(selectedId);
     setBusy(true); setSaveFeedback(null);
     try {
@@ -661,33 +777,83 @@ function Glossary({ data, call, reload, notify }: AdminProps) {
       const saved = response.item as GlossaryTerm;
       const savedForm = formFor(saved);
       setSelectedId(saved.id); setForm(savedForm); setBaseline(JSON.stringify(savedForm));
-      await reload();
       const text = updating ? 'Término actualizado y guardado correctamente.' : 'Término creado y guardado correctamente.';
       setSaveFeedback({ kind: 'success', text }); notify(text);
+      try { await reload(); } catch { setSaveFeedback({ kind: 'success', text: 'Término guardado. No pudimos actualizar el listado; el contenido confirmado se conservó.' }); }
     } catch (error) {
       const text = error instanceof Error ? error.message : 'No pudimos guardar el término.';
       setSaveFeedback({ kind: 'error', text }); notify(text);
     } finally { setBusy(false); }
   }
-  return <><div className="admin-two glossary-admin"><section className="admin-panel"><div className="panel-title"><div><h2>Términos</h2><p>Prepará definiciones breves y alias antes de activarlos dentro del texto.</p></div><button className="button ghost" type="button" onClick={() => choose('')}>Nuevo término</button></div><div className="profile-filters"><Field label="Buscar"><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} /></Field><Field label="Estado"><select value={visibility} onChange={(event) => setVisibility(event.target.value)}><option value="">Todos</option><option value="public">Públicos</option><option value="private">Privados</option></select></Field><Field label="Texto contextual"><select value={inline} onChange={(event) => setInline(event.target.value)}><option value="">Todos</option><option value="enabled">Activos</option><option value="pending">Pendientes</option></select></Field></div><div className="table-list glossary-list">{filtered.map((item) => <div className={`glossary-list-row${selectedId === item.id ? ' selected' : ''}`} key={item.id}><div className="glossary-list-summary"><strong>{item.term}</strong><span>{item.published ? 'Público' : 'Privado'} · {item.inlineEnabled ? 'Detección automática activa' : 'Pendiente de preparar'}</span></div><button type="button" className="button ghost glossary-edit-button" aria-label={`Editar término ${item.term}`} aria-pressed={selectedId === item.id} onClick={() => choose(item.id)}>{selectedId === item.id ? 'Editando' : 'Editar'}</button></div>)}{filtered.length === 0 && <p className="empty-list-message">No encontramos términos con estos filtros.</p>}</div></section><section className="admin-panel editor-form glossary-editor-form"><div className="panel-title"><div><h2>{selected ? `Editar ${selected.term}` : 'Nuevo término'}</h2><p>{dirty ? 'Hay cambios sin guardar.' : 'No hay cambios pendientes.'}</p></div></div><Field label="Término"><input value={form.term} onChange={(event) => { setSaveFeedback(null); setForm({ ...form, term: event.target.value, slug: selectedId ? form.slug : slugify(event.target.value) }); }} /></Field><Field label="Slug"><input value={form.slug} onChange={(event) => { setSaveFeedback(null); setForm({ ...form, slug: slugify(event.target.value) }); }} /></Field><Field label={`Definición breve (${form.shortDefinition.length}/320)`}><textarea maxLength={320} value={form.shortDefinition} onChange={(event) => { setSaveFeedback(null); setForm({ ...form, shortDefinition: event.target.value }); }} /></Field><section className="advanced-editor-field"><div className="advanced-editor-heading"><div><strong>Definición completa</strong><span>Editor avanzado: títulos, enlaces, listas, citas, tablas e imágenes.</span></div></div><QuorumRichTextEditor value={form.definition} onChange={(definition) => { setSaveFeedback(null); setForm((current) => ({ ...current, definition, definitionFormat: 'markdown' })); }} onUploadImage={(file) => uploadRichImage(call, file)} placeholder="Desarrollá una entrada completa para este término…" /></section><Field label="Alias, uno por línea"><textarea value={form.aliases.join('\n')} onChange={(event) => { setSaveFeedback(null); setForm({ ...form, aliases: event.target.value.split(/\r?\n|,/).map((item) => item.trim()).filter(Boolean) }); }} /></Field><label className="check-row"><input type="checkbox" checked={form.inlineEnabled} disabled={!form.shortDefinition.trim()} onChange={(event) => { setSaveFeedback(null); setForm({ ...form, inlineEnabled: event.target.checked }); }} /><span>Detectar automáticamente cuando el término o sus alias aparezcan en un proyecto</span></label><label className="check-row"><input type="checkbox" checked={form.published} onChange={(event) => { setSaveFeedback(null); setForm({ ...form, published: event.target.checked }); }} /><span>Publicar definición</span></label>{form.shortDefinition && <div className="glossary-admin-preview"><span>Vista previa</span><strong>{form.term || 'Término'}</strong><p>{form.shortDefinition}</p></div>}{selected && <div className="glossary-usage"><strong>Detección automática</strong><span>{matchingProjects.length} proyecto(s) contienen el término o alguno de sus alias</span>{selected.published && selected.inlineEnabled ? <span>Se mostrará automáticamente en las fichas públicas coincidentes.</span> : <p className="match-warning">Las coincidencias son sólo una vista previa hasta publicar y activar el término.</p>}</div>}{saveFeedback && <p className={`message ${saveFeedback.kind === 'error' ? 'error' : 'success'}`} role={saveFeedback.kind === 'error' ? 'alert' : 'status'}>{saveFeedback.text}</p>}<button className="button primary" disabled={!dirty || busy || !form.term.trim() || !form.definition.trim()} onClick={() => void save()}>{busy ? 'Guardando…' : 'Guardar término'}</button></section></div>{pendingId !== null && <div className="dialog-backdrop" onMouseDown={() => setPendingId(null)}><section className="dialog" role="alertdialog" aria-labelledby="glossary-leave-title" onMouseDown={(event) => event.stopPropagation()}><h2 id="glossary-leave-title">¿Descartar cambios del glosario?</h2><p>Los datos que todavía no guardaste se perderán.</p><div className="dialog-actions"><button className="button ghost" onClick={() => setPendingId(null)}>Seguir editando</button><button className="button danger" onClick={() => load(pendingId)}>Descartar y continuar</button></div></section></div>}</>;
+  return <><div className="admin-two glossary-admin"><section className="admin-panel"><div className="panel-title"><div><h2>Términos</h2><p>Prepará definiciones breves y alias antes de activarlos dentro del texto.</p></div><button className="button ghost" type="button" onClick={() => choose('')}>Nuevo término</button></div><div className="profile-filters"><Field label="Buscar"><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} /></Field><Field label="Estado"><select value={visibility} onChange={(event) => setVisibility(event.target.value)}><option value="">Todos</option><option value="public">Públicos</option><option value="private">Privados</option></select></Field><Field label="Texto contextual"><select value={inline} onChange={(event) => setInline(event.target.value)}><option value="">Todos</option><option value="enabled">Activos</option><option value="pending">Pendientes</option></select></Field></div><div className="table-list glossary-list">{filtered.map((item) => <div className={`glossary-list-row${selectedId === item.id ? ' selected' : ''}`} key={item.id}><div className="glossary-list-summary"><strong>{item.term}</strong><span>{item.published ? 'Público' : 'Privado'} · {item.inlineEnabled ? 'Detección automática activa' : 'Pendiente de preparar'}</span></div><button type="button" className="button ghost glossary-edit-button" aria-label={`Editar término ${item.term}`} aria-pressed={selectedId === item.id} onClick={() => choose(item.id)}>{selectedId === item.id ? 'Editando' : 'Editar'}</button></div>)}{filtered.length === 0 && <p className="empty-list-message">No encontramos términos con estos filtros.</p>}</div></section><section className="admin-panel editor-form glossary-editor-form"><div className="panel-title"><div><h2>{selected ? `Editar ${selected.term}` : 'Nuevo término'}</h2><p>{dirty ? 'Hay cambios sin guardar.' : 'No hay cambios pendientes.'}</p></div></div><Field label="Término"><input value={form.term} onChange={(event) => { setSaveFeedback(null); setForm({ ...form, term: event.target.value, slug: selectedId ? form.slug : slugify(event.target.value) }); }} /></Field><Field label="Slug"><input value={form.slug} onChange={(event) => { setSaveFeedback(null); setForm({ ...form, slug: slugify(event.target.value) }); }} /></Field><Field label={`Definición breve (${form.shortDefinition.length}/320)`}><textarea maxLength={320} value={form.shortDefinition} onChange={(event) => { setSaveFeedback(null); setForm({ ...form, shortDefinition: event.target.value }); }} /></Field><section className="advanced-editor-field"><div className="advanced-editor-heading"><div><strong>Definición completa</strong><span>Editor avanzado: títulos, enlaces, listas, citas, tablas e imágenes.</span></div></div><QuorumRichTextEditor value={form.definition} onChange={(definition) => { setSaveFeedback(null); setForm((current) => ({ ...current, definition, definitionFormat: 'markdown' })); }} onUploadImage={uploadImage} placeholder="Desarrollá una entrada completa para este término…" /></section><Field label="Alias, uno por línea"><textarea value={form.aliases.join('\n')} onChange={(event) => { setSaveFeedback(null); setForm({ ...form, aliases: event.target.value.split(/\r?\n|,/).map((item) => item.trim()).filter(Boolean) }); }} /></Field><label className="check-row"><input type="checkbox" checked={form.inlineEnabled} disabled={!form.shortDefinition.trim()} onChange={(event) => { setSaveFeedback(null); setForm({ ...form, inlineEnabled: event.target.checked }); }} /><span>Detectar automáticamente cuando el término o sus alias aparezcan en un proyecto</span></label><label className="check-row"><input type="checkbox" checked={form.published} onChange={(event) => { setSaveFeedback(null); setForm({ ...form, published: event.target.checked }); }} /><span>Publicar definición</span></label>{form.shortDefinition && <div className="glossary-admin-preview"><span>Vista previa</span><strong>{form.term || 'Término'}</strong><p>{form.shortDefinition}</p></div>}{selected && <div className="glossary-usage"><strong>Detección automática</strong><span>{matchingProjects.length} proyecto(s) contienen el término o alguno de sus alias</span>{selected.published && selected.inlineEnabled ? <span>Se mostrará automáticamente en las fichas públicas coincidentes.</span> : <p className="match-warning">Las coincidencias son sólo una vista previa hasta publicar y activar el término.</p>}</div>}{saveFeedback && <p className={`message ${saveFeedback.kind === 'error' ? 'error' : 'success'}`} role={saveFeedback.kind === 'error' ? 'alert' : 'status'}>{saveFeedback.text}</p>}<button className="button primary" disabled={!dirty || busy || uploading || !form.term.trim() || !form.definition.trim()} onClick={() => void save()}>{busy ? 'Guardando…' : 'Guardar término'}</button></section></div>{pendingId !== null && <div className="dialog-backdrop" onMouseDown={() => setPendingId(null)}><section className="dialog" role="alertdialog" aria-labelledby="glossary-leave-title" onMouseDown={(event) => event.stopPropagation()}><h2 id="glossary-leave-title">¿Descartar cambios del glosario?</h2><p>Los datos que todavía no guardaste se perderán.</p><div className="dialog-actions"><button className="button ghost" onClick={() => setPendingId(null)}>Seguir editando</button><button className="button danger" onClick={() => load(pendingId)}>Descartar y continuar</button></div></section></div>}</>;
 }
 
-function Catalogs({ data, call, reload, notify }: AdminProps) {
-  const [form, setForm] = useState({ id: '', kind: 'chamber', label: '', description: '', order: 0, active: true }); async function save() { try { await call('/v1/manage/catalogs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(form) }); await reload(); notify('Catálogo guardado.'); } catch (error) { notify(error instanceof Error ? error.message : 'No pudimos guardar.'); } }
-  return <><section className="admin-panel"><h2>Flujos versionados</h2>{data.workflows.map((flow) => <div className="workflow-admin" key={flow.id}><div><strong>{flow.name} · v{flow.version}</strong><span>{flow.active ? 'Activo' : 'Histórico'}</span></div><ol>{flow.stages.sort((a,b) => a.order-b.order).map((stage) => <li key={stage.id}>{stage.label}{stage.branchFromId ? ` — rama desde ${stage.branchFromId}` : ''}{stage.terminal ? ' — terminal' : ''}</li>)}</ol></div>)}</section><div className="admin-two"><section className="admin-panel"><h2>Catálogos</h2><div className="table-list">{data.catalogs.map((item) => <div key={item.id}><strong>{item.label}</strong><span>{item.kind} · {item.active ? 'Activo' : 'Inactivo'}</span></div>)}</div></section><section className="admin-panel"><h2>Nuevo valor</h2><Field label="Etiqueta"><input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value, id: slugify(e.target.value) })} /></Field><Field label="Clave estable"><input value={form.id} onChange={(e) => setForm({ ...form, id: slugify(e.target.value) })} /></Field><Field label="Tipo"><select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}><option value="chamber">Cámara</option><option value="initiative">Iniciativa</option></select></Field><button className="button primary" onClick={save}>Guardar valor</button></section></div></>;
+function Catalogs({ data, call, reload, notify, onStatusChange }: AdminProps & { onStatusChange: SectionStatusReporter }) {
+  const emptyForm = { id: '', kind: 'chamber', label: '', description: '', order: 0, active: true };
+  const [form, setForm] = useState(emptyForm);
+  const [baseline, setBaseline] = useState(JSON.stringify(emptyForm));
+  const [saving, setSaving] = useState(false);
+  const dirty = JSON.stringify(form) !== baseline;
+  useEffect(() => { onStatusChange(dirty, saving); }, [dirty, saving, onStatusChange]);
+
+  async function save() {
+    if (!dirty || saving) return;
+    setSaving(true);
+    try {
+      await call('/v1/manage/catalogs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(form) });
+      setForm(emptyForm); setBaseline(JSON.stringify(emptyForm));
+      notify('Catálogo guardado.');
+      try { await reload(); } catch { notify('Catálogo guardado. No pudimos actualizar el listado; el cambio confirmado se conservó.'); }
+    } catch (error) { notify(error instanceof Error ? error.message : 'No pudimos guardar el catálogo.'); }
+    finally { setSaving(false); }
+  }
+
+  return <><section className="admin-panel"><h2>Flujos versionados</h2>{data.workflows.map((flow) => <div className="workflow-admin" key={flow.id}><div><strong>{flow.name} · v{flow.version}</strong><span>{flow.active ? 'Activo' : 'Histórico'}</span></div><ol>{flow.stages.sort((a,b) => a.order-b.order).map((stage) => <li key={stage.id}>{stage.label}{stage.branchFromId ? ` — rama desde ${stage.branchFromId}` : ''}{stage.terminal ? ' — terminal' : ''}</li>)}</ol></div>)}</section><div className="admin-two"><section className="admin-panel"><h2>Catálogos</h2><div className="table-list">{data.catalogs.map((item) => <div key={item.id}><strong>{item.label}</strong><span>{item.kind} · {item.active ? 'Activo' : 'Inactivo'}</span></div>)}</div></section><section className="admin-panel"><h2>Nuevo valor</h2><Field label="Etiqueta"><input value={form.label} onChange={(e) => setForm((current) => ({ ...current, label: e.target.value, id: slugify(e.target.value) }))} /></Field><Field label="Clave estable"><input value={form.id} onChange={(e) => setForm((current) => ({ ...current, id: slugify(e.target.value) }))} /></Field><Field label="Tipo"><select value={form.kind} onChange={(e) => setForm((current) => ({ ...current, kind: e.target.value }))}><option value="chamber">Cámara</option><option value="initiative">Iniciativa</option></select></Field><button className="button primary" disabled={!dirty || saving} onClick={() => void save()}>{saving ? 'Guardando…' : 'Guardar valor'}</button></section></div></>;
 }
 
 function Followers({ data }: { data: Bootstrap }) { return <section className="admin-panel"><div className="panel-title"><div><h2>Suscripciones</h2><p>Los tokens no son visibles y se guardan con hash.</p></div><span className="status-pill">{data.subscriptions.filter((item) => item.status === 'active').length} activas</span></div><div className="table-list">{data.subscriptions.map((item) => <div key={item.id}><strong>{item.email}</strong><span>{item.status} · {item.projectIds.length} proyecto(s) · consentimiento {new Date(item.consentAt).toLocaleDateString('es-AR')}</span></div>)}</div></section>; }
 
-function Settings({ data, call, reload, notify }: AdminProps) {
+function Settings({ data, call, reload, notify, onStatusChange }: AdminProps & { onStatusChange: SectionStatusReporter }) {
   const [form, setForm] = useState(data.settings); const [baseline, setBaseline] = useState(JSON.stringify(data.settings)); const [busy, setBusy] = useState(false); const [feedback, setFeedback] = useState<{ kind: 'success' | 'error'; text: string } | null>(null); const dirty = JSON.stringify(form) !== baseline;
-  async function save() { setBusy(true); setFeedback(null); try { const response = await call('/v1/manage/settings', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(form) }); const saved = response.item as SiteSettings; setForm(saved); setBaseline(JSON.stringify(saved)); await reload(); setFeedback({ kind: 'success', text: 'Configuración guardada y caché pública invalidada.' }); notify('Configuración guardada.'); } catch (error) { const text = error instanceof Error ? error.message : 'No pudimos guardar.'; setFeedback({ kind: 'error', text }); notify(text); } finally { setBusy(false); } }
+  useEffect(() => { onStatusChange(dirty, busy); }, [dirty, busy, onStatusChange]);
+  async function save() {
+    if (!dirty || busy) return;
+    setBusy(true); setFeedback(null);
+    try {
+      const response = await call('/v1/manage/settings', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(form) });
+      const saved = response.item as SiteSettings;
+      setForm(saved); setBaseline(JSON.stringify(saved));
+      setFeedback({ kind: 'success', text: 'Configuración guardada y caché pública invalidada.' }); notify('Configuración guardada.');
+      try { await reload(); } catch { setFeedback({ kind: 'success', text: 'Configuración guardada y caché invalidada. No pudimos actualizar los datos del gestor; los cambios confirmados se conservaron.' }); }
+    } catch (error) {
+      const text = error instanceof Error ? error.message : 'No pudimos guardar.';
+      setFeedback({ kind: 'error', text }); notify(text);
+    } finally { setBusy(false); }
+  }
   return <div className="settings-stack"><section className="admin-panel editor-form"><h2>Configuración pública</h2><label className="check-row"><input type="checkbox" checked={form.privacyPolicyApproved} onChange={(e) => setForm({ ...form, privacyPolicyApproved: e.target.checked })} /><span>La política de privacidad recibió aprobación institucional</span></label><label className="check-row"><input type="checkbox" checked={form.subscriptionsEnabled} onChange={(e) => setForm({ ...form, subscriptionsEnabled: e.target.checked })} /><span>Habilitar seguimiento por correo (interruptor operativo)</span></label><hr /><label className="check-row"><input type="checkbox" checked={form.electionPortal.enabled} onChange={(e) => setForm({ ...form, electionPortal: { ...form.electionPortal, enabled: e.target.checked } })} /><span>Mostrar bloque electoral</span></label><Field label="Título"><input value={form.electionPortal.title} onChange={(e) => setForm({ ...form, electionPortal: { ...form.electionPortal, title: e.target.value } })} /></Field><Field label="Descripción"><textarea value={form.electionPortal.description} onChange={(e) => setForm({ ...form, electionPortal: { ...form.electionPortal, description: e.target.value } })} /></Field><Field label="URL vigente"><input type="url" value={form.electionPortal.url} onChange={(e) => setForm({ ...form, electionPortal: { ...form.electionPortal, url: e.target.value } })} /></Field></section><section className="admin-panel"><StageExplanationEditor value={form.legislativeStageExplanations} workflows={data.workflows} catalogs={data.catalogs} onChange={(legislativeStageExplanations) => { setFeedback(null); setForm({ ...form, legislativeStageExplanations }); }} /></section><div className="settings-savebar"><div><strong>{dirty ? 'Hay cambios sin guardar' : 'Configuración al día'}</strong><span>{dirty ? 'Los textos públicos no cambiarán hasta que guardes.' : 'La ficha pública está usando esta configuración.'}</span></div>{feedback && <p className={`message ${feedback.kind}`} role={feedback.kind === 'error' ? 'alert' : 'status'}>{feedback.text}</p>}<button className="button primary" disabled={!dirty || busy} onClick={() => void save()}>{busy ? 'Guardando…' : 'Guardar configuración'}</button></div></div>;
 }
 
-function Users({ data, call, reload, notify }: AdminProps) {
-  const [email, setEmail] = useState(''); const [role, setRole] = useState('quorum_editor'); async function save() { try { await call(`/v1/manage/roles/${encodeURIComponent(email)}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ roles: [role], active: true }) }); setEmail(''); await reload(); notify('Acceso asignado.'); } catch (error) { notify(error instanceof Error ? error.message : 'No pudimos asignar acceso.'); } }
-  return <div className="admin-two"><section className="admin-panel"><h2>Accesos explícitos</h2><div className="table-list">{data.roles.map((item) => <div key={item.id}><strong>{item.email}</strong><span>{item.roles.join(', ')} · {item.active ? 'Activo' : 'Inactivo'}</span></div>)}</div></section><section className="admin-panel"><h2>Asignar acceso</h2><Field label="Email"><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></Field><Field label="Rol"><select value={role} onChange={(e) => setRole(e.target.value)}><option value="quorum_editor">Editor</option><option value="quorum_admin">Administrador</option></select></Field><button className="button primary" onClick={save}>Asignar</button></section></div>;
+function Users({ data, call, reload, notify, onStatusChange }: AdminProps & { onStatusChange: SectionStatusReporter }) {
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState('quorum_editor');
+  const [saving, setSaving] = useState(false);
+  const dirty = Boolean(email.trim()) || role !== 'quorum_editor';
+  useEffect(() => { onStatusChange(dirty, saving); }, [dirty, saving, onStatusChange]);
+
+  async function save() {
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail || saving) return;
+    setSaving(true);
+    try {
+      await call(`/v1/manage/roles/${encodeURIComponent(normalizedEmail)}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ roles: [role], active: true }) });
+      setEmail(''); setRole('quorum_editor');
+      notify('Acceso asignado.');
+      try { await reload(); } catch { notify('Acceso asignado. No pudimos actualizar el listado; el permiso confirmado quedó guardado.'); }
+    } catch (error) { notify(error instanceof Error ? error.message : 'No pudimos asignar acceso.'); }
+    finally { setSaving(false); }
+  }
+
+  return <div className="admin-two"><section className="admin-panel"><h2>Accesos explícitos</h2><div className="table-list">{data.roles.map((item) => <div key={item.id}><strong>{item.email}</strong><span>{item.roles.join(', ')} · {item.active ? 'Activo' : 'Inactivo'}</span></div>)}</div></section><section className="admin-panel"><h2>Asignar acceso</h2><Field label="Email"><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></Field><Field label="Rol"><select value={role} onChange={(e) => setRole(e.target.value)}><option value="quorum_editor">Editor</option><option value="quorum_admin">Administrador</option></select></Field><button className="button primary" disabled={!email.trim() || saving} onClick={() => void save()}>{saving ? 'Guardando…' : 'Asignar'}</button></section></div>;
 }
 
 function History({ data, call, reload, notify, admin }: AdminProps & { admin: boolean }) {

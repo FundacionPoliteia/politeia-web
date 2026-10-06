@@ -168,7 +168,7 @@ test('el gestor local muestra los borradores iniciales y sus módulos', async ({
   await expect(page.getByRole('button', { name: 'Previsualizar' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Publicar revisión' })).toBeVisible();
 
-  const globalSave = page.getByRole('button', { name: 'Guardar', exact: true });
+  const globalSave = page.locator('.project-editor-toolbar').getByRole('button', { name: 'Guardar', exact: true });
   const title = page.locator('.editor-form input').first();
   const originalTitle = await title.inputValue();
   await expect(globalSave).toBeDisabled();
@@ -271,7 +271,7 @@ test('publicar ofrece guardar primero y conserva los cambios antes de continuar'
   const stored = (await bootstrap.json()).projects.find((item: { id: string }) => item.id === createdBody.item.id);
   expect(stored).toMatchObject({ summary: updatedSummary, summaryFormat: 'markdown' });
   await publishDialog.getByRole('button', { name: 'Cancelar' }).click();
-  await expect(editor.getByRole('button', { name: 'Guardar', exact: true })).toBeDisabled();
+  await expect(editor.locator('.project-editor-toolbar').getByRole('button', { name: 'Guardar', exact: true })).toBeDisabled();
 });
 
 test('los perfiles guardados pueden editar, agregar y quitar datos', async ({ page, request }, testInfo) => {
@@ -296,7 +296,7 @@ test('los perfiles guardados pueden editar, agregar y quitar datos', async ({ pa
   await expect(editor.getByRole('heading', { name: `Editar ${fullName}` })).toBeVisible();
   const save = editor.getByRole('button', { name: 'Guardar cambios' });
   await expect(save).toBeDisabled();
-  await editor.getByLabel('Distrito').fill('Santa Fe');
+  await editor.getByRole('textbox', { name: 'Distrito', exact: true }).fill('Santa Fe');
   await editor.getByLabel('Partido').fill('');
   await editor.getByLabel('Formación o título académico').fill('Abogada');
   await editor.getByLabel('Asistencia registrada (%)').fill('92.5');
@@ -333,7 +333,7 @@ test('los firmantes usan filtros compatibles y permiten seleccionar visibles o b
   await page.goto('/gestion');
   await page.getByRole('button', { name: 'Proyectos' }).click();
   const picker = page.locator('.legislator-relation-picker');
-  await picker.getByLabel('Distrito').selectOption(district);
+  await picker.locator('.legislator-filter-controls select').nth(1).selectOption(district);
   await expect(picker.getByLabel('Partido').locator(`option[value="${party}"]`)).toHaveAttribute('disabled', '');
   await expect(picker.getByRole('button', { name: 'Seleccionar todos los visibles (1)' })).toBeEnabled();
   await picker.getByRole('button', { name: 'Seleccionar todos los visibles (1)' }).click();

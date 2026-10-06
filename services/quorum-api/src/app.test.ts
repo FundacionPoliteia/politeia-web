@@ -119,6 +119,17 @@ describe('Quórum API', () => {
     await request(createApp()).patch(`/v1/manage/projects/${project.id}`).send({ title: 'Cambio que debe rechazarse', unsupportedField: 'contenido' }).expect(422);
     expect(await testStore.get<Project>('projects', project.id)).toEqual(project);
   });
+  it('rechaza guardar un formulario basado en una versión anterior del borrador', async () => {
+    const [project] = await testStore.list<Project>('projects');
+    const app = createApp();
+    const path = `/v1/manage/projects/${project.id}`;
+    await request(app).patch(path).set('If-Match', project.updatedAt).send({ title: 'Cambio confirmado en otra sesión' }).expect(200);
+
+    await request(app).patch(path).set('If-Match', project.updatedAt).send({ summary: 'Este texto no debe pisar la versión reciente.' }).expect(409);
+    const stored = await testStore.get<Project>('projects', project.id);
+    expect(stored?.title).toBe('Cambio confirmado en otra sesión');
+    expect(stored?.summary).toBe(project.summary);
+  });
   it('rechaza declaraciones inválidas sin sobrescribir las guardadas y conserva su orden en cambios parciales', async () => {
     const [project] = await testStore.list<Project>('projects');
     const app = createApp();
