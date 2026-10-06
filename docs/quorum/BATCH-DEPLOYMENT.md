@@ -196,6 +196,13 @@ http://localhost:3100
 http://gestion.localhost:3100
 ```
 
+Antes del lanzamiento productivo, agregar también estos orígenes al cliente web:
+
+```text
+https://quorum.politeia.ar
+https://gestion.quorum.politeia.ar
+```
+
 6. No agregar redirect URI: Quórum usa el callback JavaScript de Google Identity Services.
 7. Copiar el Client ID a Secret Manager y Vercel. El Client Secret de OAuth no se utiliza en este flujo y no debe agregarse al repositorio.
 
@@ -211,6 +218,8 @@ Crear inicialmente un único proyecto llamado, por ejemplo, `quorum-staging`:
 4. Activar “Include source files outside of the Root Directory”, porque la app usa los workspaces `brand` y `packages/quorum-contracts`.
 5. Framework Preset: Next.js. Los comandos ya están en `apps/quorum/vercel.json`.
 6. No desplegar aún: cargar primero las variables.
+
+Este proyecto queda dedicado a staging. Para mantenerlo aislado y activo al preparar la salida, crear un segundo proyecto Vercel `quorum-production`, vinculado al mismo repositorio y con el mismo Root Directory y “Include source files outside of the Root Directory”. Configurar explícitamente su rama de producción; no agregar dominios ni desplegar hasta aprobar el corte. Las variables de Preview de producción deben apuntar a la API y los secretos de staging, nunca a producción, y las previews deben tener protección de acceso.
 
 Variables de Vercel para el entorno que sirve staging:
 
@@ -278,15 +287,20 @@ Mantener desactivados hasta tener aprobación institucional:
 - sincronización automática del Congreso;
 - producción y enlace desde `politeia.ar`.
 
-## 9. Abrir el sitio público más adelante
+## 9. Preparar producción sin apagar staging
 
-La apertura no requiere quitar Google del gestor.
+El primer release de producción tendrá el sitio público abierto y Gestión protegida con Google y roles. `dev@politeia.ar` e `info@politeia.ar` son los administradores iniciales; las asignaciones editoriales del batch no se copian automáticamente. Así, una cuenta común puede consultar las páginas y capas públicas, pero no acceder a borradores ni al panel editorial.
 
-1. En Terraform, cambiar sólo `public_access_required.production` a `false` y aplicar producción.
-2. En el proyecto Vercel de producción, establecer `PUBLIC_ACCESS_REQUIRED=false` y redeploy.
-3. Mantener staging con `PUBLIC_ACCESS_REQUIRED=true` y `STAGING_ACCESS_REQUIRED=true`.
-4. Confirmar que `/`, fichas, glosario y API pública funcionan sin sesión.
-5. Confirmar que `gestion.quorum.politeia.ar` todavía exige Google y roles.
-6. Recién entonces habilitar el enlace desde `politeia.ar`.
+Staging conserva sus dominios, base, buckets, cookies, secretos y gates actuales. Al habilitar producción, `deployment_environments` debe incluir **ambos** entornos (`staging` y `production`) en el `terraform.tfvars` local, no sólo `production`. `public_access_required.production` se deja en `false`; staging permanece `true`. Terraform crea recursos nuevos de producción con protección contra borrado, sin recrear ni borrar los de staging.
 
-Rollback inmediato: volver a `PUBLIC_ACCESS_REQUIRED=true` en API y web, desplegar ambas capas y rotar `SESSION_SECRET` si existe sospecha de acceso indebido.
+La cookie productiva usa `quorum_session_production`, separada de `quorum_session` de staging. En Vercel, configurar el mismo nombre para producción. No usar `gcloud run deploy` manualmente: Terraform es la fuente de verdad para Cloud Run. El subdominio `api.quorum.politeia.ar` sigue reservado; la web llega a la API por `/api/quorum`.
+
+## 10. Promover el contenido editorial de staging
+
+La base productiva empieza separada; no se debe clonar completa la base de staging. Una promoción controlada preservará IDs y atribución editorial y copiará, como mínimo, proyectos (borradores y publicación), vistas públicas, revisiones de proyectos y legisladores, legisladores, glosario, catálogos, workflows, configuración editorial, perfiles de Quórum y documentos/imágenes asociados. Las actas originales de votación se incluyen cuando un proyecto las referencia. Los enlaces propios de staging a imágenes/documentos se reescriben al host productivo.
+
+No se copian por defecto asignaciones de roles de testers, suscripciones, tokens, trabajos de correo, métricas ni auditoría operativa del batch. Los administradores iniciales podrán dar acceso editorial a las personas elegidas desde producción. Las suscripciones/correos y las sincronizaciones automáticas del Congreso permanecen apagados hasta su aprobación y configuración productiva.
+
+Antes de escribir se toma una exportación de origen, se comprueba que producción no tenga contenido divergente y se genera un reporte de cantidades, dependencias y archivos faltantes. La promoción no borra ni modifica staging. Para que la copia represente una sola versión coherente, staging sigue respondiendo consultas durante el proceso, pero se coordina una breve pausa de guardados editoriales durante la captura final; después se reanudan inmediatamente. Si el reporte no coincide o producción ya contiene datos distintos, se detiene y se revisa antes de continuar.
+
+No promover hasta que estén listas las versiones de Secret Manager productivas, el proyecto Vercel de producción, los DNS verificados y los chequeos de acceso. El orden es: backup y simulación; infraestructura productiva; carga de secretos; build de API inmutable; promoción editorial; despliegue Vercel; pruebas públicas y de Gestión; recién entonces habilitar DNS/enlaces y confirmar apertura.

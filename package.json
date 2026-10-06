@@ -37,6 +37,7 @@
     "quorum:api:dev": "npm run dev --workspace @politeia/quorum-api",
     "quorum:seed": "npm run seed --workspace @politeia/quorum-api",
     "quorum:verify:store": "npm run verify:store --workspace @politeia/quorum-api",
+    "quorum:promote:staging": "npm run promote:staging --workspace @politeia/quorum-api --",
     "quorum:dev:persistent": "node scripts/run-quorum-dev.mjs",
     "quorum:migrate:glossary-inline": "npm run migrate:glossary-inline --workspace @politeia/quorum-api",
     "quorum:import:legislators": "npm run import:legislators --workspace @politeia/quorum-api",

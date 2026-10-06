@@ -11,6 +11,7 @@
     "test": "vitest run",
     "seed": "tsx src/seed.ts",
     "verify:store": "tsx src/verifyPersistentStore.ts",
+    "promote:staging": "tsx src/promoteStagingToProduction.ts",
     "migrate:glossary-inline": "tsx src/migrateGlossaryInline.ts",
     "import:legislators": "tsx src/bulkImportLegislators.ts --confirm",
     "mail:dispatch": "tsx src/dispatchMail.ts"

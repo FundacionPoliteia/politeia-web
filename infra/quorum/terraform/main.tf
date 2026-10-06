@@ -260,6 +260,13 @@ resource "google_cloud_run_v2_service" "api" {
         name  = "SESSION_COOKIE_DOMAIN"
         value = ".quorum.politeia.ar"
       }
+      dynamic "env" {
+        for_each = each.key == "production" ? ["quorum_session_production"] : []
+        content {
+          name  = "SESSION_COOKIE_NAME"
+          value = env.value
+        }
+      }
       env {
         name  = "DEFAULT_ADMIN_EMAILS"
         value = "dev@politeia.ar,info@politeia.ar"
@@ -299,6 +306,12 @@ resource "google_cloud_run_v2_service" "api" {
     google_storage_bucket_iam_member.api_source_snapshots_create,
     google_secret_manager_secret_iam_member.api,
   ]
+
+  lifecycle {
+    # Cloud Run/gcloud manages these service-level metadata fields. Keep them
+    # as-is so production provisioning does not rewrite the live staging service.
+    ignore_changes = [client, client_version, scaling]
+  }
 }
 
 resource "google_cloud_run_v2_service_iam_member" "public" {

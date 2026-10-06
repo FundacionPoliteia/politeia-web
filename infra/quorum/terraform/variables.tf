@@ -6,7 +6,7 @@ variable "region" {
   default = "southamerica-east1"
 }
 variable "deployment_environments" {
-  description = "Environments managed by this apply. Use staging only for the closed batch."
+  description = "Environments managed by this apply. Include staging and production together to preserve both environments."
   type        = set(string)
   default     = ["staging", "production"]
   validation {
@@ -79,7 +79,7 @@ variable "congress_sync_interval_days" {
 }
 
 variable "public_access_required" {
-  description = "Temporarily requires an authorized Google session for every public API route."
+  description = "Require an authorized Google session for public site/API routes; management endpoints always require explicit roles."
   type        = object({ staging = bool, production = bool })
   default     = { staging = false, production = false }
 }

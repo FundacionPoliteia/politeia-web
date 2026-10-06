@@ -21,10 +21,11 @@ vercel_revalidate_urls = {
   production = "https://quorum.politeia.ar/api/revalidate"
 }
 
-# Closed batch: both environments remain private until the public launch.
+# Staging stays gated for the batch. Production opens the public site at launch;
+# the management host remains protected by Google authentication and roles.
 public_access_required = {
   staging    = true
-  production = true
+  production = false
 }
 
 # Prefer exact tester emails in the public-access-emails secret.
