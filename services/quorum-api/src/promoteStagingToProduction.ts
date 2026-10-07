@@ -1,6 +1,7 @@
 import { Firestore } from '@google-cloud/firestore';
-import { Storage } from '@google-cloud/storage';
+import { GoogleAuth, type AuthClient } from 'google-auth-library';
 import { collections, type CollectionKey } from './store.js';
+import { copyStorageObject, listStorageObjects, type PlannedStorageCopy } from './storagePromotionClient.js';
 import {
   equivalentStorageObject, hasStagingPromotionReferences, planCollectionPromotion, preparePromotionRecord,
   stagingPromotionCollections, type PromotionLocations,
@@ -24,8 +25,6 @@ const locations: PromotionLocations = {
 
 type DocumentMap = Map<string, unknown>;
 type CollectionMaps = Map<CollectionKey, DocumentMap>;
-type StorageFile = ReturnType<Storage['bucket']> extends never ? never : import('@google-cloud/storage').File;
-type PlannedObjectCopy = { objectName: string; sourceFile: StorageFile; targetFile: StorageFile };
 
 async function readCollection(db: Firestore, key: CollectionKey): Promise<DocumentMap> {
   const snapshot = await db.collection(collections[key]).get();
@@ -59,13 +58,14 @@ function parseMode(args: string[]) {
   return apply ? 'apply' as const : 'dry-run' as const;
 }
 
-async function planBucketCopy(storage: Storage, sourceBucketName: string, targetBucketName: string) {
-  const sourceBucket = storage.bucket(sourceBucketName);
-  const targetBucket = storage.bucket(targetBucketName);
-  const [[sourceFiles], [targetFiles]] = await Promise.all([sourceBucket.getFiles(), targetBucket.getFiles()]);
+async function planBucketCopy(storageClient: Pick<AuthClient, 'request'>, sourceBucketName: string, targetBucketName: string) {
+  const [sourceFiles, targetFiles] = await Promise.all([
+    listStorageObjects(storageClient, sourceBucketName),
+    listStorageObjects(storageClient, targetBucketName),
+  ]);
   const sourceByName = new Map(sourceFiles.map((file) => [file.name, file]));
   const targetByName = new Map(targetFiles.map((file) => [file.name, file]));
-  const copies: PlannedObjectCopy[] = [];
+  const copies: PlannedStorageCopy[] = [];
   const unchanged: string[] = [];
   const conflicts: string[] = [];
 
@@ -74,14 +74,12 @@ async function planBucketCopy(storage: Storage, sourceBucketName: string, target
   }
 
   for (const [objectName, sourceFile] of sourceByName) {
-    const targetFile = targetBucket.file(objectName);
     const existingTarget = targetByName.get(objectName);
     if (!existingTarget) {
-      copies.push({ objectName, sourceFile, targetFile });
+      copies.push({ objectName, sourceBucketName, targetBucketName, sourceGeneration: sourceFile.generation });
       continue;
     }
-    const [[sourceMetadata], [targetMetadata]] = await Promise.all([sourceFile.getMetadata(), existingTarget.getMetadata()]);
-    if (equivalentStorageObject(sourceMetadata as Record<string, unknown>, targetMetadata as Record<string, unknown>)) unchanged.push(objectName);
+    if (equivalentStorageObject(sourceFile, existingTarget)) unchanged.push(objectName);
     else conflicts.push(`${targetBucketName}/${objectName}: el objeto ya existe distinto en producción`);
   }
 
@@ -113,7 +111,8 @@ async function main() {
   const mode = parseMode(process.argv.slice(2));
   const source = new Firestore({ projectId, databaseId: sourceDatabaseId });
   const target = new Firestore({ projectId, databaseId: targetDatabaseId });
-  const storage = new Storage({ projectId });
+  const googleAuth = new GoogleAuth({ projectId, scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
+  const storageClient = await googleAuth.getClient();
 
   const [sourceContent, targetContent] = await Promise.all([
     readCollections(source, stagingPromotionCollections),
@@ -124,8 +123,8 @@ async function main() {
   const recordPlans = planCollections(sourceContent, targetContent);
   const unmappedReferences = recordPlans.flatMap((plan) => plan.toWrite.flatMap((record) => hasStagingPromotionReferences(record.value, locations) ? [`${plan.key}/${record.id}: quedó una referencia de staging sin reescribir`] : []));
   const [documents, snapshots] = await Promise.all([
-    planBucketCopy(storage, sourceDocumentsBucket, targetDocumentsBucket),
-    planBucketCopy(storage, sourceSnapshotsBucket, targetSnapshotsBucket),
+    planBucketCopy(storageClient, sourceDocumentsBucket, targetDocumentsBucket),
+    planBucketCopy(storageClient, sourceSnapshotsBucket, targetSnapshotsBucket),
   ]);
   const conflicts = [
     ...recordPlans.flatMap((plan) => plan.conflicts.map((conflict) => `${plan.key}/${conflict}`)),
@@ -159,7 +158,7 @@ async function main() {
   // Copy each object only if the destination name is still absent. If a run stops midway, rerun after a new dry-run.
   for (const bucket of [documents, snapshots]) {
     for (const item of bucket.copies) {
-      await item.sourceFile.copy(item.targetFile, { preconditionOpts: { ifGenerationMatch: 0 } });
+      await copyStorageObject(storageClient, item);
     }
   }
   // Create-only Firestore writes preserve any production data if the plan became stale after review.
@@ -172,8 +171,8 @@ async function main() {
 
   const [verifiedCollections, verifiedDocuments, verifiedSnapshots] = await Promise.all([
     readCollections(target, stagingPromotionCollections),
-    planBucketCopy(storage, sourceDocumentsBucket, targetDocumentsBucket),
-    planBucketCopy(storage, sourceSnapshotsBucket, targetSnapshotsBucket),
+    planBucketCopy(storageClient, sourceDocumentsBucket, targetDocumentsBucket),
+    planBucketCopy(storageClient, sourceSnapshotsBucket, targetSnapshotsBucket),
   ]);
   const verification = planCollections(sourceContent, verifiedCollections);
   const verificationConflicts = verification.flatMap((plan) => plan.conflicts.map((conflict) => `${plan.key}/${conflict}`));
