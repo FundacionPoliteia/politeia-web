@@ -13,11 +13,27 @@ beforeEach(() => {
   config.devAuth = true;
   config.publicAccessRequired = false;
   config.publicAccessGateSecret = '';
+  config.dataWritesDisabled = false;
   testStore = createMemoryStore(true);
   setStoreForTests(testStore);
 });
 
 describe('Quórum API', () => {
+  it('mantiene las consultas públicas disponibles pero bloquea las escrituras durante un corte', async () => {
+    config.dataWritesDisabled = true;
+    const app = createApp();
+    const initialProjects = await testStore.list('projects');
+
+    await request(app).get('/v1/public/projects').expect(200);
+    await request(app).post('/v1/public/metrics').send({ event: 'project-opened' }).expect(503);
+    await request(app).post('/v1/manage/projects').send({ title: 'No debe guardarse' }).expect(503);
+    await request(app).post('/v1/operations/backups/export').expect(503);
+    await request(app).post('/v1/webhooks/resend').set('content-type', 'application/json').send('{}').expect(503);
+
+    expect(await testStore.list('metrics')).toHaveLength(0);
+    expect(await testStore.list('projects')).toHaveLength(initialProjects.length);
+  });
+
   it('publica una propuesta en preparación y exige ingreso formal al avanzar sin cambiar de ficha', async () => {
     const app = createApp();
     const [project] = await testStore.list<Project>('projects');

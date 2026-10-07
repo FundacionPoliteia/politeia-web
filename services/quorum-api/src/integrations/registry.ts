@@ -24,7 +24,7 @@ const sourceDefinitions = [{
   attribution: 'Fuente: Honorable Senado de la Nación — Datos Abiertos',
 }] as const;
 
-export async function ensureSourceRegistry(): Promise<ExternalSource[]> {
+export async function ensureSourceRegistry(options: { readOnly?: boolean } = {}): Promise<ExternalSource[]> {
   const timestamp = new Date().toISOString();
   return Promise.all(sourceDefinitions.map(async (definition) => {
     const existing = await store().get<ExternalSource>('externalSources', definition.id);
@@ -50,7 +50,7 @@ export async function ensureSourceRegistry(): Promise<ExternalSource[]> {
     });
     const changed = !existing || registryConfiguration(existing) !== registryConfiguration(candidate);
     const source = changed ? { ...candidate, updatedAt: timestamp } : candidate;
-    if (changed) await store().set('externalSources', source.id, source);
+    if (changed && !options.readOnly) await store().set('externalSources', source.id, source);
     return source;
   }));
 }
@@ -61,7 +61,9 @@ function registryConfiguration(source: ExternalSource) {
 }
 
 export async function getIntegrationOverview() {
-  const sources = await ensureSourceRegistry();
+  // The editor overview is a GET route, but registry reconciliation normally writes.
+  // During a migration freeze, synthesize the current view without touching Firestore.
+  const sources = await ensureSourceRegistry({ readOnly: config.dataWritesDisabled });
   const dataStore = store();
   const [runs, snapshots, records, links, suggestions] = await Promise.all([
     cachedList<ExternalSyncRun>(dataStore, 'externalSyncRuns', cacheTtl.operationalOverview),

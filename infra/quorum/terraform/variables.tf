@@ -14,6 +14,16 @@ variable "deployment_environments" {
     error_message = "deployment_environments only accepts staging and production."
   }
 }
+variable "production_api_enabled" {
+  description = "Safety gate: keep the production Cloud Run API and its schedulers absent until production secrets and migrated data are ready."
+  type        = bool
+  default     = false
+}
+variable "data_writes_disabled" {
+  description = "Temporary API write freeze by environment for consistent Firestore backups and migration."
+  type        = object({ staging = bool, production = bool })
+  default     = { staging = false, production = false }
+}
 variable "api_images" {
   description = "Immutable container image by environment."
   type        = object({ staging = string, production = string })

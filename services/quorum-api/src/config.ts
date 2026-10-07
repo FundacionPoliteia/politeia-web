@@ -29,6 +29,7 @@ export const config = {
   allowedExternalDomains: list(process.env.ALLOWED_EXTERNAL_DOMAINS || 'gmail.com'),
   defaultAdminEmails: [...new Set(['dev@politeia.ar', 'info@politeia.ar', ...list(process.env.DEFAULT_ADMIN_EMAILS || '')])],
   publicAccessRequired: process.env.PUBLIC_ACCESS_REQUIRED === 'true',
+  dataWritesDisabled: process.env.DATA_WRITES_DISABLED === 'true',
   publicAccessAllowedEmails: list(process.env.PUBLIC_ACCESS_ALLOWED_EMAILS || ''),
   publicAccessAllowedDomains: list(process.env.PUBLIC_ACCESS_ALLOWED_DOMAINS || ''),
   publicAccessGateSecret: (process.env.PUBLIC_ACCESS_GATE_SECRET || '').trim(),

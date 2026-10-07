@@ -1,55 +1,81 @@
+import { collections } from './store.js';
 import { describe, expect, it } from 'vitest';
 import {
-  equivalentStorageObject, planCollectionPromotion, preparePromotionRecord,
-  referencedUploadIds, rewriteStagingApiUrls, stagingPromotionCollections,
+  equivalentStorageObject, hasStagingPromotionReferences, planCollectionPromotion, preparePromotionRecord,
+  referencedUploadIds, rewriteStagingApiUrls, rewriteStagingStorageUris, stagingPromotionCollections,
+  stagingPromotionExcludedCollections, type PromotionLocations,
 } from './stagingPromotion.js';
 
-const stagingApi = 'https://staging.quorum.politeia.ar/api/quorum';
-const productionApi = 'https://quorum.politeia.ar/api/quorum';
+const locations: PromotionLocations = {
+  sourceApiBase: 'https://staging.quorum.politeia.ar/api/quorum',
+  productionApiBase: 'https://quorum.politeia.ar/api/quorum',
+  sourceDocumentsBucket: 'politeia-quorum-quorum-staging-documents',
+  productionDocumentsBucket: 'politeia-quorum-quorum-production-documents',
+  sourceSnapshotsBucket: 'politeia-quorum-quorum-staging-source-snapshots',
+  productionSnapshotsBucket: 'politeia-quorum-quorum-production-source-snapshots',
+};
 
-describe('staging-to-production content promotion', () => {
-  it('allowlists editorial content but never access assignments, subscriptions or telemetry', () => {
-    expect(stagingPromotionCollections).toContain('projects');
-    expect(stagingPromotionCollections).toContain('revisions');
-    expect(stagingPromotionCollections).toContain('teamMembers');
-    expect(stagingPromotionCollections).not.toContain('roles');
-    expect(stagingPromotionCollections).not.toContain('subscriptions');
-    expect(stagingPromotionCollections).not.toContain('audits');
-    expect(stagingPromotionCollections).not.toContain('metrics');
+describe('staging-to-production data promotion', () => {
+  it('includes every persistent store collection and excludes only the mail delivery queue', () => {
+    const expected = (Object.keys(collections) as Array<keyof typeof collections>).filter((key) => key !== 'mailJobs');
+    expect(stagingPromotionCollections).toEqual(expected);
+    expect(stagingPromotionExcludedCollections).toEqual(['mailJobs']);
+    expect(stagingPromotionCollections).toContain('roles');
+    expect(stagingPromotionCollections).toContain('subscriptions');
+    expect(stagingPromotionCollections).toContain('subscriptionTokens');
+    expect(stagingPromotionCollections).toContain('audits');
+    expect(stagingPromotionCollections).toContain('metrics');
+    expect(stagingPromotionCollections).toContain('sourceSnapshots');
+    expect(stagingPromotionCollections).toContain('uploads');
   });
 
-  it('rewrites only staging API base URLs and preserves third-party URLs', () => {
+  it('rewrites only Quórum staging API URLs and preserves third-party URLs', () => {
     const result = rewriteStagingApiUrls({
-      photo: `${stagingApi}/v1/public/media/image-1`,
-      document: `${stagingApi}/v1/public/files/document-1`,
+      photo: `${locations.sourceApiBase}/v1/public/media/image-1`,
+      document: `${locations.sourceApiBase}/v1/public/files/document-1`,
       officialSource: 'https://www.senado.gob.ar/acta/1',
-    }, stagingApi, productionApi);
+    }, locations.sourceApiBase, locations.productionApiBase);
 
-    expect(result.photo).toBe(`${productionApi}/v1/public/media/image-1`);
-    expect(result.document).toBe(`${productionApi}/v1/public/files/document-1`);
+    expect(result.photo).toBe(`${locations.productionApiBase}/v1/public/media/image-1`);
+    expect(result.document).toBe(`${locations.productionApiBase}/v1/public/files/document-1`);
     expect(result.officialSource).toBe('https://www.senado.gob.ar/acta/1');
+  });
+
+  it('rewrites private GCS URIs for document uploads and source snapshots', () => {
+    const result = rewriteStagingStorageUris({
+      upload: `gs://${locations.sourceDocumentsBucket}/media/image-1.webp`,
+      snapshot: `gs://${locations.sourceSnapshotsBucket}/hcdn/2026/run-1.json.gz`,
+      external: 'gs://outside-project-data/unchanged.json',
+    }, locations);
+
+    expect(result.upload).toBe(`gs://${locations.productionDocumentsBucket}/media/image-1.webp`);
+    expect(result.snapshot).toBe(`gs://${locations.productionSnapshotsBucket}/hcdn/2026/run-1.json.gz`);
+    expect(result.external).toBe('gs://outside-project-data/unchanged.json');
+    expect(hasStagingPromotionReferences(result, locations)).toBe(false);
+    expect(hasStagingPromotionReferences({ value: locations.sourceApiBase }, locations)).toBe(true);
   });
 
   it('finds only uploaded Quórum media and document IDs referenced by saved content', () => {
     const ids = referencedUploadIds([
-      { photoUrl: `${stagingApi}/v1/public/media/image-1?size=large` },
-      { documents: [{ url: `${stagingApi}/v1/public/files/document-2` }] },
+      { photoUrl: `${locations.sourceApiBase}/v1/public/media/image-1?size=large` },
+      { documents: [{ url: `${locations.sourceApiBase}/v1/public/files/document-2` }] },
       { link: 'https://example.com/media/image-external' },
     ]);
     expect([...ids].sort()).toEqual(['document-2', 'image-1']);
   });
 
-  it('copies editorial settings but keeps subscriptions disabled in production', () => {
+  it('preserves subscriptions data but disables sending and marks imported metrics as staging history', () => {
     const settings = preparePromotionRecord('settings', {
-      id: 'public',
-      subscriptionsEnabled: true,
-      privacyPolicyApproved: true,
-      electionPortal: { enabled: true },
-    }, stagingApi, productionApi) as Record<string, unknown>;
+      id: 'public', subscriptionsEnabled: true, privacyPolicyApproved: true,
+    }, locations) as Record<string, unknown>;
+    const metrics = preparePromotionRecord('metrics', {
+      id: '2026-10-07', events: { 'project-opened': 120 },
+    }, locations) as Record<string, unknown>;
 
     expect(settings.subscriptionsEnabled).toBe(false);
     expect(settings.privacyPolicyApproved).toBe(true);
-    expect(settings.electionPortal).toEqual({ enabled: true });
+    expect(metrics).toMatchObject({ id: '2026-10-07', events: { 'project-opened': 120 }, sourceEnvironment: 'staging' });
+    expect(preparePromotionRecord('roles', { email: 'editor@example.com', active: false }, locations)).toEqual({ email: 'editor@example.com', active: false });
   });
 
   it('is resumable for identical rows but refuses to overwrite divergent production records', () => {
@@ -61,11 +87,15 @@ describe('staging-to-production content promotion', () => {
     const divergent = planCollectionPromotion(source, new Map([['project-1', { title: 'Editado en producción' }]]), (_id, value) => value);
     expect(divergent.toWrite).toEqual([]);
     expect(divergent.conflicts).toContain('project-1: distinto en producción');
+    const targetOnly = planCollectionPromotion(new Map(), new Map([['production-only', { title: 'Conservar' }]]), (_id, value) => value);
+    expect(targetOnly.conflicts).toContain('production-only: extra en producción');
   });
 
-  it('uses object checksums before considering an existing uploaded file identical', () => {
-    expect(equivalentStorageObject({ md5Hash: 'abc' }, { md5Hash: 'abc' })).toBe(true);
-    expect(equivalentStorageObject({ md5Hash: 'abc' }, { md5Hash: 'def' })).toBe(false);
+  it('uses object size and available MD5 or CRC32C checksums before considering files identical', () => {
+    expect(equivalentStorageObject({ size: '10', md5Hash: 'abc' }, { size: '10', md5Hash: 'abc' })).toBe(true);
+    expect(equivalentStorageObject({ size: '10', crc32c: 'crc' }, { size: '10', crc32c: 'crc' })).toBe(true);
+    expect(equivalentStorageObject({ size: '10', md5Hash: 'abc' }, { size: '10', md5Hash: 'def' })).toBe(false);
+    expect(equivalentStorageObject({ size: '10', crc32c: 'abc' }, { size: '11', crc32c: 'abc' })).toBe(false);
     expect(equivalentStorageObject({}, {})).toBe(false);
   });
 });

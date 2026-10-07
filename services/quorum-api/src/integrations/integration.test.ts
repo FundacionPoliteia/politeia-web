@@ -4,7 +4,7 @@ import { config } from '../config.js';
 import { ApiError } from '../errors.js';
 import { createMemoryStore, setStoreForTests, type DataStore } from '../store.js';
 import { bulkImportAllExternalLegislators, bulkImportExternalLegislators, importExternalLegislator } from './legislatorImport.js';
-import { ensureSourceRegistry } from './registry.js';
+import { ensureSourceRegistry, getIntegrationOverview } from './registry.js';
 import { applyLegislatorSuggestion, listLegislatorRevisions } from './legislatorReview.js';
 import { sourceIsDue } from './scheduler.js';
 import { syncHcdnLegislators, syncSenateLegislators } from './sync.js';
@@ -15,11 +15,13 @@ const configuredDataStore = config.dataStore;
 beforeEach(() => {
   testStore = createMemoryStore(true); setStoreForTests(testStore);
   config.dataStore = 'memory';
+  config.dataWritesDisabled = false;
   config.congressImportEnabled = true; config.hcdnImportEnabled = true; config.senateImportEnabled = true; config.congressImportMode = 'assisted'; config.hcdnMinimumCurrentLegislators = 1; config.senateMinimumCurrentLegislators = 1;
 });
 
 afterEach(() => {
   config.dataStore = configuredDataStore;
+  config.dataWritesDisabled = false;
   config.congressImportEnabled = false; config.hcdnImportEnabled = false; config.senateImportEnabled = false; config.congressImportMode = 'shadow'; config.hcdnMinimumCurrentLegislators = 200; config.senateMinimumCurrentLegislators = 70;
   setStoreForTests(null);
 });
@@ -38,6 +40,22 @@ describe('integración legislativa aislada', () => {
     await ensureSourceRegistry();
 
     expect(sourceWrites).toBe(0);
+  });
+
+  it('no reconcilia el registro de integraciones durante el modo de sólo lectura', async () => {
+    config.dataWritesDisabled = true;
+    let sourceWrites = 0;
+    const originalSet = testStore.set.bind(testStore);
+    testStore.set = async (collection, id, value) => {
+      if (collection === 'externalSources') sourceWrites += 1;
+      return originalSet(collection, id, value);
+    };
+
+    const overview = await getIntegrationOverview();
+
+    expect(overview.sources).toHaveLength(2);
+    expect(sourceWrites).toBe(0);
+    expect(await testStore.list('externalSources')).toHaveLength(0);
   });
 
   it('es idempotente y no crea snapshots ni registros duplicados', async () => {

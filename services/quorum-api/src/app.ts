@@ -46,6 +46,12 @@ export function createApp() {
   app.use((req, _res, next) => { req.requestId = req.header('x-request-id') || crypto.randomUUID(); next(); });
   app.use(cors({ origin: corsOrigin, credentials: true, optionsSuccessStatus: 204 }));
   app.options('*', cors({ origin: corsOrigin, credentials: true }));
+  app.use((req, _res, next) => {
+    if (config.dataWritesDisabled && !['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+      return next(new ApiError(503, 'data_writes_disabled', 'La API está temporalmente en modo de sólo lectura'));
+    }
+    next();
+  });
   app.post('/v1/webhooks/resend', express.raw({ type: 'application/json', limit: '256kb' }), resendWebhook);
   app.use(express.json({ limit: '1mb' }));
   app.use(originGuard);

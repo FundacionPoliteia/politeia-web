@@ -2,8 +2,8 @@ import { Firestore } from '@google-cloud/firestore';
 import { Storage } from '@google-cloud/storage';
 import { collections, type CollectionKey } from './store.js';
 import {
-  equivalentStorageObject, planCollectionPromotion, preparePromotionRecord,
-  referencedUploadIds, stagingPromotionCollections,
+  equivalentStorageObject, hasStagingPromotionReferences, planCollectionPromotion, preparePromotionRecord,
+  stagingPromotionCollections, type PromotionLocations,
 } from './stagingPromotion.js';
 
 const projectId = 'politeia-quorum';
@@ -11,12 +11,21 @@ const sourceDatabaseId = 'quorum-staging';
 const targetDatabaseId = 'quorum-production';
 const sourceDocumentsBucket = `${projectId}-quorum-staging-documents`;
 const targetDocumentsBucket = `${projectId}-quorum-production-documents`;
-const sourceApiBase = 'https://staging.quorum.politeia.ar/api/quorum';
-const targetApiBase = 'https://quorum.politeia.ar/api/quorum';
+const sourceSnapshotsBucket = `${projectId}-quorum-staging-source-snapshots`;
+const targetSnapshotsBucket = `${projectId}-quorum-production-source-snapshots`;
+const locations: PromotionLocations = {
+  sourceApiBase: 'https://staging.quorum.politeia.ar/api/quorum',
+  productionApiBase: 'https://quorum.politeia.ar/api/quorum',
+  sourceDocumentsBucket,
+  productionDocumentsBucket: targetDocumentsBucket,
+  sourceSnapshotsBucket,
+  productionSnapshotsBucket: targetSnapshotsBucket,
+};
 
 type DocumentMap = Map<string, unknown>;
 type CollectionMaps = Map<CollectionKey, DocumentMap>;
-type UploadRecord = { objectName?: unknown };
+type StorageFile = ReturnType<Storage['bucket']> extends never ? never : import('@google-cloud/storage').File;
+type PlannedObjectCopy = { objectName: string; sourceFile: StorageFile; targetFile: StorageFile };
 
 async function readCollection(db: Firestore, key: CollectionKey): Promise<DocumentMap> {
   const snapshot = await db.collection(collections[key]).get();
@@ -32,7 +41,7 @@ function planCollections(source: CollectionMaps, target: CollectionMaps) {
   return stagingPromotionCollections.map((key) => {
     const sourceRows = source.get(key) || new Map();
     const targetRows = target.get(key) || new Map();
-    const plan = planCollectionPromotion(sourceRows, targetRows, (_id, value) => preparePromotionRecord(key, value, sourceApiBase, targetApiBase));
+    const plan = planCollectionPromotion(sourceRows, targetRows, (_id, value) => preparePromotionRecord(key, value, locations));
     return { key, sourceRows, targetRows, ...plan };
   });
 }
@@ -50,51 +59,54 @@ function parseMode(args: string[]) {
   return apply ? 'apply' as const : 'dry-run' as const;
 }
 
-async function inspectUploads(source: Firestore, target: Firestore, sourceFiles: Storage, targetFiles: Storage, sourceContent: CollectionMaps, targetContent: CollectionMaps) {
-  const sourceUploads = await readCollection(source, 'uploads');
-  const targetUploads = await readCollection(target, 'uploads');
-  const references = referencedUploadIds(stagingPromotionCollections.flatMap((key) => [...(sourceContent.get(key)?.values() || [])]));
-  const missingRecords = [...references].filter((id) => !sourceUploads.has(id));
-  const selected = new Map<string, unknown>();
-  const conflicts: string[] = missingRecords.map((id) => `${id}: el contenido referencia un medio sin registro`);
-  const missingFiles: Array<{ id: string; objectName: string }> = [];
-  const equivalentFiles: string[] = [];
+async function planBucketCopy(storage: Storage, sourceBucketName: string, targetBucketName: string) {
+  const sourceBucket = storage.bucket(sourceBucketName);
+  const targetBucket = storage.bucket(targetBucketName);
+  const [[sourceFiles], [targetFiles]] = await Promise.all([sourceBucket.getFiles(), targetBucket.getFiles()]);
+  const sourceByName = new Map(sourceFiles.map((file) => [file.name, file]));
+  const targetByName = new Map(targetFiles.map((file) => [file.name, file]));
+  const copies: PlannedObjectCopy[] = [];
+  const unchanged: string[] = [];
+  const conflicts: string[] = [];
 
-  for (const id of references) {
-    const value = sourceUploads.get(id) as UploadRecord | undefined;
-    if (!value) continue;
-    const objectName = typeof value.objectName === 'string' ? value.objectName : '';
-    if (!objectName || objectName.startsWith('/') || objectName.split('/').includes('..')) {
-      conflicts.push(`${id}: ruta de archivo inválida`);
-      continue;
-    }
-    selected.set(id, value);
-    const [sourceMetadata] = await sourceFiles.bucket(sourceDocumentsBucket).file(objectName).getMetadata().catch(() => [null]);
-    if (!sourceMetadata) {
-      conflicts.push(`${id}: falta el archivo ${objectName} en el bucket de staging`);
-      continue;
-    }
-    const destination = targetFiles.bucket(targetDocumentsBucket).file(objectName);
-    const [exists] = await destination.exists();
-    if (!exists) {
-      missingFiles.push({ id, objectName });
-      continue;
-    }
-    const [targetMetadata] = await destination.getMetadata();
-    if (!equivalentStorageObject(sourceMetadata as Record<string, unknown>, targetMetadata as Record<string, unknown>)) {
-      conflicts.push(`${id}: el archivo ${objectName} ya existe distinto en producción`);
-    } else {
-      equivalentFiles.push(id);
-    }
+  for (const objectName of targetByName.keys()) {
+    if (!sourceByName.has(objectName)) conflicts.push(`${targetBucketName}/${objectName}: objeto extra en producción`);
   }
 
-  const targetUploadSubset = new Map([...targetUploads].filter(([id]) => references.has(id)));
-  const uploadPlan = planCollectionPromotion(selected, targetUploadSubset, (_id, value) => value);
-  const extraTargetUploads = [...targetUploads.keys()].filter((id) => !references.has(id));
-  for (const id of extraTargetUploads) conflicts.push(`${id}: registro de archivo extra en producción`);
-  conflicts.push(...uploadPlan.conflicts.map((conflict) => `uploads/${conflict}`));
+  for (const [objectName, sourceFile] of sourceByName) {
+    const targetFile = targetBucket.file(objectName);
+    const existingTarget = targetByName.get(objectName);
+    if (!existingTarget) {
+      copies.push({ objectName, sourceFile, targetFile });
+      continue;
+    }
+    const [[sourceMetadata], [targetMetadata]] = await Promise.all([sourceFile.getMetadata(), existingTarget.getMetadata()]);
+    if (equivalentStorageObject(sourceMetadata as Record<string, unknown>, targetMetadata as Record<string, unknown>)) unchanged.push(objectName);
+    else conflicts.push(`${targetBucketName}/${objectName}: el objeto ya existe distinto en producción`);
+  }
 
-  return { references, selected, uploadPlan, missingFiles, equivalentFiles, conflicts };
+  return { sourceBucketName, targetBucketName, sourceCount: sourceFiles.length, targetCount: targetFiles.length, copies, unchanged, conflicts };
+}
+
+function logRoleAssignments(rows: Map<string, unknown> | undefined) {
+  console.log('Roles heredados (email · roles · estado):');
+  const assignments: Array<{ id: string; email?: unknown; roles?: unknown; active?: unknown }> = [...(rows || new Map()).entries()]
+    .map(([id, value]) => {
+      const record = value as Record<string, unknown>;
+      return { id, email: record.email, roles: record.roles, active: record.active };
+    })
+    .sort((left, right) => String(left.email || left.id).localeCompare(String(right.email || right.id)));
+  if (!assignments.length) console.log('- No hay asignaciones explícitas; se mantienen los administradores iniciales configurados en la API.');
+  for (const item of assignments) {
+    const roles = Array.isArray(item.roles) ? item.roles.join(', ') : '';
+    console.log(`- ${String(item.email || item.id)} · ${roles} · ${item.active === false ? 'inactivo' : 'activo'}`);
+  }
+}
+
+function summarizeConflicts(conflicts: string[]) {
+  console.error(`La promoción se detiene; no se escribirá nada. Conflictos: ${conflicts.length}`);
+  conflicts.slice(0, 50).forEach((conflict) => console.error(`- ${conflict}`));
+  if (conflicts.length > 50) console.error(`… y ${conflicts.length - 50} más; corregí los conflictos y volvé a simular.`);
 }
 
 async function main() {
@@ -110,19 +122,31 @@ async function main() {
   if (!sourceContent.get('settings')?.has('public')) throw new Error('Falta la configuración editorial "public" en quorum-staging.');
 
   const recordPlans = planCollections(sourceContent, targetContent);
-  const uploads = await inspectUploads(source, target, storage, storage, sourceContent, targetContent);
-  const conflicts = [...recordPlans.flatMap((plan) => plan.conflicts.map((conflict) => `${plan.key}/${conflict}`)), ...uploads.conflicts];
+  const unmappedReferences = recordPlans.flatMap((plan) => plan.toWrite.flatMap((record) => hasStagingPromotionReferences(record.value, locations) ? [`${plan.key}/${record.id}: quedó una referencia de staging sin reescribir`] : []));
+  const [documents, snapshots] = await Promise.all([
+    planBucketCopy(storage, sourceDocumentsBucket, targetDocumentsBucket),
+    planBucketCopy(storage, sourceSnapshotsBucket, targetSnapshotsBucket),
+  ]);
+  const conflicts = [
+    ...recordPlans.flatMap((plan) => plan.conflicts.map((conflict) => `${plan.key}/${conflict}`)),
+    ...documents.conflicts,
+    ...snapshots.conflicts,
+    ...unmappedReferences,
+  ];
 
   console.log(`Modo: ${mode === 'apply' ? 'APLICAR' : 'simulación (sin escrituras)'}`);
   console.log(`Proyecto: ${projectId} · origen: ${sourceDatabaseId} · destino: ${targetDatabaseId}`);
+  console.log(`Colecciones persistentes: ${stagingPromotionCollections.length}; excluida deliberadamente: mailJobs`);
   console.log('Colección                 Staging  Producción  Nuevos  Iguales');
   for (const plan of recordPlans) {
     console.log(`${plan.key.padEnd(25)} ${String(plan.sourceRows.size).padStart(7)} ${String(plan.targetRows.size).padStart(11)} ${String(plan.toWrite.length).padStart(7)} ${String(plan.unchanged.length).padStart(8)}`);
   }
-  console.log(`Medios referenciados: ${uploads.references.size}; archivos por copiar: ${uploads.missingFiles.length}; ya coinciden: ${uploads.equivalentFiles.length}`);
+  for (const bucket of [documents, snapshots]) {
+    console.log(`${bucket.sourceBucketName} → ${bucket.targetBucketName}: origen ${bucket.sourceCount}; destino ${bucket.targetCount}; por copiar ${bucket.copies.length}; iguales ${bucket.unchanged.length}`);
+  }
+  logRoleAssignments(sourceContent.get('roles'));
   if (conflicts.length) {
-    console.error('La promoción se detiene; no se escribirá nada. Conflictos detectados:');
-    conflicts.forEach((conflict) => console.error(`- ${conflict}`));
+    summarizeConflicts(conflicts);
     process.exitCode = 1;
     return;
   }
@@ -132,27 +156,33 @@ async function main() {
     return;
   }
 
-  // Files first: after Firestore records are written, every migrated media URL is already live.
-  for (const file of uploads.missingFiles) {
-    await storage.bucket(sourceDocumentsBucket).file(file.objectName).copy(storage.bucket(targetDocumentsBucket).file(file.objectName));
+  // Copy each object only if the destination name is still absent. If a run stops midway, rerun after a new dry-run.
+  for (const bucket of [documents, snapshots]) {
+    for (const item of bucket.copies) {
+      await item.sourceFile.copy(item.targetFile, { preconditionOpts: { ifGenerationMatch: 0 } });
+    }
   }
+  // Create-only Firestore writes preserve any production data if the plan became stale after review.
   for (const plan of recordPlans) {
     for (const document of plan.toWrite) {
-      const value = preparePromotionRecord(plan.key, document.value, sourceApiBase, targetApiBase);
+      const value = preparePromotionRecord(plan.key, document.value, locations);
       await target.collection(collections[plan.key]).doc(document.id).create(value as Record<string, unknown>);
     }
   }
-  for (const document of uploads.uploadPlan.toWrite) {
-    await target.collection(collections.uploads).doc(document.id).create(document.value as Record<string, unknown>);
-  }
 
-  const [verified] = await Promise.all([readCollections(target, stagingPromotionCollections)]);
-  const verification = planCollections(sourceContent, verified);
+  const [verifiedCollections, verifiedDocuments, verifiedSnapshots] = await Promise.all([
+    readCollections(target, stagingPromotionCollections),
+    planBucketCopy(storage, sourceDocumentsBucket, targetDocumentsBucket),
+    planBucketCopy(storage, sourceSnapshotsBucket, targetSnapshotsBucket),
+  ]);
+  const verification = planCollections(sourceContent, verifiedCollections);
   const verificationConflicts = verification.flatMap((plan) => plan.conflicts.map((conflict) => `${plan.key}/${conflict}`));
-  const verificationUploads = await readCollection(target, 'uploads');
-  for (const id of uploads.references) if (!verificationUploads.has(id)) verificationConflicts.push(`uploads/${id}: no se verificó`);
-  if (verificationConflicts.length) throw new Error(`La copia terminó pero la verificación detectó diferencias: ${verificationConflicts.join('; ')}`);
-  console.log('Promoción completada y verificada. Staging no fue modificado.');
+  for (const bucket of [verifiedDocuments, verifiedSnapshots]) {
+    if (bucket.copies.length) verificationConflicts.push(`${bucket.targetBucketName}: quedan ${bucket.copies.length} objetos sin verificar`);
+    verificationConflicts.push(...bucket.conflicts);
+  }
+  if (verificationConflicts.length) throw new Error(`La copia terminó pero la verificación detectó diferencias: ${verificationConflicts.slice(0, 50).join('; ')}`);
+  console.log('Promoción completa y verificada. Staging no fue modificado; la cola mailJobs no se copió.');
 }
 
 main().catch((error) => {

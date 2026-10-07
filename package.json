@@ -48,19 +48,20 @@
     "quorum:secrets:check": "node scripts/check-quorum-secrets.mjs"
   },
   "dependencies": {
-    "@tiptap/extension-bubble-menu": "^3.27.1",
-    "@tiptap/extension-image": "^3.27.1",
-    "@tiptap/extension-link": "^3.27.1",
-    "@tiptap/extension-placeholder": "^3.27.1",
-    "@tiptap/extension-table": "^3.27.1",
-    "@tiptap/extension-table-cell": "^3.27.1",
-    "@tiptap/extension-table-header": "^3.27.1",
-    "@tiptap/extension-table-row": "^3.27.1",
-    "@tiptap/pm": "^3.27.1",
-    "@tiptap/react": "^3.27.1",
-    "@tiptap/starter-kit": "^3.27.1",
+    "@tiptap/core": "^3.31.4",
+    "@tiptap/extension-bubble-menu": "^3.31.4",
+    "@tiptap/extension-image": "^3.31.4",
+    "@tiptap/extension-link": "^3.31.4",
+    "@tiptap/extension-placeholder": "^3.31.4",
+    "@tiptap/extension-table": "^3.31.4",
+    "@tiptap/extension-table-cell": "^3.31.4",
+    "@tiptap/extension-table-header": "^3.31.4",
+    "@tiptap/extension-table-row": "^3.31.4",
+    "@tiptap/pm": "^3.31.4",
+    "@tiptap/react": "^3.31.4",
+    "@tiptap/starter-kit": "^3.31.4",
     "marked": "^18.0.5",
-    "next": "^15.5.22",
+    "next": "^15.5.27",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "turndown": "^7.2.4",
@@ -72,6 +73,6 @@
   },
   "overrides": {
     "postcss": "8.5.24",
-    "sharp": "0.35.0"
+    "sharp": "0.35.5"
   }
 }

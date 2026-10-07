@@ -17,7 +17,11 @@ locals {
       revalidate_url = var.vercel_revalidate_urls.production
     }
   }
-  environments    = { for key, value in local.all_environments : key => value if contains(var.deployment_environments, key) }
+  environments = { for key, value in local.all_environments : key => value if contains(var.deployment_environments, key) }
+  api_environments = {
+    for key, value in local.environments : key => value
+    if key != "production" || var.production_api_enabled
+  }
   apis            = toset(["run.googleapis.com", "firestore.googleapis.com", "storage.googleapis.com", "secretmanager.googleapis.com", "cloudscheduler.googleapis.com", "artifactregistry.googleapis.com"])
   secret_suffixes = toset(["session-secret", "google-client-id", "public-access-emails", "public-gate-secret", "resend-key", "resend-webhook", "turnstile-secret", "dispatch-token", "revalidate-secret"])
   secrets         = { for pair in setproduct(keys(local.environments), local.secret_suffixes) : "${pair[0]}-${pair[1]}" => { env = pair[0], suffix = pair[1] } }
@@ -55,6 +59,20 @@ resource "google_storage_bucket" "documents" {
   location                    = var.region
   uniform_bucket_level_access = true
   public_access_prevention    = "enforced"
+
+  labels = each.key == "production" ? {
+    app         = "quorum"
+    component   = "documents"
+    environment = "production"
+  } : null
+
+  dynamic "soft_delete_policy" {
+    for_each = each.key == "production" ? [true] : []
+    content {
+      retention_duration_seconds = 604800
+    }
+  }
+
   versioning {
     enabled = true
   }
@@ -73,8 +91,23 @@ resource "google_storage_bucket" "backups" {
   for_each                    = local.environments
   name                        = "${var.project_id}-quorum-${each.key}-backups"
   location                    = var.region
+  storage_class               = each.key == "production" ? "NEARLINE" : "STANDARD"
   uniform_bucket_level_access = true
   public_access_prevention    = "enforced"
+
+  labels = each.key == "production" ? {
+    app         = "quorum"
+    component   = "backups"
+    environment = "production"
+  } : null
+
+  dynamic "soft_delete_policy" {
+    for_each = each.key == "production" ? [true] : []
+    content {
+      retention_duration_seconds = 604800
+    }
+  }
+
   lifecycle_rule {
     condition {
       age = 30
@@ -91,6 +124,19 @@ resource "google_storage_bucket" "source_snapshots" {
   location                    = var.region
   uniform_bucket_level_access = true
   public_access_prevention    = "enforced"
+
+  labels = each.key == "production" ? {
+    app         = "quorum"
+    component   = "source-snapshots"
+    environment = "production"
+  } : null
+
+  dynamic "soft_delete_policy" {
+    for_each = each.key == "production" ? [true] : []
+    content {
+      retention_duration_seconds = 604800
+    }
+  }
 
   versioning {
     enabled = true
@@ -171,7 +217,7 @@ resource "google_secret_manager_secret_iam_member" "api" {
 }
 
 resource "google_cloud_run_v2_service" "api" {
-  for_each            = local.environments
+  for_each            = local.api_environments
   name                = "quorum-api-${each.key}"
   location            = var.region
   deletion_protection = true
@@ -195,6 +241,10 @@ resource "google_cloud_run_v2_service" "api" {
       env {
         name  = "DATA_STORE"
         value = "firestore"
+      }
+      env {
+        name  = "DATA_WRITES_DISABLED"
+        value = tostring(var.data_writes_disabled[each.key])
       }
       env {
         name  = "GCP_PROJECT_ID"
@@ -315,7 +365,7 @@ resource "google_cloud_run_v2_service" "api" {
 }
 
 resource "google_cloud_run_v2_service_iam_member" "public" {
-  for_each = local.environments
+  for_each = local.api_environments
   project  = var.project_id
   location = var.region
   name     = google_cloud_run_v2_service.api[each.key].name
@@ -324,7 +374,7 @@ resource "google_cloud_run_v2_service_iam_member" "public" {
 }
 
 resource "google_cloud_scheduler_job" "backup" {
-  for_each  = local.environments
+  for_each  = local.api_environments
   name      = "quorum-${each.key}-daily-firestore-export"
   region    = var.region
   schedule  = "20 3 * * *"
@@ -340,7 +390,7 @@ resource "google_cloud_scheduler_job" "backup" {
 }
 
 resource "google_cloud_scheduler_job" "congress_sync" {
-  for_each  = { for key, value in local.environments : key => value if var.congress_auto_sync_enabled[key] }
+  for_each  = { for key, value in local.api_environments : key => value if var.congress_auto_sync_enabled[key] }
   name      = "quorum-${each.key}-congress-sync-due"
   region    = var.region
   schedule  = "15 4 * * *"
