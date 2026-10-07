@@ -242,9 +242,12 @@ resource "google_cloud_run_v2_service" "api" {
         name  = "DATA_STORE"
         value = "firestore"
       }
-      env {
-        name  = "DATA_WRITES_DISABLED"
-        value = tostring(var.data_writes_disabled[each.key])
+      dynamic "env" {
+        for_each = var.data_writes_disabled[each.key] ? [true] : []
+        content {
+          name  = "DATA_WRITES_DISABLED"
+          value = "true"
+        }
       }
       env {
         name  = "GCP_PROJECT_ID"
