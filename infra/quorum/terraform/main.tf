@@ -153,8 +153,9 @@ resource "google_storage_bucket" "source_snapshots" {
 }
 
 resource "google_secret_manager_secret" "quorum" {
-  for_each  = local.secrets
-  secret_id = "quorum-${each.key}"
+  for_each            = local.secrets
+  secret_id           = "quorum-${each.key}"
+  deletion_protection = each.value.env == "production"
   replication {
     auto {}
   }
