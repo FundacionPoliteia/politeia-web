@@ -11,12 +11,15 @@ import { isProjectAwaitingFormalEntry } from '@/lib/projectIngress';
 import { projectIcon, projectIconGlyph } from '@/lib/projectIcons';
 import ProjectStageMovement from './ProjectStageMovement';
 
-export default function ProjectExplorer({ data }: { data: PublicBootstrap }) {
+export default function ProjectExplorer({ data, mobileView, onMobileViewChange }: {
+  data: PublicBootstrap;
+  mobileView: 'list' | 'grid';
+  onMobileViewChange: (view: 'list' | 'grid') => void;
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [query, setQuery] = useState(searchParams.get('q') || '');
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [mobileView, setMobileView] = useState<'list' | 'grid'>('list');
   const rawChamber = searchParams.get('camara') || '';
   const rawStage = searchParams.get('estado') || '';
   const legacyDebateFilter = isPublicDebateFilter(rawChamber) || isPublicDebateFilter(rawStage);
@@ -76,10 +79,6 @@ export default function ProjectExplorer({ data }: { data: PublicBootstrap }) {
         </div>
       </div>
       {activeFilterCount > 0 && <div className="results-head" aria-live="polite"><span><strong>{filtered.length}</strong> {filtered.length === 1 ? 'proyecto' : 'proyectos'}</span><button className="button ghost" type="button" onClick={() => { setQuery(''); router.replace('/#proyectos'); }}>Limpiar filtros</button></div>}
-      {filtered.length > 0 && <div className="project-view-toggle" role="group" aria-label="Vista de proyectos">
-        <button type="button" aria-label="Vista en grilla" aria-pressed={mobileView === 'grid'} onClick={() => setMobileView('grid')}><span className="material-symbols-outlined" aria-hidden="true">grid_view</span></button>
-        <button type="button" aria-label="Vista en lista" aria-pressed={mobileView === 'list'} onClick={() => setMobileView('list')}><span className="material-symbols-outlined" aria-hidden="true">view_list</span></button>
-      </div>}
       {filtered.length ? <div className={`project-grid${mobileView === 'grid' ? ' project-grid--compact' : ''}`} data-mobile-view={mobileView}>{filtered.map((project) => <ProjectCard project={project} key={project.id} />)}</div> : <div className="empty-state"><strong>{data.projects.length ? 'No hay resultados para esos filtros.' : 'El contenido público está en preparación.'}</strong><span>{data.projects.length ? 'Probá con otra búsqueda o limpiá la selección.' : 'Los borradores permanecen privados hasta que el equipo editorial valide y publique cada ficha.'}</span></div>}
     </div>
   );

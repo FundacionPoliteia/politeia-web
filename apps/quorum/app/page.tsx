@@ -1,9 +1,8 @@
-import { Suspense } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { effectiveProjectStageId, stageProgress, type PublicProject } from '@politeia/quorum-contracts';
 import KineticAdvanceWord from '@/components/KineticAdvanceWord';
-import ProjectExplorer from '@/components/ProjectExplorer';
+import ProjectSection from '@/components/ProjectSection';
 import { fetchPublicBootstrap } from '@/lib/api';
 import { projectIcon, projectIconGlyph } from '@/lib/projectIcons';
 import { projectStageVisualState } from '@/lib/projectStages';
@@ -21,7 +20,7 @@ export default async function HomePage() {
         <Image className="hero-congress" src="/images/congreso-silhouette.webp" alt="" aria-hidden="true" width={1536} height={1024} sizes="(max-width: 1536px) 100vw, 1536px" priority />
         <div className="shell hero-grid"><div><span className="eyebrow">Información legislativa</span><h1>Entendé qué se debate. Seguí cómo <KineticAdvanceWord /></h1><p className="hero-copy">Quórum es la plataforma de Fundación <a href="https://politeia.ar">Politeia</a> para conocer los principales proyectos tratados en el Congreso. Vas a encontrar resúmenes, comprender cómo pueden afectarte y consultar sus fuentes oficiales.</p></div><FeaturedProjects projects={featuredProjects} /></div>
       </section>
-      <section className="section" id="proyectos"><div className="shell"><div className="section-heading"><div><span className="eyebrow">Seguimiento legislativo</span><h2>Todos los proyectos.</h2></div><p>Explorá tanto los proyectos destacados como el resto del seguimiento. Buscá por nombre o expediente y filtrá según la etapa, la cámara de origen o el tipo de iniciativa.</p></div><Suspense fallback={<div className="empty-state">Cargando proyectos…</div>}><ProjectExplorer data={data} /></Suspense></div></section>
+      <section className="section" id="proyectos"><div className="shell"><ProjectSection data={data} /></div></section>
       {data.settings.electionPortal.enabled && data.settings.electionPortal.url && <section className="section"><div className="shell"><div className="election-block"><div><span className="eyebrow">Otra herramienta Politeia</span><h2>{data.settings.electionPortal.title}</h2><p>{data.settings.electionPortal.description}</p></div><a className="button primary" href={data.settings.electionPortal.url}>{data.settings.electionPortal.label} <span aria-hidden="true">↗</span></a></div></div></section>}
     </main>
   );

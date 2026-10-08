@@ -106,6 +106,7 @@ h3 { font-size: 1.35rem; }
 .section-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 40px; margin-bottom: 36px; }
 .section-heading h2 { max-width: 14ch; margin: 10px 0 0; }
 .section-heading p { max-width: 52ch; margin: 0; color: var(--gris); }
+.project-section-explorer { min-width: 0; }
 .explorer { display: grid; gap: 30px; }
 .project-filter-panel { display: contents; }
 .project-filter-toggle { display: none; }
@@ -956,7 +957,13 @@ body:has(.management-root) > .site-header, body:has(.management-root) > .site-fo
   .project-filter-panel.open .project-filter-chevron { transform: rotate(180deg); }
   .project-filter-panel:not(.open) .filters { display: none; }
   .filters, .project-grid, .profile-list, .fact-grid { grid-template-columns: 1fr; }
-  .project-view-toggle { justify-self: end; display: inline-grid; grid-template-columns: repeat(2, 1fr); gap: 3px; border: 1px solid var(--linea); border-radius: 12px; background: var(--blanco); padding: 3px; box-shadow: 0 5px 16px rgba(26,26,55,.07); }
+  .project-section-layout { display: grid; grid-template-columns: minmax(0,1fr) 84px; grid-template-rows: auto auto auto; align-items: start; column-gap: 10px; }
+  .project-section-heading { display: contents; }
+  .project-section-heading > div { grid-column: 1; grid-row: 1; min-width: 0; }
+  .project-section-heading > p { grid-column: 1 / -1; grid-row: 2; margin: 0 0 36px; }
+  .project-section-explorer { grid-column: 1 / -1; grid-row: 3; }
+  .project-view-toggle--sticky { position: sticky; z-index: 51; top: 24px; grid-column: 2; grid-row: 1 / span 3; justify-self: end; align-self: start; margin-top: 30px; }
+  .project-view-toggle { display: inline-grid; grid-template-columns: repeat(2, 1fr); gap: 3px; border: 1px solid var(--linea); border-radius: 12px; background: var(--blanco); padding: 3px; box-shadow: 0 5px 16px rgba(26,26,55,.07); }
   .project-view-toggle button { display: grid; width: 38px; height: 36px; place-items: center; border: 0; border-radius: 8px; background: transparent; color: var(--gris); cursor: pointer; }
   .project-view-toggle button[aria-pressed="true"] { background: var(--quorum-blue-soft); color: var(--azul); }
   .project-view-toggle button:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }

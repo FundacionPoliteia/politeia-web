@@ -50,6 +50,11 @@ test('la grilla compacta sólo cambia la vista mobile de las fichas', async ({ p
 
   if ((page.viewportSize()?.width || 1280) <= 620) {
     await expect(toggle).toBeVisible();
+    const title = page.getByRole('heading', { name: 'Todos los proyectos.' });
+    const [titleBounds, toggleBounds] = await Promise.all([title.boundingBox(), toggle.boundingBox()]);
+    expect(titleBounds).not.toBeNull();
+    expect(toggleBounds).not.toBeNull();
+    expect(toggleBounds!.x).toBeGreaterThanOrEqual(titleBounds!.x + titleBounds!.width);
     await expect(card.locator('p')).toBeVisible();
     await toggle.getByRole('button', { name: 'Vista en grilla' }).click();
     await expect(grid).toHaveAttribute('data-mobile-view', 'grid');
@@ -60,6 +65,9 @@ test('la grilla compacta sólo cambia la vista mobile de las fichas', async ({ p
     await expect(grid).toHaveAttribute('data-mobile-view', 'list');
     await expect(card.locator('p')).toBeVisible();
     expect(await grid.evaluate((element) => getComputedStyle(element).gridTemplateColumns.trim().split(/\s+/).length)).toBe(1);
+    await grid.scrollIntoViewIfNeeded();
+    await page.evaluate(() => window.scrollBy(0, 120));
+    await expect.poll(async () => (await toggle.boundingBox())?.y ?? -1).toBeCloseTo(24, 0);
   } else {
     await expect(toggle).toBeHidden();
     expect(await grid.evaluate((element) => getComputedStyle(element).gridTemplateColumns.trim().split(/\s+/).length)).toBe(3);
