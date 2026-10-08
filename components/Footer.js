@@ -19,7 +19,7 @@ export default function Footer() {
           <div className="foot-col">
             <h5>Entorno</h5>
             <a href="https://politeiatest.vercel.app/" target="_blank" rel="noopener">Promesas</a>
-            <span style={{display:'block',color:'var(--gris)',fontSize:'.92rem',marginBottom:'10px',opacity:.6}}>Quorum (próximamente)</span>
+            <a href="https://quorum.politeia.ar" target="_blank" rel="noopener noreferrer">Quórum</a>
             <Link href="/blog">Blog</Link>
           </div>
           <div className="foot-col">

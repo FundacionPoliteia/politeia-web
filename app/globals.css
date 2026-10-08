@@ -2521,8 +2521,17 @@ a {
   background: rgba(19, 122, 159, var(--field-opacity))
 }
 
-.project-card[data-motion-key="quorum"] .soft-parallax__field {
-  background: rgba(107, 108, 120, var(--field-opacity))
+.motion-card[data-motion-key="quorum"] .soft-parallax__field {
+  background: rgba(18, 127, 157, var(--field-opacity));
+  box-shadow: 0 0 54px rgba(18, 127, 157, .12)
+}
+
+.motion-card[data-motion-key="quorum"] .soft-parallax__field:nth-child(2) {
+  background: rgba(74, 157, 176, var(--field-opacity))
+}
+
+.motion-card[data-motion-key="quorum"] .soft-parallax__field:nth-child(3) {
+  background: rgba(142, 195, 205, var(--field-opacity))
 }
 
 .project-card[data-motion-key="politez"] .soft-parallax__field {
@@ -2535,10 +2544,6 @@ a {
 
 .motion-card:active .soft-parallax__field {
   opacity: .94
-}
-
-.tool-motion-card.soon .soft-parallax__field {
-  background: rgba(107, 108, 120, var(--field-opacity))
 }
 
 @media(max-width:860px) {
@@ -2608,7 +2613,7 @@ a {
   flex-direction: column
 }
 
-.card:not(.soon):not([aria-disabled="true"]):hover {
+.card:not([aria-disabled="true"]):hover {
   transform: translateY(-4px);
   box-shadow: 0 18px 40px rgba(26, 26, 55, .1), inset 0 0 0 1px rgba(19, 122, 159, .18);
   border-color: rgba(19, 122, 159, .28)
@@ -2654,15 +2659,9 @@ a {
   gap: 6px
 }
 
-.card.soon,
 .card[aria-disabled="true"] {
   cursor: default;
   pointer-events: none
-}
-
-.card.soon .ico {
-  background: var(--gris);
-  opacity: .6
 }
 
 .badge {
@@ -2692,12 +2691,6 @@ a {
   background: rgba(19, 122, 159, .13);
   border-color: rgba(19, 122, 159, .22);
   color: var(--azul)
-}
-
-.badge-development {
-  background: rgba(91, 91, 107, .13);
-  border-color: rgba(91, 91, 107, .22);
-  color: var(--gris)
 }
 
 .badge-publication {
