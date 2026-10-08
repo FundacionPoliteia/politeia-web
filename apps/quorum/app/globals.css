@@ -311,8 +311,14 @@ h3 { font-size: 1.35rem; }
 .timeline article.timeline-preparation time, .timeline-stage-change.preparation { color: #68538e; }
 .featured-project-row.stage-visual-preparation { --featured-stage-color: #68538e; --featured-stage-soft: #f3eff9; border-style: dashed; }
 @media (max-width: 700px) { .preparation-state { grid-template-columns: minmax(0,1fr); gap: 12px; padding: 20px; } .preparation-illustration { width: 100px; } }
-.project-card.stage-visual-promulgated { border-color: color-mix(in srgb,var(--quorum-green) 45%,var(--linea)); }
-.project-card.stage-visual-promulgated .status-pill { background: color-mix(in srgb,var(--quorum-green) 14%,var(--blanco)); color: var(--quorum-green); }
+.project-card.stage-visual-promulgated { border-color: color-mix(in srgb,var(--quorum-green) 56%,var(--linea)); border-left: 4px solid var(--quorum-green); background: linear-gradient(145deg,color-mix(in srgb,var(--quorum-green) 8%,var(--blanco)),var(--blanco) 58%); }
+.project-card.stage-visual-promulgated::before { width: 190px; height: 190px; background: color-mix(in srgb,var(--quorum-green) 16%,var(--blanco)); }
+.project-card.stage-visual-promulgated .status-pill { background: color-mix(in srgb,var(--quorum-green) 15%,var(--blanco)); color: var(--quorum-green); }
+.project-card.stage-public-debate { border-color: color-mix(in srgb,#9a5d16 48%,var(--linea)); border-left: 4px solid #9a5d16; background: linear-gradient(145deg,#fbf3e5,var(--blanco) 60%); }
+.project-card.stage-public-debate::before { width: 190px; height: 190px; background: color-mix(in srgb,#d98e24 20%,var(--blanco)); }
+.project-card.stage-public-debate .status-pill { background: #f8ecd6; color: #805015; }
+.project-card.stage-visual-promulgated:hover { border-color: var(--quorum-green); box-shadow: 0 12px 30px color-mix(in srgb,var(--quorum-green) 15%,transparent); }
+.project-card.stage-public-debate:hover { border-color: #9a5d16; box-shadow: 0 12px 30px color-mix(in srgb,#9a5d16 14%,transparent); }
 .project-card.stage-visual-forward { border-color: color-mix(in srgb,var(--azul) 42%,var(--linea)); box-shadow: inset 4px 0 0 var(--azul); }
 .project-card.stage-visual-backward { border-color: color-mix(in srgb,var(--quorum-coral) 50%,var(--linea)); background: linear-gradient(90deg,color-mix(in srgb,var(--quorum-coral) 7%,var(--blanco)),var(--blanco) 36%); box-shadow: inset 4px 0 0 var(--quorum-coral); }
 .project-card.stage-visual-backward .status-pill { background: color-mix(in srgb,var(--quorum-coral) 14%,var(--blanco)); color: var(--quorum-coral); }

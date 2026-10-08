@@ -72,12 +72,15 @@ function ProjectCard({ project }: { project: PublicProject }) {
   const currentStageId = effectiveProjectStageId(project);
   const current = project.workflow.stages.find((stage) => stage.id === currentStageId);
   const stageVisual = projectStageVisualState(project);
+  const normalizedStageName = `${currentStageId} ${current?.label || ''} ${current?.shortLabel || ''}`
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const isPublicDebate = normalizedStageName.includes('debate') && normalizedStageName.includes('publico');
   const transition = latestProjectStageTransition(project);
   const previousStage = project.workflow.stages.find((stage) => stage.id === transition?.previousStageId);
   const hasDirectionalTransition = (stageVisual === 'backward' || stageVisual === 'forward')
     && Boolean(previousStage && current && previousStage.id !== current.id);
   return (
-    <Link className={`project-card stage-visual-${stageVisual}`} href={`/proyectos/${project.slug}`} onClick={() => metric('project-opened')}>
+    <Link className={`project-card stage-visual-${stageVisual}${isPublicDebate ? ' stage-public-debate' : ''}`} href={`/proyectos/${project.slug}`} onClick={() => metric('project-opened')}>
       <div className="card-top"><span className="project-card-identity"><span className="project-card-icon material-symbols-outlined" aria-hidden="true">{projectIconGlyph(projectIcon(project))}</span><span className="status-pill">{current?.shortLabel || 'En seguimiento'}</span></span><span className="docket">{project.docketNumber}</span></div>
       <h3>{project.title}</h3><p>{richTextExcerpt(project.summary, project.summaryFormat, 220)}</p>
       <div className="project-card-footer">
