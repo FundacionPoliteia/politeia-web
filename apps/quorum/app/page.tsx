@@ -42,7 +42,6 @@ function FeaturedProjects({ projects }: { projects: PublicProject[] }) {
           <span className="featured-project-copy">
             <strong>{project.title}</strong>
             <small className="featured-project-meta">
-              {project.docketNumber && <span className="featured-project-docket">Exp. {project.docketNumber}</span>}
               <span>{[project.chamber?.label, project.initiative?.label].filter(Boolean).join(' · ') || 'Información legislativa'}</span>
             </small>
           </span>
