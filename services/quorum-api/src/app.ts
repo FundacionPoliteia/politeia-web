@@ -19,7 +19,7 @@ import { changeTeamMember, createTeamMember, listTeam, publicTeam } from './team
 import { streamEditorialImage, streamPdf, uploadEditorialImage, uploadPdf } from './files.js';
 import { dispatchPendingMail } from './mail.js';
 import { openApiSpec } from './openapi.js';
-import { confirmFollow, deleteSubscription, exportSubscription, getPreferences, requestFollow, updatePreferences } from './subscriptions.js';
+import { assertSubscriptionsEnabled, confirmFollow, deleteSubscription, exportSubscription, getPreferences, requestFollow, updatePreferences } from './subscriptions.js';
 import { newId, store } from './store.js';
 import { bulkImportAllExternalLegislators, bulkImportExternalLegislators, importExternalLegislator, searchExternalLegislators } from './integrations/legislatorImport.js';
 import { getIntegrationOverview } from './integrations/registry.js';
@@ -74,6 +74,7 @@ export function createApp() {
   app.get('/v1/public/files/:id', publicLimiter, asyncHandler(streamPdf));
   app.get('/v1/public/media/:id', publicLimiter, asyncHandler(streamEditorialImage));
   app.post('/v1/public/follows/request', sensitiveLimiter, asyncHandler(async (req, res) => {
+    await assertSubscriptionsEnabled();
     await verifyTurnstile(req.body?.turnstileToken, req.ip);
     res.status(202).json(await requestFollow(req.body));
   }));

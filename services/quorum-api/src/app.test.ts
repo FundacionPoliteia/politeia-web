@@ -349,6 +349,23 @@ describe('Quórum API', () => {
     expect(response.headers['cache-control']).toBe('private, no-store');
   });
 
+  it('devuelve suscripciones deshabilitadas antes de exigir Turnstile en producción', async () => {
+    const originalNodeEnv = config.nodeEnv;
+    const originalTurnstileSecret = config.turnstileSecretKey;
+    config.nodeEnv = 'production';
+    config.turnstileSecretKey = '';
+    try {
+      const response = await request(createApp())
+        .post('/v1/public/follows/request')
+        .send({ email: 'persona@example.com', projectId: 'missing', consent: true })
+        .expect(503);
+      expect(response.body.error.code).toBe('subscriptions_disabled');
+    } finally {
+      config.nodeEnv = originalNodeEnv;
+      config.turnstileSecretKey = originalTurnstileSecret;
+    }
+  });
+
   it('impide habilitar seguimiento sin aprobación de privacidad', async () => {
     const settings = await testStore.get<SiteSettings>('settings', 'public');
     const response = await request(createApp())

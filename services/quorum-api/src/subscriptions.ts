@@ -6,14 +6,20 @@ import { newId, store } from './store.js';
 
 const TOKEN_TTL_MS = 48 * 60 * 60 * 1000;
 
+export async function assertSubscriptionsEnabled() {
+  const settings = await getSettings();
+  if (!settings.subscriptionsEnabled || !settings.privacyPolicyApproved) {
+    throw new ApiError(503, 'subscriptions_disabled', 'El seguimiento por correo todavía no está habilitado');
+  }
+}
+
 export async function requestFollow(input: unknown) {
   const body = input as Record<string, unknown>;
   const email = String(body?.email || '').trim().toLowerCase();
   const projectId = String(body?.projectId || '').trim();
   const consent = body?.consent === true;
   if (!/^\S+@\S+\.\S+$/.test(email) || !projectId || !consent) throw new ApiError(422, 'follow_invalid', 'Ingresá un email válido y aceptá la política de privacidad');
-  const settings = await getSettings();
-  if (!settings.subscriptionsEnabled || !settings.privacyPolicyApproved) throw new ApiError(503, 'subscriptions_disabled', 'El seguimiento por correo todavía no está habilitado');
+  await assertSubscriptionsEnabled();
   const project = await store().get<{ id: string; title: string; status: string }>('publicProjects', projectId);
   if (!project || project.status !== 'published') throw notFound('Proyecto');
   const id = emailId(email);

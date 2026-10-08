@@ -338,7 +338,30 @@ resource "google_cloud_run_v2_service" "api" {
         value = each.value.revalidate_url
       }
       dynamic "env" {
-        for_each = { SESSION_SECRET = "session-secret", GOOGLE_CLIENT_ID = "google-client-id", PUBLIC_ACCESS_ALLOWED_EMAILS = "public-access-emails", PUBLIC_ACCESS_GATE_SECRET = "public-gate-secret", RESEND_API_KEY = "resend-key", RESEND_WEBHOOK_SECRET = "resend-webhook", TURNSTILE_SECRET_KEY = "turnstile-secret", MAIL_DISPATCH_TOKEN = "dispatch-token", NEXT_REVALIDATE_SECRET = "revalidate-secret" }
+        for_each = each.key == "production" ? [var.production_mail_provider] : []
+        content {
+          name  = "MAIL_PROVIDER"
+          value = env.value
+        }
+      }
+      dynamic "env" {
+        for_each = merge(
+          {
+            SESSION_SECRET               = "session-secret"
+            GOOGLE_CLIENT_ID             = "google-client-id"
+            PUBLIC_ACCESS_ALLOWED_EMAILS = "public-access-emails"
+            PUBLIC_ACCESS_GATE_SECRET    = "public-gate-secret"
+            MAIL_DISPATCH_TOKEN          = "dispatch-token"
+            NEXT_REVALIDATE_SECRET       = "revalidate-secret"
+          },
+          each.key == "staging" || var.production_mail_provider == "resend" ? {
+            RESEND_API_KEY        = "resend-key"
+            RESEND_WEBHOOK_SECRET = "resend-webhook"
+          } : {},
+          each.key == "staging" || var.production_turnstile_enabled ? {
+            TURNSTILE_SECRET_KEY = "turnstile-secret"
+          } : {},
+        )
         content {
           name = env.key
           value_source {

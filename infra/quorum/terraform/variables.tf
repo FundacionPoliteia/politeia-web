@@ -19,6 +19,21 @@ variable "production_api_enabled" {
   type        = bool
   default     = false
 }
+variable "production_mail_provider" {
+  description = "Production mail transport. Keep disabled until transactional email is explicitly configured and tested."
+  type        = string
+  default     = "disabled"
+
+  validation {
+    condition     = contains(["disabled", "console", "resend"], var.production_mail_provider)
+    error_message = "production_mail_provider must be disabled, console, or resend."
+  }
+}
+variable "production_turnstile_enabled" {
+  description = "Mount the Turnstile verification secret in production only when the matching public site key is configured."
+  type        = bool
+  default     = false
+}
 variable "data_writes_disabled" {
   description = "Temporary API write freeze by environment for consistent Firestore backups and migration."
   type        = object({ staging = bool, production = bool })

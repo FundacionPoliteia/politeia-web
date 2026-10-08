@@ -1,6 +1,10 @@
 project_id = "politeia-quorum"
 region     = "southamerica-east1"
-deployment_environments = ["staging"]
+deployment_environments = ["staging", "production"]
+production_api_enabled = false
+production_mail_provider = "disabled"
+production_turnstile_enabled = false
+data_writes_disabled = { staging = false, production = false }
 
 api_images = {
   staging    = "southamerica-east1-docker.pkg.dev/politeia-quorum/quorum/quorum-api:REPLACE_WITH_COMMIT_SHA"
