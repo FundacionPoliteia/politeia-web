@@ -132,16 +132,15 @@ export default async function Home() {
               <p>Compará tus posturas con las de los partidos y candidatos antes de votar. Sin sesgos, con fuentes.</p>
               <span className="go">Abrir la app →</span>
             </a>
-            <div className="card soon motion-card tool-motion-card" aria-disabled="true">
+            <a className="card motion-card tool-motion-card" href="https://quorum.politeia.ar" target="_blank" rel="noopener noreferrer">
               <CardMotionBackdrop seed="quorum" variant="tool" />
-              <span className="badge">Próximamente</span>
               <div className="ico">
                 <svg viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round"><path d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4" /><path d="M9 9v.01M9 12v.01M9 15v.01" /></svg>
               </div>
               <h3>Quórum</h3>
               <p>Seguí qué se vota en el Congreso, quién lo propone y cómo te afecta. En lenguaje claro.</p>
-              <span className="go" style={{ color: 'var(--gris)' }}>En desarrollo</span>
-            </div>
+              <span className="go">Abrir Quórum →</span>
+            </a>
             <Link className="card motion-card tool-motion-card" href="/blog">
               <CardMotionBackdrop seed="blog" variant="tool" />
               <div className="ico">
