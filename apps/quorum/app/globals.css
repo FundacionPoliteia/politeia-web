@@ -105,7 +105,7 @@ h3 { font-size: 1.35rem; }
 .explorer { display: grid; gap: 30px; }
 .project-filter-panel { display: contents; }
 .project-filter-toggle { display: none; }
-.filters { display: grid; grid-template-columns: minmax(220px, 1.6fr) repeat(3, minmax(145px, .7fr)); gap: 12px; padding: 16px; border: 1px solid var(--linea); border-radius: var(--radius-panel); background: var(--blanco); box-shadow: 0 14px 32px rgba(26,26,55,.05); }
+.filters { display: grid; grid-template-columns: minmax(220px, 1.6fr) repeat(4, minmax(125px, .7fr)); gap: 12px; padding: 16px; border: 1px solid var(--linea); border-radius: var(--radius-panel); background: var(--blanco); box-shadow: 0 14px 32px rgba(26,26,55,.05); }
 .control { display: grid; gap: 5px; }
 .control span { color: var(--gris); font-size: .7rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .control input, .control select, .field input, .field select, .field textarea { width: 100%; min-height: 48px; border: 1px solid var(--linea); border-radius: var(--radius-control); background: var(--hueso); color: var(--tinta); padding: 10px 13px; }
@@ -113,6 +113,7 @@ h3 { font-size: 1.35rem; }
 .results-head { display: flex; justify-content: space-between; gap: 20px; color: var(--gris); }
 .results-head strong { color: var(--tinta); }
 .project-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.project-view-toggle { display: none; }
 .project-card { position: relative; min-height: 340px; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--linea); border-radius: var(--radius-card); background: var(--blanco); padding: 25px; transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
 .project-card:hover { transform: translateY(-4px); border-color: rgba(19,122,159,.35); box-shadow: var(--shadow-soft); }
 .project-card::before { position: absolute; width: 170px; height: 170px; top: -95px; right: -70px; border-radius: 999px; background: var(--rosa); content: ''; }
@@ -951,6 +952,24 @@ body:has(.management-root) > .site-header, body:has(.management-root) > .site-fo
   .project-filter-panel.open .project-filter-chevron { transform: rotate(180deg); }
   .project-filter-panel:not(.open) .filters { display: none; }
   .filters, .project-grid, .profile-list, .fact-grid { grid-template-columns: 1fr; }
+  .project-view-toggle { justify-self: end; display: inline-grid; grid-template-columns: repeat(2, 1fr); gap: 3px; border: 1px solid var(--linea); border-radius: 12px; background: var(--blanco); padding: 3px; box-shadow: 0 5px 16px rgba(26,26,55,.07); }
+  .project-view-toggle button { display: grid; width: 38px; height: 36px; place-items: center; border: 0; border-radius: 8px; background: transparent; color: var(--gris); cursor: pointer; }
+  .project-view-toggle button[aria-pressed="true"] { background: var(--quorum-blue-soft); color: var(--azul); }
+  .project-view-toggle button:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
+  .project-view-toggle .material-symbols-outlined { font-size: 21px; }
+  .project-grid.project-grid--compact { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .project-grid--compact .project-card { min-height: 0; padding: 13px; }
+  .project-grid--compact .card-top { align-items: flex-start; margin-bottom: 16px; }
+  .project-grid--compact .project-card-identity { align-items: flex-start; flex-wrap: wrap; gap: 6px; }
+  .project-grid--compact .project-card-icon.material-symbols-outlined { width: 30px; height: 30px; flex-basis: 30px; font-size: 1rem; }
+  .project-grid--compact .status-pill { max-width: 100%; padding: 5px 7px; font-size: .58rem; line-height: 1.2; }
+  .project-grid--compact .docket,
+  .project-grid--compact .project-card > p,
+  .project-grid--compact .project-card-footer > :not(.card-link) { display: none; }
+  .project-grid--compact .project-card h3 { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 5; overflow-wrap: anywhere; margin-bottom: 0; font-size: 1rem; line-height: 1.17; }
+  .project-grid--compact .project-card-footer { gap: 0; padding-top: 16px; }
+  .project-grid--compact .card-link { gap: 4px; font-size: .76rem; }
+  .project-grid--compact .project-card::before { width: 90px; height: 90px; top: -52px; right: -42px; }
   .people { grid-template-columns: 1fr; }
   .signatories-show-all { width: 100%; }
   .signatories-modal { width: 100%; max-height: calc(100dvh - 24px); gap: 16px; border-radius: 20px; padding: 24px 18px; }

@@ -16,6 +16,7 @@ export default function ProjectExplorer({ data }: { data: PublicBootstrap }) {
   const searchParams = useSearchParams();
   const [query, setQuery] = useState(searchParams.get('q') || '');
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [mobileView, setMobileView] = useState<'list' | 'grid'>('list');
   const rawChamber = searchParams.get('camara') || '';
   const rawStage = searchParams.get('estado') || '';
   const legacyDebateFilter = isPublicDebateFilter(rawChamber) || isPublicDebateFilter(rawStage);
@@ -33,7 +34,7 @@ export default function ProjectExplorer({ data }: { data: PublicBootstrap }) {
       && (!publicDebate || isPublicDebateProject(project))
       && (!initiative || project.initiativeTypeId === initiative)
       && (!chamber || project.originChamberId === chamber);
-  }), [data.projects, query, stage, initiative, chamber]);
+  }), [data.projects, query, stage, publicDebate, initiative, chamber]);
 
   function setParam(name: string, value: string) {
     const params = new URLSearchParams(searchParams.toString());
@@ -61,7 +62,6 @@ export default function ProjectExplorer({ data }: { data: PublicBootstrap }) {
 
   return (
     <div className="explorer">
-        <label className="control"><span>Situación pública</span><select value={publicDebate ? PUBLIC_DEBATE_FILTER_ID : ''} onChange={(event) => setParam('situacion', event.target.value)}><option value="">Todas</option><option value={PUBLIC_DEBATE_FILTER_ID}>En debate público</option></select></label>
       <div className={`project-filter-panel${filtersOpen ? ' open' : ''}`}>
         <button className="project-filter-toggle" type="button" aria-expanded={filtersOpen} aria-controls="project-filters" onClick={() => setFiltersOpen((current) => !current)}>
           <span><strong>Filtros</strong><small>{activeFilterCount ? `${activeFilterCount} ${activeFilterCount === 1 ? 'activo' : 'activos'}` : 'Buscar y refinar proyectos'}</small></span>
@@ -70,12 +70,17 @@ export default function ProjectExplorer({ data }: { data: PublicBootstrap }) {
         <div className="filters" id="project-filters" aria-label="Filtros de proyectos">
         <label className="control"><span>Buscar</span><input type="search" value={query} placeholder="Nombre, expediente o tema" onChange={(event) => submitQuery(event.target.value)} /></label>
         <label className="control"><span>Estado</span><select value={stage} onChange={(event) => setParam('estado', event.target.value)}><option value="">Todos</option>{stages.map((item) => <option value={item.id} key={item.id}>{item.shortLabel}</option>)}</select></label>
+        <label className="control"><span>Situación pública</span><select value={publicDebate ? PUBLIC_DEBATE_FILTER_ID : ''} onChange={(event) => setParam('situacion', event.target.value)}><option value="">Todas</option><option value={PUBLIC_DEBATE_FILTER_ID}>En debate público</option></select></label>
         <label className="control"><span>Iniciativa</span><select value={initiative} onChange={(event) => setParam('iniciativa', event.target.value)}><option value="">Todas</option>{initiatives.map((item) => <option value={item.id} key={item.id}>{item.label}</option>)}</select></label>
         <label className="control"><span>Cámara</span><select value={chamber} onChange={(event) => setParam('camara', event.target.value)}><option value="">Todas</option>{chambers.map((item) => <option value={item.id} key={item.id}>{item.label}</option>)}</select></label>
         </div>
       </div>
       {activeFilterCount > 0 && <div className="results-head" aria-live="polite"><span><strong>{filtered.length}</strong> {filtered.length === 1 ? 'proyecto' : 'proyectos'}</span><button className="button ghost" type="button" onClick={() => { setQuery(''); router.replace('/#proyectos'); }}>Limpiar filtros</button></div>}
-      {filtered.length ? <div className="project-grid">{filtered.map((project) => <ProjectCard project={project} key={project.id} />)}</div> : <div className="empty-state"><strong>{data.projects.length ? 'No hay resultados para esos filtros.' : 'El contenido público está en preparación.'}</strong><span>{data.projects.length ? 'Probá con otra búsqueda o limpiá la selección.' : 'Los borradores permanecen privados hasta que el equipo editorial valide y publique cada ficha.'}</span></div>}
+      {filtered.length > 0 && <div className="project-view-toggle" role="group" aria-label="Vista de proyectos">
+        <button type="button" aria-label="Vista en grilla" aria-pressed={mobileView === 'grid'} onClick={() => setMobileView('grid')}><span className="material-symbols-outlined" aria-hidden="true">grid_view</span></button>
+        <button type="button" aria-label="Vista en lista" aria-pressed={mobileView === 'list'} onClick={() => setMobileView('list')}><span className="material-symbols-outlined" aria-hidden="true">view_list</span></button>
+      </div>}
+      {filtered.length ? <div className={`project-grid${mobileView === 'grid' ? ' project-grid--compact' : ''}`} data-mobile-view={mobileView}>{filtered.map((project) => <ProjectCard project={project} key={project.id} />)}</div> : <div className="empty-state"><strong>{data.projects.length ? 'No hay resultados para esos filtros.' : 'El contenido público está en preparación.'}</strong><span>{data.projects.length ? 'Probá con otra búsqueda o limpiá la selección.' : 'Los borradores permanecen privados hasta que el equipo editorial valide y publique cada ficha.'}</span></div>}
     </div>
   );
 }
