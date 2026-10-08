@@ -1,5 +1,15 @@
 import { expect, test } from '@playwright/test';
 
+test('la página de privacidad en borrador no se publica ni aparece en la navegación', async ({ page }) => {
+  const response = await page.goto('/privacidad');
+  expect(response?.status()).toBe(404);
+
+  await page.goto('/');
+  await expect(page.getByRole('navigation', { name: 'Navegación principal' }).getByRole('link', { name: 'Privacidad' })).toHaveCount(0);
+  await expect(page.getByRole('navigation', { name: 'Secciones de Quórum' }).getByRole('link', { name: 'Privacidad' })).toHaveCount(0);
+  await expect(page.getByRole('navigation', { name: 'Navegación móvil de Quórum' }).getByRole('link', { name: 'Privacidad' })).toHaveCount(0);
+});
+
 test('la ficha conserva legibles votos y declaraciones en desktop y mobile', async ({ page, request }, testInfo) => {
   test.setTimeout(120_000);
   const apiBase = 'http://localhost:' + (process.env.QUORUM_E2E_API_PORT || 8890);

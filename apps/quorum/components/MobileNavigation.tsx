@@ -10,7 +10,6 @@ const items = [
   { href: '/camino-de-la-ley', label: 'Camino de la ley', icon: 'route' },
   { href: '/glosario', label: 'Glosario', icon: 'menu_book' },
   { href: '/nosotros', label: 'Nosotros', icon: 'groups' },
-  { href: '/privacidad', label: 'Privacidad', icon: 'shield' },
 ];
 
 export default function MobileNavigation() {
