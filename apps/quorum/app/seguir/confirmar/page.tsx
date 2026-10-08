@@ -1,6 +1,8 @@
 import SubscriptionManager from '@/components/SubscriptionManager';
 import { fetchPublicBootstrap } from '@/lib/api';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata = { title: 'Confirmar seguimiento', robots: { index: false, follow: false } };
 
 export default async function ConfirmPage({ searchParams }: { searchParams: Promise<{ token?: string }> }) {

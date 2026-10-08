@@ -8,6 +8,10 @@ import { fetchPublicBootstrap } from '@/lib/api';
 import { projectIcon, projectIconGlyph } from '@/lib/projectIcons';
 import { projectStageVisualState } from '@/lib/projectStages';
 
+// The public catalogue lives in the API. Rendering it per request avoids
+// coupling a Vercel build to Cloud Run availability during static generation.
+export const dynamic = 'force-dynamic';
+
 export default async function HomePage() {
   const data = await fetchPublicBootstrap();
   const featuredProjects = data.projects.filter((project) => project.featured).slice(0, 6);

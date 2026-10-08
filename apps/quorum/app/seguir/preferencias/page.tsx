@@ -1,6 +1,8 @@
 import SubscriptionManager from '@/components/SubscriptionManager';
 import { fetchPublicBootstrap } from '@/lib/api';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata = { title: 'Preferencias de seguimiento', robots: { index: false, follow: false } };
 
 export default async function PreferencesPage({ searchParams }: { searchParams: Promise<{ token?: string }> }) {

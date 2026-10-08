@@ -2,6 +2,10 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { fetchPublicBootstrap } from '@/lib/api';
 
+// This route reads the managed glossary from Cloud Run. It must not be
+// prerendered during a Vercel build, where that dependency may be unavailable.
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: 'Glosario legislativo',
   description: 'Conceptos legislativos explicados en lenguaje claro.',
