@@ -352,6 +352,8 @@ h3 { font-size: 1.35rem; }
 .profile-card, .term-card { border: 1px solid var(--linea); border-radius: var(--radius-card); background: var(--blanco); padding: 24px; }
 .profile-card span, .term-card span { color: var(--azul); font-size: .74rem; font-weight: 800; }
 .profile-card p, .term-card p { color: var(--gris); }
+.term-card, .project-term-card { min-width: 0; }
+.term-card h2, .project-term-card h3, .article-page h1, .glossary-inline > button, .glossary-popover strong, .glossary-modal header > strong { min-width: 0; hyphens: auto; hyphenate-character: '-'; overflow-wrap: anywhere; word-break: normal; }
 .project-term-card { display: flex; min-height: 100%; flex-direction: column; text-decoration: none; transition: border-color .18s ease, box-shadow .18s ease; }
 .project-term-card p { flex: 1; }
 .project-term-card .term-card-destination { display: flex; align-items: center; justify-content: flex-end; gap: 7px; margin-top: 18px; border-top: 1px solid var(--linea); padding-top: 14px; color: var(--azul); letter-spacing: .02em; }

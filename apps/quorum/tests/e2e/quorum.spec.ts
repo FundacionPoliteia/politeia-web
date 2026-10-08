@@ -36,11 +36,11 @@ test('los filtros de proyectos se despliegan en mobile y permanecen visibles en 
   }
 });
 
-test('el glosario contextual abre la definición completa en un modal scrolleable', async ({ page, request }, testInfo) => {
+test('el glosario contextual y sus términos largos se mantienen legibles', async ({ page, request }, testInfo) => {
   const apiBase = `http://localhost:${process.env.QUORUM_E2E_API_PORT || 8890}`;
-  const marker = testInfo.project.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+  const marker = `${testInfo.project.name}-${Date.now()}`.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
   const slug = `modal-glosario-${marker}`;
-  const term = `Debate federal ${marker}`;
+  const term = `Anticonstitucionalmente ${marker}`;
   const definition = Array.from({ length: 70 }, (_, index) => `Párrafo ${index + 1}: explicación completa y trazable del término legislativo.`).join('\n\n');
   const createdTerm = await request.post(`${apiBase}/v1/manage/glossary`, { data: {
     term, slug: `termino-${marker}`, shortDefinition: 'Definición breve para la exploración contextual.', definition,
@@ -78,12 +78,39 @@ test('el glosario contextual abre la definición completa en un modal scrolleabl
   const published = await request.post(`${apiBase}/v1/manage/projects/${projectId}/publish`, { data: { notifyFollowers: false } });
   expect(published.ok(), await published.text()).toBeTruthy();
 
+  await page.goto('/glosario');
+  const glossaryTermHeading = page.locator('.term-card h2').filter({ hasText: term });
+  await expect(glossaryTermHeading).toBeVisible();
+  const glossaryTermLayout = await glossaryTermHeading.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { hyphens: style.hyphens, overflowWrap: style.overflowWrap, scrollWidth: element.scrollWidth, clientWidth: element.clientWidth, height: element.getBoundingClientRect().height, lineHeight: parseFloat(style.lineHeight) };
+  });
+  expect(glossaryTermLayout.hyphens).toBe('auto');
+  expect(glossaryTermLayout.overflowWrap).toBe('anywhere');
+  expect(glossaryTermLayout.scrollWidth).toBeLessThanOrEqual(glossaryTermLayout.clientWidth + 1);
+  if ((page.viewportSize()?.width || 1280) < 860) expect(glossaryTermLayout.height).toBeGreaterThan(glossaryTermLayout.lineHeight + 1);
+
+  await page.goto(`/glosario/${createdTermBody.item.slug}`);
+  const articleTermHeading = page.locator('.article-page h1');
+  await expect(articleTermHeading).toHaveText(term);
+  const articleTermLayout = await articleTermHeading.evaluate((element) => ({ scrollWidth: element.scrollWidth, clientWidth: element.clientWidth }));
+  expect(articleTermLayout.scrollWidth).toBeLessThanOrEqual(articleTermLayout.clientWidth + 1);
+
   await page.goto(`/proyectos/${slug}`);
+  const projectTermHeading = page.locator('.project-term-card h3').filter({ hasText: term });
+  await expect(projectTermHeading).toBeVisible();
+  const projectTermLayout = await projectTermHeading.evaluate((element) => ({ scrollWidth: element.scrollWidth, clientWidth: element.clientWidth }));
+  expect(projectTermLayout.scrollWidth).toBeLessThanOrEqual(projectTermLayout.clientWidth + 1);
   const trigger = page.getByRole('button', { name: term });
   await expect(trigger).toBeVisible();
+  const triggerStyle = await trigger.evaluate((element) => getComputedStyle(element).hyphens);
+  expect(triggerStyle).toBe('auto');
   await trigger.click();
   const modal = page.getByRole('dialog', { name: term });
   await expect(modal).toBeVisible();
+  const modalTermHeading = modal.locator('header > strong');
+  const modalTermLayout = await modalTermHeading.evaluate((element) => ({ scrollWidth: element.scrollWidth, clientWidth: element.clientWidth }));
+  expect(modalTermLayout.scrollWidth).toBeLessThanOrEqual(modalTermLayout.clientWidth + 1);
   await expect(modal).toContainText(definition.slice(0, 80));
   await expect(modal.getByRole('link', { name: 'Referencia oficial' })).toBeVisible();
   expect(await modal.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
