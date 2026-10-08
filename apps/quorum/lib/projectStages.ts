@@ -1,7 +1,8 @@
 import type { PublicProject, WorkflowDefinition } from '@politeia/quorum-contracts';
-import { PREPARATION_STAGE_ID, withPreparationStage } from '@politeia/quorum-contracts';
+import { effectiveProjectStageId, PREPARATION_STAGE_ID, withPreparationStage } from '@politeia/quorum-contracts';
+import { isProjectAwaitingFormalEntry } from './projectIngress';
 
-export type StageVisualState = 'normal' | 'forward' | 'backward' | 'closed' | 'promulgated' | 'preparation';
+export type StageVisualState = 'normal' | 'forward' | 'backward' | 'closed' | 'promulgated' | 'preparation' | 'unfiled';
 
 export type ProjectStageTransition = {
   currentStageId: string;
@@ -27,7 +28,9 @@ export function chronologyStageVisuals(project: Pick<PublicProject, 'currentStag
   return new Map([...chronologyStageTransitions(project)].map(([id, transition]) => [id, transition.state]));
 }
 
-export function projectStageVisualState(project: Pick<PublicProject, 'currentStageId' | 'historicalStageId' | 'updates' | 'workflow'>): StageVisualState {
+export function projectStageVisualState(project: Pick<PublicProject, 'currentStageId' | 'historicalStageId' | 'updates' | 'workflow' | 'originChamberId'>): StageVisualState {
+  if (effectiveProjectStageId(project) === PREPARATION_STAGE_ID) return 'preparation';
+  if (isProjectAwaitingFormalEntry(project)) return 'unfiled';
   return latestProjectStageTransition(project)?.state || stageVisualState(project.workflow, project.currentStageId, null);
 }
 

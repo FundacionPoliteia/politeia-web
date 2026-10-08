@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { effectiveProjectStageId, glossaryTermAppearsInTexts, hasChronologyChanges, projectIconSchema, slugify, stageProgress, workflowDefinitionSchema } from './index.js';
+import { effectiveProjectStageId, glossaryTermAppearsInTexts, hasChronologyChanges, isPublicDebateFilter, isPublicDebateProject, matchesProjectStageFilter, projectIconSchema, PUBLIC_DEBATE_FILTER_ID, slugify, stageProgress, workflowDefinitionSchema } from './index.js';
 
 const workflow = workflowDefinitionSchema.parse({
   id: 'legislativo-nacional-v1',
@@ -49,6 +49,24 @@ describe('effectiveProjectStageId', () => {
 
   it('usa la etapa histórica cuando todavía no hay cambios de etapa', () => {
     expect(effectiveProjectStageId({ currentStageId: 'ingreso', updates: [{ id: 'note', date: '2026-08-09', title: 'Nota', body: 'Sin cambio', stageId: null, sources: [] }] })).toBe('ingreso');
+  });
+});
+
+describe('public debate status filter', () => {
+  const baseProject = { currentStageId: 'mesa-de-entrada', updates: [] };
+
+  it('recognizes legacy public-debate text without changing the origin chamber', () => {
+    const project = { ...baseProject, docketNumber: 'ACTUALMENTE EN DEBATE PÚBLICO', originChamberId: 'sin-ingresar-todavia' };
+    expect(isPublicDebateFilter('debate-publico')).toBe(true);
+    expect(isPublicDebateFilter('sin-ingresar-todavia')).toBe(false);
+    expect(isPublicDebateProject({ originChamberId: 'sin-ingresar-todavia' })).toBe(false);
+    expect(isPublicDebateProject(project)).toBe(true);
+    expect(matchesProjectStageFilter(project, PUBLIC_DEBATE_FILTER_ID)).toBe(true);
+  });
+
+  it('recognizes the old manager category and lets an explicit choice override legacy inference', () => {
+    expect(isPublicDebateProject({ originChamberId: 'en-debate-publico' })).toBe(true);
+    expect(isPublicDebateProject({ publicDebate: false, docketNumber: 'ACTUALMENTE EN DEBATE PÚBLICO', originChamberId: 'sin-ingresar-todavia' })).toBe(false);
   });
 });
 

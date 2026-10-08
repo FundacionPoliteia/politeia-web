@@ -14,6 +14,7 @@ export const projectChangeFields = {
   title: { section: 'identity', label: 'Título' }, slug: { section: 'identity', label: 'Slug' },
   docketNumber: { section: 'identity', label: 'Expediente' }, entryDate: { section: 'identity', label: 'Fecha de ingreso' },
   originChamberId: { section: 'identity', label: 'Cámara de origen' }, initiativeTypeId: { section: 'identity', label: 'Iniciativa' },
+  publicDebate: { section: 'identity', label: 'Debate público' },
   workflowId: { section: 'stages', label: 'Proceso legislativo' }, workflowVersion: { section: 'stages', label: 'Versión del proceso' },
   currentStageId: { section: 'stages', label: 'Etapa inicial o histórica' }, stageExplanationOverrides: { section: 'stages', label: 'Explicaciones personalizadas' },
   summary: { section: 'summary', label: 'Resumen' }, summaryFormat: { section: 'summary', label: 'Formato' },
@@ -86,7 +87,7 @@ export function compareProjectChanges(current: Project, published?: Project | nu
       const significant = kind !== 'reordered' && (
         ['votes', 'chronology', 'people'].includes(section) ||
         (section === 'positions' && (kind !== 'modified' || /\.(quote|stance)$/.test(path))) ||
-        /^(originChamberId|initiativeTypeId|currentStageId|workflowId|workflowVersion)$/.test(path)
+        /^(originChamberId|initiativeTypeId|publicDebate|currentStageId|workflowId|workflowVersion)$/.test(path)
       );
       fields.push({ path: path + suffix, label: label + (suffix ? ' · Orden' : ''), section, kind, before: oldValue ?? null, after: newValue ?? null, significant,
         ...(path === 'summary' || path === 'impact' ? { beforeFormat: published?.[path === 'summary' ? 'summaryFormat' : 'impactFormat'] || 'plain', afterFormat: current[path === 'summary' ? 'summaryFormat' : 'impactFormat'] } : {}),

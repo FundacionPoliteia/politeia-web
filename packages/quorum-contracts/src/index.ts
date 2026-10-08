@@ -188,6 +188,7 @@ export const projectSchema = z.object({
   entryDate: isoDateSchema.nullable().default(null),
   originChamberId: slugSchema.nullable().default(null),
   initiativeTypeId: slugSchema.nullable().default(null),
+  publicDebate: z.boolean().optional(),
   workflowId: slugSchema,
   workflowVersion: z.number().int().positive(),
   currentStageId: slugSchema,
@@ -628,6 +629,37 @@ export function effectiveProjectStageId(project: Pick<Project, 'currentStageId' 
     }
   });
   return effective;
+}
+
+export const PUBLIC_DEBATE_FILTER_ID = 'debate-publico';
+export const LEGACY_PUBLIC_DEBATE_CATALOG_ID = 'en-debate-publico';
+
+export function isPublicDebateFilter(value: string) {
+  return normalizeGlossarySearchText(value).includes('debate publico');
+}
+
+export function isPublicDebateProject(project: {
+  publicDebate?: boolean;
+  originChamberId?: string | null;
+  docketNumber?: string | null;
+}) {
+  if (project.publicDebate !== undefined) return project.publicDebate;
+  return isPublicDebateFilter(project.originChamberId || '')
+    || normalizeGlossarySearchText(project.docketNumber || '').includes('debate publico');
+}
+
+export function matchesProjectStageFilter(
+  project: Pick<Project, 'currentStageId' | 'updates'> & {
+    publicDebate?: boolean;
+    originChamberId?: string | null;
+    docketNumber?: string | null;
+  },
+  selectedStageId: string,
+) {
+  if (!selectedStageId) return true;
+  return isPublicDebateFilter(selectedStageId)
+    ? isPublicDebateProject(project)
+    : effectiveProjectStageId(project) === selectedStageId;
 }
 
 export function hasChronologyChanges(

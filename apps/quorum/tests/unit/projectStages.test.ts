@@ -11,8 +11,8 @@ const workflow = { stages: [
   { id: 'archivado', label: 'Archivado', shortLabel: 'Archivado', order: 4, branchFromId: 'comisiones', terminal: true, active: true },
 ] } as WorkflowDefinition;
 
-function project(updates: PublicProject['updates'], currentStageId = 'dictamen') {
-  return { workflow, updates, currentStageId };
+function project(updates: PublicProject['updates'], currentStageId = 'dictamen', originChamberId: string | null = null) {
+  return { workflow, updates, currentStageId, originChamberId };
 }
 
 describe('señales visuales de etapa', () => {
@@ -54,5 +54,10 @@ describe('señales visuales de etapa', () => {
   it('distingue cierre y promulgación', () => {
     expect(projectStageVisualState(project([{ id: 'closed', date: '2026-08-02', title: 'Archivo', body: 'Cierre', stageId: 'archivado', sources: [] }], 'archivado'))).toBe('closed');
     expect(projectStageVisualState(project([{ id: 'law', date: '2026-08-02', title: 'Promulgada', body: 'Ley', stageId: 'promulgacion', sources: [] }], 'promulgacion'))).toBe('promulgated');
+  });
+
+  it('reserva el ámbar para fichas que todavía no ingresaron formalmente', () => {
+    expect(projectStageVisualState(project([], 'ingreso', 'sin-ingresar-todavia'))).toBe('unfiled');
+    expect(projectStageVisualState(project([], 'ingreso'))).toBe('normal');
   });
 });
