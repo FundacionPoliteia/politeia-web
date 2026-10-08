@@ -5,8 +5,6 @@ import { useEffect, useRef } from 'react';
 type Particle = {
   x: number;
   y: number;
-  vx: number;
-  vy: number;
   homeX: number;
   homeY: number;
   radius: number;
@@ -54,8 +52,7 @@ export default function KineticAdvanceWord() {
     let animationFrame = 0;
     let visible = true;
     let scrollPhase = window.scrollY * 0.012;
-    let scrollImpulse = 0;
-    let previousScrollY = window.scrollY;
+    let previousFrameTime = 0;
     let blue = '#137a9f';
     let pink = '#fce3da';
 
@@ -71,8 +68,6 @@ export default function KineticAdvanceWord() {
         particles.push({
           x: homeX,
           y: homeY,
-          vx: 0,
-          vy: 0,
           homeX,
           homeY,
           radius: 0.7 + random() * 1.45,
@@ -117,15 +112,16 @@ export default function KineticAdvanceWord() {
         return;
       }
 
+      const elapsed = previousFrameTime ? Math.min(50, time - previousFrameTime) : 16.667;
+      previousFrameTime = time;
+      const settle = 1 - Math.exp(-elapsed / 115);
       const isPointerDriven = finePointer.matches && window.innerWidth > 700 && pointer.active;
       const pointerX = pointer.active ? pointer.x : width / 2;
       const pointerY = pointer.active ? pointer.y : height / 2;
       const normalizedX = pointer.active ? Math.max(-1, Math.min(1, (pointerX / width - 0.5) * 2)) : 0;
       const normalizedY = pointer.active ? Math.max(-1, Math.min(1, (pointerY / height - 0.5) * 2)) : 0;
-      const mobileWave = Math.max(-1, Math.min(1, scrollImpulse / 34));
 
       context.clearRect(0, 0, width, height);
-      const now = time * 0.00055;
 
       for (const particle of particles) {
         let targetX = particle.homeX;
@@ -142,15 +138,13 @@ export default function KineticAdvanceWord() {
           targetY += (deltaY / distance) * influence * 12 * particle.depth;
         } else {
           targetX += Math.sin(scrollPhase + particle.phase) * (3.5 + particle.depth * 3);
-          targetY += Math.cos(scrollPhase * 0.78 + particle.phase) * (2 + particle.depth * 3) + mobileWave * particle.depth * 8;
+          targetY += Math.cos(scrollPhase * 0.78 + particle.phase) * (2 + particle.depth * 3);
         }
 
-        targetX += Math.sin(now + particle.phase) * 1.4 * particle.depth;
-        targetY += Math.cos(now * 0.82 + particle.phase) * 1.1 * particle.depth;
-        particle.vx = (particle.vx + (targetX - particle.x) * 0.035) * 0.88;
-        particle.vy = (particle.vy + (targetY - particle.y) * 0.035) * 0.88;
-        particle.x += particle.vx;
-        particle.y += particle.vy;
+        const deltaX = targetX - particle.x;
+        const deltaY = targetY - particle.y;
+        particle.x = Math.abs(deltaX) < 0.045 ? targetX : particle.x + deltaX * settle;
+        particle.y = Math.abs(deltaY) < 0.045 ? targetY : particle.y + deltaY * settle;
       }
 
       for (let first = 0; first < particles.length; first += 1) {
@@ -178,7 +172,6 @@ export default function KineticAdvanceWord() {
         context.fill();
       }
       context.globalAlpha = 1;
-      scrollImpulse *= 0.9;
     };
 
     const onPointerMove = (event: PointerEvent) => {
@@ -209,9 +202,7 @@ export default function KineticAdvanceWord() {
     };
     const onScroll = () => {
       const currentScrollY = window.scrollY;
-      scrollImpulse = Math.max(-48, Math.min(48, currentScrollY - previousScrollY));
       scrollPhase = currentScrollY * 0.012;
-      previousScrollY = currentScrollY;
     };
 
     const resizeObserver = new ResizeObserver(resize);
