@@ -2,11 +2,19 @@
 
 import Link from 'next/link';
 import PersonPhoto from './PersonPhoto';
-import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import type { Legislator, PublicLegislatorAttribution } from '@politeia/quorum-contracts';
 import { formatDate } from '@/lib/api';
 
-export default function LegislatorDrawer({ author, signatories, profiles }: { author: PublicLegislatorAttribution | null; signatories: PublicLegislatorAttribution[]; profiles: Legislator[] }) {
+type LegislatorModalOpener = (person: Legislator, event: ReactMouseEvent<HTMLButtonElement>) => void;
+const LegislatorModalContext = createContext<LegislatorModalOpener | null>(null);
+export function useLegislatorModal() {
+  const open = useContext(LegislatorModalContext);
+  if (!open) throw new Error('ProjectPositions debe estar dentro de LegislatorDrawer.');
+  return open;
+}
+
+export default function LegislatorDrawer({ author, signatories, profiles, children }: { author: PublicLegislatorAttribution | null; signatories: PublicLegislatorAttribution[]; profiles: Legislator[]; children?: ReactNode }) {
   const [selected, setSelected] = useState<PublicLegislatorAttribution | null>(null);
   const [showAllSignatories, setShowAllSignatories] = useState(false);
   const [signatoryQuery, setSignatoryQuery] = useState('');
@@ -56,16 +64,18 @@ export default function LegislatorDrawer({ author, signatories, profiles }: { au
   }, [showAllSignatories]);
 
   function open(person: PublicLegislatorAttribution, event: ReactMouseEvent<HTMLButtonElement>) { openerRef.current = event.currentTarget; setSelected(person); }
+  function openProfile(person: Legislator, event: ReactMouseEvent<HTMLButtonElement>) { openerRef.current = event.currentTarget; setSelected(person); }
   function openFromSignatories(person: PublicLegislatorAttribution) { openerRef.current = signatoriesTriggerRef.current; setShowAllSignatories(false); setSelected(person); }
   function close() { setSelected(null); requestAnimationFrame(() => openerRef.current?.focus()); }
   function closeSignatories() { setShowAllSignatories(false); setSignatoryQuery(''); requestAnimationFrame(() => signatoriesTriggerRef.current?.focus()); }
 
-  if (!author && !signatories.length) return null;
+  if (!author && !signatories.length && !children) return null;
   return <>
-    <div className="project-people">
+    {(author || signatories.length > 0) && <div className="project-people">
       {author && <section className="project-people-group"><span className="project-people-label">Autoría</span><button className="author-card" type="button" onClick={(event) => open(author, event)}><span><strong>{author.fullName}</strong><small>{personSummary(author)}</small></span><span aria-hidden="true">Ver datos →</span></button></section>}
       {signatories.length > 0 && <section className="project-people-group"><div className="project-people-heading"><span className="project-people-label">Firmantes</span><strong>{signatories.length}</strong></div><div className="people">{previewSignatories.map((person) => <button className="person-chip" type="button" key={person.id} onClick={(event) => open(person, event)}><strong>{person.fullName}</strong><small>{person.bloc || person.party || officeLabel(person.office)}</small></button>)}</div>{signatories.length > previewSignatories.length && <button ref={signatoriesTriggerRef} className="button ghost signatories-show-all" type="button" onClick={() => { setSignatoryQuery(''); setShowAllSignatories(true); }}>Ver los {signatories.length} firmantes <span aria-hidden="true">→</span></button>}</section>}
-    </div>
+    </div>}
+    {children && <LegislatorModalContext.Provider value={openProfile}>{children}</LegislatorModalContext.Provider>}
     {showAllSignatories && <div className="legislator-modal-backdrop" onMouseDown={closeSignatories}>
       <section ref={signatoriesModalRef} className="signatories-modal" role="dialog" aria-modal="true" aria-labelledby="signatories-modal-title" onMouseDown={(event) => event.stopPropagation()}>
         <button ref={signatoriesCloseRef} className="legislator-modal-close" type="button" aria-label="Cerrar lista de firmantes" onClick={closeSignatories}>×</button>

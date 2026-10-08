@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import VotingResults from '@/components/VotingResults';
-import { effectiveProjectStageId, glossaryTermAppearsInTexts, type PublicProject, type SiteSettings } from '@politeia/quorum-contracts';
+import { effectiveProjectStageId, glossaryTermAppearsInTexts, type Legislator, type PublicProject, type SiteSettings } from '@politeia/quorum-contracts';
 import LegislatorDrawer from '@/components/LegislatorDrawer';
 import ShareFollow from '@/components/ShareFollow';
 import GlossaryAnnotatedText from '@/components/GlossaryAnnotatedText';
@@ -13,7 +13,7 @@ import StageTracker from '@/components/StageTracker';
 import ProjectTableOfContents from '@/components/ProjectTableOfContents';
 import ProjectPositions from '@/components/ProjectPositions';
 
-export default function ProjectDetail({ project, subscriptionsEnabled, stageExplanations = [], contentId = 'contenido' }: { project: PublicProject; subscriptionsEnabled: boolean; stageExplanations?: SiteSettings['legislativeStageExplanations']; contentId?: string }) {
+export default function ProjectDetail({ project, subscriptionsEnabled, stageExplanations = [], contentId = 'contenido', legislators = [] }: { project: PublicProject; subscriptionsEnabled: boolean; stageExplanations?: SiteSettings['legislativeStageExplanations']; contentId?: string; legislators?: Legislator[] }) {
   const currentStageId = effectiveProjectStageId(project);
   const current = project.workflow.stages.find((stage) => stage.id === currentStageId);
   const occurrenceMode = project.glossaryOccurrenceMode || 'all';
@@ -52,7 +52,9 @@ export default function ProjectDetail({ project, subscriptionsEnabled, stageExpl
       <section className="content-block"><span className="eyebrow">Impacto cotidiano</span><h2>¿Cómo me afecta?</h2><RichContent value={project.impact} format={project.impactFormat} terms={termsFor('impact')} sectionId="impact" occurrenceMode={occurrenceMode} excludedOccurrenceIds={excludedOccurrenceIds} /></section>
       {hasAttributions && <section className="content-block"><span className="eyebrow">Autoría y firmas</span><h2>Quiénes impulsan el proyecto</h2><p className="section-intro">La autoría identifica a quien presenta o impulsa la iniciativa. Los firmantes acompañan formalmente su presentación.</p><LegislatorDrawer author={authorAttribution} signatories={signatoryAttributions} profiles={profiles} /></section>}
       <VotingResults items={project.votingResults || []} />
-      <ProjectPositions items={project.positions || []} />
+      <LegislatorDrawer author={null} signatories={[]} profiles={legislators}>
+        <ProjectPositions items={project.positions || []} legislators={legislators} />
+      </LegislatorDrawer>
       {sortedUpdates.length > 0 && <section className="content-block"><span className="eyebrow">Historial público</span><h2>Cronología de avances</h2><div className="timeline">{sortedUpdates.map((update) => {
         const sectionId = `update-${update.id}`;
         const visual = chronologyVisuals.get(update.id) || 'normal';

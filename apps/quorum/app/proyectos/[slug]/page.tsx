@@ -17,5 +17,5 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
   const { slug } = await params;
   const [project, bootstrap] = await Promise.all([fetchPublicProject(slug), fetchPublicBootstrap()]);
   if (!project) notFound();
-  return <ProjectDetail project={project} subscriptionsEnabled={bootstrap.settings.subscriptionsEnabled} stageExplanations={bootstrap.settings.legislativeStageExplanations} />;
+  return <ProjectDetail project={project} subscriptionsEnabled={bootstrap.settings.subscriptionsEnabled} stageExplanations={bootstrap.settings.legislativeStageExplanations} legislators={bootstrap.legislators} />;
 }

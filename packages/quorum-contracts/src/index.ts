@@ -160,6 +160,7 @@ export const projectPositionSchema = z.object({
   stance: z.enum(['for', 'against']),
   photoUrl: photoUrlSchema.optional(),
   name: z.string().trim().min(1, 'Completá el nombre de quien declara.').max(160),
+  legislatorId: z.string().trim().min(1).nullable().optional(),
   role: z.string().trim().max(200).default(''),
   quote: z.string().trim().min(1, 'Completá la declaración.').max(6000),
   sourceLabel: z.string().trim().max(160).default(''),

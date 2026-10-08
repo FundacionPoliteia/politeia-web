@@ -4,10 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import PhotoField from './PhotoField';
 import { projectPositionSchema, projectPositionsSchema, type Legislator, type ProjectPosition } from '@politeia/quorum-contracts';
 import styles from './ProjectPositions.module.css';
-
-function normalize(value: string) {
-  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-}
+import { exactLegislatorMatch, isDeputyOrSenator, normalizeLegislatorSearch } from '@/lib/legislatorMatch';
 
 const positionFieldLabels: Record<string, string> = {
   photoUrl: 'URL de la foto', sourceUrl: 'Enlace a la fuente', sourceLabel: 'Nombre de la fuente',
@@ -70,12 +67,12 @@ export default function ProjectPositionsEditor({ items, legislators, savedItems,
     onChange(items.map((item) => item.id === id ? { ...item, ...patch } : item));
   };
   const suggestionsFor = (value: string) => {
-    const query = normalize(value);
+    const query = normalizeLegislatorSearch(value);
     if (!query) return [];
-    return legislators.filter((item) => normalize(item.fullName).includes(query)).slice(0, 6);
+    return legislators.filter((item) => isDeputyOrSenator(item) && normalizeLegislatorSearch(item.fullName).includes(query)).slice(0, 6);
   };
   const chooseLegislator = (id: string, legislator: Legislator) => {
-    update(id, { name: legislator.fullName, role: legislatorRole(legislator), ...(legislator.photoUrl ? { photoUrl: legislator.photoUrl } : {}) });
+    update(id, { name: legislator.fullName, legislatorId: legislator.id, role: legislatorRole(legislator), ...(legislator.photoUrl ? { photoUrl: legislator.photoUrl } : {}) });
     setActiveNameId(null);
   };
   const move = (index: number, offset: number) => {
@@ -94,6 +91,7 @@ export default function ProjectPositionsEditor({ items, legislators, savedItems,
       const parsedItem = projectPositionSchema.safeParse(item);
       const sourceError = parsedItem.success ? undefined : parsedItem.error.issues.find((issue) => issue.path[0] === 'sourceUrl');
       const locked = Boolean(saved && parsedItem.success && JSON.stringify(projectPositionSchema.safeParse(saved).data) === JSON.stringify(parsedItem.data) && !editing.has(item.id));
+      const suggestions = suggestionsFor(item.name);
       return <fieldset key={item.id} className={`${styles.editorRow} ${locked ? styles.lockedRow : ''}`} disabled={busy || savingId !== null}>
       <legend><span className={styles.declarationHeading}><span>{item.name || `Declaración ${index + 1}`}</span><span className={`${styles.editorStance} ${item.stance === 'for' ? styles.support : styles.opposition}`}>{item.stance === 'for' ? 'A favor' : 'En contra'}</span></span></legend>
       <div className={styles.rowSaveBar}>
@@ -112,12 +110,12 @@ export default function ProjectPositionsEditor({ items, legislators, savedItems,
           <label htmlFor={`position-name-${item.id}`}>Nombre</label>
           <input id={`position-name-${item.id}`} required maxLength={160} value={item.name} autoComplete="off" onFocus={() => setActiveNameId(item.id)} onBlur={() => window.setTimeout(() => setActiveNameId((current) => current === item.id ? null : current), 120)} onChange={(e) => {
             const name = e.target.value;
-            const match = legislators.find((legislator) => normalize(legislator.fullName) === normalize(name));
-            update(item.id, match ? { name, role: legislatorRole(match) } : { name });
+            const match = exactLegislatorMatch(name, legislators);
+            update(item.id, match ? { name, legislatorId: match.id, role: legislatorRole(match) } : { name, legislatorId: null });
             setActiveNameId(item.id);
           }} />
-          {activeNameId === item.id && suggestionsFor(item.name).length > 0 && <div className={styles.nameSuggestions} role="listbox" aria-label="Legisladores recomendados">{suggestionsFor(item.name).map((legislator) => <button key={legislator.id} type="button" role="option" onMouseDown={(event) => event.preventDefault()} onClick={() => chooseLegislator(item.id, legislator)}><strong>{legislator.fullName}</strong><small>{legislator.office === 'diputado' ? 'Diputado/a' : legislator.office === 'senador' ? 'Senador/a' : 'Legislador/a'} · {legislator.bloc || legislator.party || 'Sin bloque'}</small></button>)}</div>}
-          <small className={styles.nameHint}>Escribí un nombre o elegí una coincidencia para completar cargo y bloque.</small>
+          {activeNameId === item.id && suggestions.length > 0 && <div className={styles.nameSuggestions} role="listbox" aria-label="Diputados y senadores recomendados">{suggestions.map((legislator) => <button key={legislator.id} type="button" role="option" onMouseDown={(event) => event.preventDefault()} onClick={() => chooseLegislator(item.id, legislator)}><strong>{legislator.fullName}</strong><small>{legislator.office === 'diputado' ? 'Diputado/a' : 'Senador/a'} · {legislator.bloc || legislator.party || 'Sin bloque'}</small></button>)}</div>}
+          <small className={styles.nameHint}>Buscá o elegí un diputado/a o senador/a cargado. El nombre abre el modal sólo si coincide exactamente con un perfil publicado.</small>
         </div>
         <label className="field">Cargo o espacio político<input maxLength={200} value={item.role} onChange={(e) => update(item.id, { role: e.target.value })} /></label>
         <label className="field">Fecha de la declaración<input type="date" value={item.date || ''} onChange={(e) => update(item.id, { date: e.target.value || null })} /></label>

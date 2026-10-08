@@ -1,11 +1,17 @@
-import type { ProjectPosition } from '@politeia/quorum-contracts';
+'use client';
+
+import type { Legislator, ProjectPosition } from '@politeia/quorum-contracts';
+import { useLegislatorModal } from '@/components/LegislatorDrawer';
 import { formatDate } from '@/lib/api';
 import { declarationExcerpt } from '@/lib/declarationExcerpt';
+import { exactLegislatorMatch, isDeputyOrSenator } from '@/lib/legislatorMatch';
 import styles from './ProjectPositions.module.css';
 import PersonPhoto from './PersonPhoto';
 
-export default function ProjectPositions({ items }: { items: ProjectPosition[] }) {
+export default function ProjectPositions({ items, legislators }: { items: ProjectPosition[]; legislators: Legislator[] }) {
+  const openLegislator = useLegislatorModal();
   if (!items.length) return null;
+  const publicLegislators = legislators.filter((legislator) => legislator.published && isDeputyOrSenator(legislator));
   const orderedItems = [...items.filter((item) => item.stance === 'for'), ...items.filter((item) => item.stance === 'against')];
   return <section className="content-block">
     <span className="eyebrow">Voces del debate</span>
@@ -22,9 +28,10 @@ export default function ProjectPositions({ items }: { items: ProjectPosition[] }
     <div className={styles.masonry}>
           {orderedItems.map((item) => {
             const excerpt = declarationExcerpt(item.quote);
+            const legislator = exactLegislatorMatch(item.name, publicLegislators, item.legislatorId);
             return <article className={`${styles.statement} ${item.stance === 'for' ? styles.support : styles.opposition}`} key={item.id}>
             <span className={styles.stanceLabel}>{item.stance === 'for' ? 'A favor' : 'En contra'}</span>
-            <header className={styles.person}><PersonPhoto url={item.photoUrl} name={item.name} /><div><strong>{item.name}</strong>{item.role && <span>{item.role}</span>}{item.date && <time dateTime={item.date}>{formatDate(item.date)}</time>}</div></header>
+            <header className={styles.person}><PersonPhoto url={item.photoUrl} name={item.name} /><div>{legislator ? <button className={styles.personNameButton} type="button" onClick={(event) => openLegislator(legislator, event)}><strong>{item.name}</strong></button> : <strong>{item.name}</strong>}{item.role && <span>{item.role}</span>}{item.date && <time dateTime={item.date}>{formatDate(item.date)}</time>}</div></header>
             {excerpt ? <details className={styles.quoteDetails}><summary><span className={styles.excerpt}>{excerpt}</span><span className={styles.expand}>Leer declaración completa</span><span className={styles.collapse}>Cerrar declaración</span></summary><blockquote>{item.quote}</blockquote></details> : <blockquote>{item.quote}</blockquote>}
             {item.sourceUrl && /^https?:\/\//i.test(item.sourceUrl) && <a className={styles.source} href={item.sourceUrl} target="_blank" rel="noopener noreferrer">{item.sourceLabel || 'Ver fuente'}<span className="material-symbols-outlined" aria-hidden="true">open_in_new</span></a>}
             {!item.sourceUrl && <span className={styles.sourceNote}>{item.sourceLabel || 'Fuente no consignada'}</span>}
