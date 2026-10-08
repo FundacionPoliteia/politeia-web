@@ -1,12 +1,17 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { teamMemberInputSchema, teamMemberSchema, type TeamMember, type TeamMemberInput } from '@politeia/quorum-contracts';
+import { teamMemberInputSchema, teamMemberSchema, type TeamMember, type TeamMemberInput, type TeamSocialLink } from '@politeia/quorum-contracts';
 import PhotoField from './PhotoField';
 import TeamProfiles from './TeamProfiles';
 import UnsavedChangesDialog from './UnsavedChangesDialog';
+import styles from './TeamManager.module.css';
 
-const empty: TeamMemberInput = { fullName: '', role: '', organization: 'Fundación Politeia', area: '', bio: '', photoUrl: '', order: 0 };
+const empty: TeamMemberInput = { fullName: '', role: '', organization: 'Fundación Politeia', area: '', bio: '', photoUrl: '', socialLinks: [], order: 0 };
+const socialPlatforms: Array<{ value: TeamSocialLink['platform']; label: string }> = [
+  { value: 'linkedin', label: 'LinkedIn' }, { value: 'x', label: 'X' }, { value: 'instagram', label: 'Instagram' },
+  { value: 'facebook', label: 'Facebook' }, { value: 'youtube', label: 'YouTube' }, { value: 'website', label: 'Sitio web' }, { value: 'other', label: 'Otro enlace' },
+];
 type Props = { call: (path: string, init?: RequestInit) => Promise<any>; uploadImage: (file: File) => Promise<string>; onDirtyChange: (dirty: boolean, busy?: boolean) => void };
 export default function TeamManager({ call, uploadImage, onDirtyChange }: Props) {
   const [items, setItems] = useState<TeamMember[]>([]);
@@ -84,7 +89,10 @@ export default function TeamManager({ call, uploadImage, onDirtyChange }: Props)
     } catch (caught) { setError(caught instanceof Error ? caught.message : 'No pudimos guardar. Tus cambios siguen en pantalla.'); }
     finally { inFlight.current = false; setBusy(false); }
   }
-  const set = (key: keyof TeamMemberInput, value: string | number) => { setForm(current => ({ ...current, [key]: value })); setMessage(''); };
+  const set = <Key extends keyof TeamMemberInput>(key: Key, value: TeamMemberInput[Key]) => { setForm(current => ({ ...current, [key]: value })); setMessage(''); };
+  function addSocialLink() { setForm(current => ({ ...current, socialLinks: [...current.socialLinks, { platform: 'linkedin', label: '', url: '' }] })); setMessage(''); }
+  function updateSocialLink(index: number, value: Partial<TeamSocialLink>) { setForm(current => ({ ...current, socialLinks: current.socialLinks.map((link, linkIndex) => linkIndex === index ? { ...link, ...value } : link) })); setMessage(''); }
+  function removeSocialLink(index: number) { setForm(current => ({ ...current, socialLinks: current.socialLinks.filter((_, linkIndex) => linkIndex !== index) })); setMessage(''); }
   if (loading) return <p role="status">Cargando perfiles de Quórum…</p>;
   return <section aria-label="Gestión de Nosotros"><p>Perfiles del equipo de Quórum, independientes de autores del blog y legisladores. Publicar un perfil no otorga acceso al gestor.</p><button className="button ghost" disabled={busy || uploading} onClick={() => void refresh()}>Recargar perfiles</button>
     <div className="admin-two"><aside className="admin-panel"><button className="button primary" disabled={busy || uploading} onClick={() => choose(null)}>Nuevo integrante</button><div className="table-list">{items.map(item => <button className="button ghost" key={item.id} disabled={busy || uploading} onClick={() => choose(item)}>{item.draft.fullName} · {item.published ? 'Publicado' : 'Borrador'}</button>)}</div></aside>
@@ -92,6 +100,19 @@ export default function TeamManager({ call, uploadImage, onDirtyChange }: Props)
       <fieldset disabled={busy || uploading} style={{ border: 0, padding: 0, minWidth: 0 }}>
         <div className="form-grid">{([['fullName', 'Nombre completo'], ['role', 'Función en Quórum'], ['organization', 'Organización'], ['area', 'Área o equipo de la organización']] as const).map(([key, label]) => <label className="field" key={key}>{label}<input value={form[key]} maxLength={160} onChange={event => set(key, event.target.value)} /></label>)}</div>
         <label className="field">Presentación del integrante<textarea rows={6} maxLength={6000} value={form.bio} onChange={event => set('bio', event.target.value)} /></label>
+        <fieldset className={styles.socialEditor}>
+          <legend>Redes y enlaces públicos</legend>
+          <p>Se mostrarán en el perfil público sólo después de publicar esta versión.</p>
+          <div className={styles.socialList}>
+            {form.socialLinks.map((link, index) => <div className={styles.socialRow} key={`${link.platform}-${index}`}>
+              <label className="field">Red {index + 1}<select aria-label={`Red ${index + 1}`} value={link.platform} onChange={event => updateSocialLink(index, { platform: event.target.value as TeamSocialLink['platform'] })}>{socialPlatforms.map(platform => <option key={platform.value} value={platform.value}>{platform.label}</option>)}</select></label>
+              <label className="field">URL del enlace {index + 1}<input type="url" value={link.url} maxLength={2000} placeholder="https://…" onChange={event => updateSocialLink(index, { url: event.target.value })} /></label>
+              <label className="field">Etiqueta visible <input value={link.label} maxLength={80} placeholder="Opcional" onChange={event => updateSocialLink(index, { label: event.target.value })} /></label>
+              <button className="button ghost" type="button" aria-label={`Quitar enlace ${index + 1}`} onClick={() => removeSocialLink(index)}>Quitar</button>
+            </div>)}
+          </div>
+          <button className="button ghost" type="button" onClick={addSocialLink}>Agregar red o enlace</button>
+        </fieldset>
         <label className="field">Orden de aparición<input type="number" min={0} max={10000} step={1} value={form.order} onChange={event => set('order', Number(event.target.value))} /></label>
         <PhotoField value={form.photoUrl} name={form.fullName} onChange={url => set('photoUrl', url)} onUpload={async file => { setUploading(true); try { return await uploadImage(file); } finally { setUploading(false); } }} />
       </fieldset>

@@ -12,4 +12,8 @@
 .role { color: var(--quorum-focus); font-size: .8rem; font-weight: 800; margin-bottom: 0; }
 .organization { color: var(--gris); font-size: .85rem; border-bottom: 1px solid var(--linea); padding-bottom: 16px; }
 .bio { color: var(--gris); white-space: pre-wrap; margin-bottom: 0; }
+.socialLinks { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+.socialLinks a { display: inline-flex; align-items: center; gap: 5px; border: 1px solid color-mix(in srgb, var(--azul) 26%, var(--linea)); border-radius: 999px; background: color-mix(in srgb, var(--quorum-blue-soft) 56%, var(--blanco)); padding: 7px 10px; color: var(--quorum-focus); font-size: .76rem; font-weight: 800; line-height: 1.1; transition: background .18s ease, border-color .18s ease, transform .18s ease; }
+.socialLinks a:hover, .socialLinks a:focus-visible { border-color: var(--azul); background: var(--quorum-blue-soft); color: var(--tinta); transform: translateY(-1px); }
+.socialLinks :global(.material-symbols-outlined) { font-size: .92rem; }
 @media (max-width: 540px) { .hero { padding: 44px 0 36px; } .card { grid-template-columns: 1fr; } .portrait { flex-direction: row; padding: 20px; } .portrait :global(.person-photo) { width: 88px; height: 104px; margin: 0; } .copy { padding: 24px; } }

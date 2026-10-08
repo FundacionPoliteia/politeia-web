@@ -7,7 +7,10 @@ import { createMemoryStore, setStoreForTests } from './store.js';
 import type { Role } from '@politeia/quorum-contracts';
 
 const original = { devAuth: config.devAuth, publicAccessRequired: config.publicAccessRequired, env: process.env.DEV_AUTH };
-const member = { fullName: 'Ana Equipo', role: 'Coordinación editorial', organization: 'Fundación Politeia', area: 'Quórum', bio: 'Presentación pública.', photoUrl: '', order: 1 };
+const member = {
+  fullName: 'Ana Equipo', role: 'Coordinación editorial', organization: 'Fundación Politeia', area: 'Quórum', bio: 'Presentación pública.', photoUrl: '', order: 1,
+  socialLinks: [{ platform: 'linkedin' as const, label: '', url: 'https://www.linkedin.com/in/ana-equipo/' }],
+};
 beforeEach(() => { config.devAuth = true; process.env.DEV_AUTH = 'true'; config.publicAccessRequired = false; setStoreForTests(createMemoryStore(false)); });
 afterEach(() => { config.devAuth = original.devAuth; config.publicAccessRequired = original.publicAccessRequired; if (original.env === undefined) delete process.env.DEV_AUTH; else process.env.DEV_AUTH = original.env; });
 describe('perfiles propios de Quórum', () => {
@@ -18,7 +21,7 @@ describe('perfiles propios de Quórum', () => {
     expect((await request(createApp()).get('/v1/manage/team').expect(200)).body.items[0]).toEqual(created);
     expect((await request(app).get('/v1/public/team').expect(200)).body.items).toEqual([]);
     const published = (await request(app).post(path + '/publish').send({ version: 1 }).expect(200)).body.item;
-    const changed = { ...member, fullName: 'Ana Corregida', bio: 'Borrador todavía privado', photoUrl: 'https://example.com/photo.png' };
+    const changed = { ...member, fullName: 'Ana Corregida', bio: 'Borrador todavía privado', photoUrl: 'https://example.com/photo.png', socialLinks: [{ platform: 'website' as const, label: 'Perfil institucional', url: 'https://politeia.ar/equipo/ana' }] };
     const saved = (await request(app).put(path).send({ version: published.version, draft: changed }).expect(200)).body.item;
     expect(saved.draft).toEqual(changed);
     const visible = (await request(createApp()).get('/v1/public/team').expect(200));
@@ -26,7 +29,9 @@ describe('perfiles propios de Quórum', () => {
     expect(visible.body.items).toEqual([{ ...member, id: created.id }]);
     expect(JSON.stringify(visible.body)).not.toContain('updatedBy');
     await request(app).post(path + '/publish').send({ version: saved.version }).expect(200);
-    expect((await request(app).get('/v1/public/team')).body.items[0].fullName).toBe('Ana Corregida');
+    const republished = (await request(app).get('/v1/public/team')).body.items[0];
+    expect(republished.fullName).toBe('Ana Corregida');
+    expect(republished.socialLinks).toEqual(changed.socialLinks);
     await request(app).post(path + '/unpublish').send({ version: saved.version + 1 }).expect(200);
     expect((await request(app).get('/v1/public/team')).body.items).toEqual([]);
     expect((await request(app).get('/v1/manage/team')).body.items[0].draft).toEqual(changed);
@@ -56,7 +61,18 @@ describe('perfiles propios de Quórum', () => {
     const app = createApp();
     await request(app).post('/v1/manage/team').send({ ...member, fullName: '' }).expect(422);
     await request(app).post('/v1/manage/team').send({ ...member, photoUrl: 'javascript:alert(1)' }).expect(422);
+    await request(app).post('/v1/manage/team').send({ ...member, socialLinks: [{ platform: 'linkedin', label: '', url: 'javascript:alert(1)' }] }).expect(422);
     await request(app).post('/v1/manage/team').send({ ...member, project: 'blog' }).expect(422);
     await request(app).put('/v1/manage/team/missing').send({ draft: member, version: 1 }).expect(404);
+  });
+  it('acepta perfiles existentes sin enlaces y los normaliza a una lista vacía', async () => {
+    const app = createApp();
+    const legacy = { ...member } as Partial<typeof member>;
+    delete legacy.socialLinks;
+    const created = (await request(app).post('/v1/manage/team').send(legacy).expect(201)).body.item;
+    expect(created.draft.socialLinks).toEqual([]);
+    const published = (await request(app).post(`/v1/manage/team/${created.id}/publish`).send({ version: created.version }).expect(200)).body.item;
+    expect(published.published.socialLinks).toEqual([]);
+    expect((await request(app).get('/v1/public/team')).body.items[0].socialLinks).toEqual([]);
   });
 });

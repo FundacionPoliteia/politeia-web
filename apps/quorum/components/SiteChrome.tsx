@@ -1,12 +1,10 @@
 import Link from 'next/link';
+// The public navbar is shared with the parent Politeia site so both surfaces keep one visual contract.
+// @ts-expect-error The root app is a JavaScript Next application and exports this shared client component.
+import PublicNavbar from '../../../components/PublicNavbar';
 
-export function SiteHeader() {
-  return <header className="site-header">
-    <div className="shell header-inner">
-      <Link className="wordmark" href="/" aria-label="Quórum Politeia, inicio"><strong className="wordmark-quorum" aria-hidden="true"><span className="wordmark-quorum-part wordmark-quorum-part-first">Quó</span><span className="wordmark-quorum-part wordmark-quorum-part-second">rum</span></strong><span>Politeia</span></Link>
-      <nav aria-label="Navegación principal"><Link href="/#proyectos">Proyectos</Link><Link href="/camino-de-la-ley">Camino de la ley</Link><Link href="/glosario">Glosario</Link><Link href="/nosotros">Nosotros</Link></nav>
-    </div>
-  </header>;
+export function SiteHeader({ showOnManagement = false }: { showOnManagement?: boolean }) {
+  return <PublicNavbar variant="quorum" showOnManagement={showOnManagement} />;
 }
 
 export function SiteFooter() {

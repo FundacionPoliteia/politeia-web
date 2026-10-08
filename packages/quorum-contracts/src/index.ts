@@ -127,6 +127,15 @@ export const photoUrlSchema = z.string().trim().max(2000).refine((value) => {
 }, 'Ingresá una URL HTTP o HTTPS válida para la foto, sin credenciales.');
 
 // Editorial team profiles are independent of blog accounts and legislators.
+export const teamSocialLinkPlatforms = ['linkedin', 'x', 'instagram', 'facebook', 'youtube', 'website', 'other'] as const;
+export const teamSocialLinkSchema = z.object({
+  platform: z.enum(teamSocialLinkPlatforms),
+  label: z.string().trim().max(80).default(''),
+  url: z.string().trim().min(1, 'Ingresá el enlace de la red.').max(2000).refine((value) => {
+    try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password; } catch { return false; }
+  }, 'Ingresá una URL HTTP o HTTPS válida, sin credenciales.'),
+}).strict();
+export type TeamSocialLink = z.infer<typeof teamSocialLinkSchema>;
 export const teamMemberInputSchema = z.object({
   fullName: z.string().trim().min(1, 'Completá el nombre.').max(160),
   role: z.string().trim().min(1, 'Completá la función en Quórum.').max(160),
@@ -134,6 +143,7 @@ export const teamMemberInputSchema = z.object({
   area: z.string().trim().max(160).default(''),
   bio: z.string().trim().max(6000).default(''),
   photoUrl: photoUrlSchema.default(''),
+  socialLinks: z.array(teamSocialLinkSchema).max(12, 'Podés agregar hasta 12 enlaces.').default([]),
   order: z.number().int().min(0).max(10000).default(0),
 }).strict();
 export type TeamMemberInput = z.infer<typeof teamMemberInputSchema>;

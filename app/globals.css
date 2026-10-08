@@ -1,4 +1,5 @@
 @import "../brand/politeia-tokens.css";
+@import "../components/public-navbar.css";
 
 * {
   margin: 0;

@@ -40,7 +40,7 @@ test('el glosario contextual y sus términos largos se mantienen legibles', asyn
   const apiBase = `http://localhost:${process.env.QUORUM_E2E_API_PORT || 8890}`;
   const marker = `${testInfo.project.name}-${Date.now()}`.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
   const slug = `modal-glosario-${marker}`;
-  const term = `Anticonstitucionalmente ${marker}`;
+  const term = `Desburocratización ${marker}`;
   const definition = Array.from({ length: 70 }, (_, index) => `Párrafo ${index + 1}: explicación completa y trazable del término legislativo.`).join('\n\n');
   const createdTerm = await request.post(`${apiBase}/v1/manage/glossary`, { data: {
     term, slug: `termino-${marker}`, shortDefinition: 'Definición breve para la exploración contextual.', definition,
@@ -79,36 +79,39 @@ test('el glosario contextual y sus términos largos se mantienen legibles', asyn
   expect(published.ok(), await published.text()).toBeTruthy();
 
   await page.goto('/glosario');
-  const glossaryTermHeading = page.locator('.term-card h2').filter({ hasText: term });
+  const glossaryTermHeading = page.getByRole('link', { name: term, exact: true }).locator('..');
   await expect(glossaryTermHeading).toBeVisible();
   const glossaryTermLayout = await glossaryTermHeading.evaluate((element) => {
     const style = getComputedStyle(element);
     return { hyphens: style.hyphens, overflowWrap: style.overflowWrap, scrollWidth: element.scrollWidth, clientWidth: element.clientWidth, height: element.getBoundingClientRect().height, lineHeight: parseFloat(style.lineHeight) };
   });
-  expect(glossaryTermLayout.hyphens).toBe('auto');
+  expect(glossaryTermLayout.hyphens).toBe('manual');
   expect(glossaryTermLayout.overflowWrap).toBe('anywhere');
+  expect(await glossaryTermHeading.textContent()).toContain('Desburocratiz\u00adación');
   expect(glossaryTermLayout.scrollWidth).toBeLessThanOrEqual(glossaryTermLayout.clientWidth + 1);
   if ((page.viewportSize()?.width || 1280) < 860) expect(glossaryTermLayout.height).toBeGreaterThan(glossaryTermLayout.lineHeight + 1);
 
   await page.goto(`/glosario/${createdTermBody.item.slug}`);
   const articleTermHeading = page.locator('.article-page h1');
-  await expect(articleTermHeading).toHaveText(term);
+  await expect(articleTermHeading).toHaveAttribute('aria-label', term);
+  expect(await articleTermHeading.textContent()).toContain('Desburocratiz\u00adación');
   const articleTermLayout = await articleTermHeading.evaluate((element) => ({ scrollWidth: element.scrollWidth, clientWidth: element.clientWidth }));
   expect(articleTermLayout.scrollWidth).toBeLessThanOrEqual(articleTermLayout.clientWidth + 1);
 
   await page.goto(`/proyectos/${slug}`);
-  const projectTermHeading = page.locator('.project-term-card h3').filter({ hasText: term });
+  const projectTermHeading = page.getByRole('link', { name: `Abrir la definición completa de ${term}`, exact: true }).locator('h3');
   await expect(projectTermHeading).toBeVisible();
   const projectTermLayout = await projectTermHeading.evaluate((element) => ({ scrollWidth: element.scrollWidth, clientWidth: element.clientWidth }));
   expect(projectTermLayout.scrollWidth).toBeLessThanOrEqual(projectTermLayout.clientWidth + 1);
   const trigger = page.getByRole('button', { name: term });
   await expect(trigger).toBeVisible();
   const triggerStyle = await trigger.evaluate((element) => getComputedStyle(element).hyphens);
-  expect(triggerStyle).toBe('auto');
+  expect(triggerStyle).toBe('manual');
   await trigger.click();
   const modal = page.getByRole('dialog', { name: term });
   await expect(modal).toBeVisible();
   const modalTermHeading = modal.locator('header > strong');
+  expect(await modalTermHeading.textContent()).toContain('Desburocratiz\u00adación');
   const modalTermLayout = await modalTermHeading.evaluate((element) => ({ scrollWidth: element.scrollWidth, clientWidth: element.clientWidth }));
   expect(modalTermLayout.scrollWidth).toBeLessThanOrEqual(modalTermLayout.clientWidth + 1);
   await expect(modal).toContainText(definition.slice(0, 80));

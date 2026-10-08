@@ -7,7 +7,18 @@ test('la página de privacidad en borrador no se publica ni aparece en la navega
   await page.goto('/');
   await expect(page.getByRole('navigation', { name: 'Navegación principal' }).getByRole('link', { name: 'Privacidad' })).toHaveCount(0);
   await expect(page.getByRole('navigation', { name: 'Secciones de Quórum' }).getByRole('link', { name: 'Privacidad' })).toHaveCount(0);
-  await expect(page.getByRole('navigation', { name: 'Navegación móvil de Quórum' }).getByRole('link', { name: 'Privacidad' })).toHaveCount(0);
+  const mobileNavigation = page.getByRole('navigation', { name: 'Navegación móvil de Quórum' });
+  await expect(mobileNavigation.getByRole('link', { name: 'Privacidad' })).toHaveCount(0);
+  if ((page.viewportSize()?.width || 1280) <= 860) {
+    await expect(mobileNavigation.getByRole('link')).toHaveCount(5);
+    expect(await mobileNavigation.evaluate((element) => getComputedStyle(element).gridTemplateColumns.trim().split(/\s+/).length)).toBe(5);
+  }
+
+  await page.goto('/gestion');
+  await expect(page.getByRole('navigation', { name: 'Navegación móvil de Quórum' })).toHaveCount(0);
+
+  await page.goto('/acceso');
+  await expect(page.getByRole('navigation', { name: 'Navegación móvil de Quórum' })).toHaveCount(0);
 });
 
 test('la ficha conserva legibles votos y declaraciones en desktop y mobile', async ({ page, request }, testInfo) => {
@@ -68,6 +79,12 @@ test('la ficha conserva legibles votos y declaraciones en desktop y mobile', asy
   await expect(declarationDetails.locator('blockquote')).toBeHidden();
 
   const chart = page.locator('.vote-chart').first();
+  const trackBounds = await chart.locator('.vote-track').evaluateAll((tracks) => tracks.map((track) => {
+    const bounds = track.getBoundingClientRect();
+    return { left: bounds.left, right: bounds.right };
+  }));
+  expect(new Set(trackBounds.map((bounds) => Math.round(bounds.left * 10))).size).toBe(1);
+  expect(new Set(trackBounds.map((bounds) => Math.round(bounds.right * 10))).size).toBe(1);
   for (const [rowClass, expected] of [['vote-yes', '130'], ['vote-no', '0'], ['vote-abstention', '1000']]) {
     const row = chart.locator('.' + rowClass);
     const count = row.locator('strong');

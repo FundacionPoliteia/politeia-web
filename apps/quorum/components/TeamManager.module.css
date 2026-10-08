@@ -1,0 +1,57 @@
+.socialEditor {
+  display: grid;
+  gap: 14px;
+  margin: 0 0 16px;
+  border: 1px solid var(--linea);
+  border-radius: 14px;
+  background: #fbfaf8;
+  padding: 18px;
+}
+
+.socialEditor legend {
+  padding-inline: 6px;
+  color: var(--tinta);
+  font-size: .86rem;
+  font-weight: 750;
+}
+
+.socialEditor > p {
+  margin: 0;
+  color: var(--gris);
+  font-size: .8rem;
+}
+
+.socialList {
+  display: grid;
+  gap: 10px;
+}
+
+.socialRow {
+  display: grid;
+  grid-template-columns: minmax(125px, .6fr) minmax(220px, 1.6fr) minmax(150px, .8fr) auto;
+  align-items: end;
+  gap: 10px;
+  border: 1px solid var(--linea);
+  border-radius: 12px;
+  background: var(--blanco);
+  padding: 12px;
+}
+
+.socialRow :global(.field) {
+  min-width: 0;
+  margin: 0;
+}
+
+.socialRow :global(.button) {
+  min-height: 44px;
+}
+
+@media (max-width: 820px) {
+  .socialRow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 520px) {
+  .socialEditor { padding: 14px; }
+  .socialRow { grid-template-columns: 1fr; }
+  .socialRow :global(.button) { width: 100%; }
+}

@@ -7,6 +7,7 @@ import GlossaryAnnotatedText from '@/components/GlossaryAnnotatedText';
 import RichContent from '@/components/RichContent';
 import { formatDate } from '@/lib/api';
 import { richTextExcerpt, richTextPlainText } from '@/lib/richText';
+import { softHyphenate } from '@/lib/hyphenation';
 import { chronologyStageTransitions, chronologyStageVisuals, latestProjectStageTransition, projectStageVisualState } from '@/lib/projectStages';
 import StageTracker from '@/components/StageTracker';
 import ProjectTableOfContents from '@/components/ProjectTableOfContents';
@@ -65,7 +66,7 @@ export default function ProjectDetail({ project, subscriptionsEnabled, stageExpl
           <h3>{update.title}</h3><GlossaryAnnotatedText text={update.body} terms={termsFor(sectionId)} sectionId={sectionId} occurrenceMode={occurrenceMode} excludedOccurrenceIds={excludedOccurrenceIds} />
         </article>;
       })}</div></section>}
-      {project.glossary.length > 0 && <section className="content-block"><span className="eyebrow">Palabras detectadas</span><h2>Glosario del proyecto</h2><div className="profile-list">{project.glossary.map((term) => <Link className="term-card project-term-card" href={`/glosario/${term.slug}`} aria-label={`Abrir la definición completa de ${term.term}`} key={term.id}><span>Definición</span><h3>{term.term}</h3><p>{richTextExcerpt(term.definition, term.definitionFormat, 150)}</p><span className="term-card-destination">Abrir definición <span aria-hidden="true">↗</span></span></Link>)}</div></section>}
+      {project.glossary.length > 0 && <section className="content-block"><span className="eyebrow">Palabras detectadas</span><h2>Glosario del proyecto</h2><div className="profile-list">{project.glossary.map((term) => <Link className="term-card project-term-card" href={`/glosario/${term.slug}`} aria-label={`Abrir la definición completa de ${term.term}`} key={term.id}><span>Definición</span><h3>{softHyphenate(term.term)}</h3><p>{richTextExcerpt(term.definition, term.definitionFormat, 150)}</p><span className="term-card-destination">Abrir definición <span aria-hidden="true">↗</span></span></Link>)}</div></section>}
       {(project.documents.length > 0 || project.sources.length > 0) && <section className="content-block"><span className="eyebrow">Trazabilidad</span><h2>Documentación y fuentes</h2><ul className="resource-list">{project.documents.map((document) => <li key={document.id}><a href={document.url} target="_blank" rel="noreferrer"><span>{document.title}</span><span aria-hidden="true">↗</span></a></li>)}{project.sources.map((source) => <li key={source.id}><a href={source.url} target="_blank" rel="noreferrer"><span>{source.label}</span><span aria-hidden="true">↗</span></a></li>)}</ul></section>}
     </article><aside><div className="sidebar-card"><h3>Guardá o compartí esta ficha</h3><p>El enlace siempre apunta a la última versión publicada por el equipo de Quórum.</p><ShareFollow projectId={project.id} title={project.title} subscriptionsEnabled={subscriptionsEnabled} /></div></aside></div></section>
   </main>;

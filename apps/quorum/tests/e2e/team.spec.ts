@@ -9,12 +9,16 @@ test('Nosotros guarda y publica perfiles sin filtrar borradores; navegación des
   await manager.getByLabel('Función en Quórum').fill('Coordinación editorial');
   await manager.getByLabel('Área o equipo de la organización').fill('Investigación');
   await manager.getByLabel('Presentación del integrante').fill('Trabajamos para acercar la actividad legislativa a la ciudadanía.');
+  await manager.getByRole('button', { name: 'Agregar red o enlace', exact: true }).click();
+  await manager.getByLabel('Red 1').selectOption('linkedin');
+  await manager.getByLabel('URL del enlace 1').fill('https://www.linkedin.com/in/equipo-quorum/');
   await manager.getByRole('button', { name: 'Guardar borrador', exact: true }).click();
   await expect(manager.getByRole('status')).toContainText('Borrador guardado');
   await page.reload();
   await page.getByRole('button', { name: 'Nosotros', exact: true }).click();
   await manager.getByRole('button', { name: `${name} · Borrador`, exact: true }).click();
   await expect(manager.getByLabel('Área o equipo de la organización')).toHaveValue('Investigación');
+  await expect(manager.getByLabel('URL del enlace 1')).toHaveValue('https://www.linkedin.com/in/equipo-quorum/');
   const publicPage = await page.context().newPage();
   await publicPage.goto('/nosotros');
   await expect(publicPage.getByRole('heading', { name, exact: true })).toHaveCount(0);
@@ -23,6 +27,7 @@ test('Nosotros guarda y publica perfiles sin filtrar borradores; navegación des
   await expect(manager.getByRole('status')).toContainText('Perfil publicado');
   await publicPage.reload();
   await expect(publicPage.getByRole('heading', { name, exact: true })).toBeVisible();
+  await expect(publicPage.getByRole('link', { name: 'LinkedIn', exact: true })).toHaveAttribute('href', 'https://www.linkedin.com/in/equipo-quorum/');
   await expect(publicPage.getByRole('link', { name: 'Nosotros', exact: true }).first()).toBeAttached();
   if ((page.viewportSize()?.width || 1280) < 860) await expect(publicPage.getByRole('navigation', { name: 'Navegación móvil de Quórum' }).getByRole('link', { name: 'Nosotros', exact: true })).toBeVisible();
   expect(await publicPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

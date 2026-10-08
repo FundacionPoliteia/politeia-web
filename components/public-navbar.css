@@ -1,0 +1,47 @@
+.wrap { max-width: 1480px; margin: 0 auto; padding: 0 32px; }
+.nav { position: sticky; top: 0; z-index: 50; background: rgba(247, 245, 242, .82); backdrop-filter: blur(12px); border-bottom: 1px solid var(--linea); }
+.nav-in { display: flex; align-items: center; justify-content: space-between; height: 72px; }
+.logo { display: flex; align-items: center; gap: 10px; font-family: var(--display); font-size: 1.45rem; font-weight: 600; letter-spacing: -.01em; }
+.logo .dot { display: inline-block; width: 11px; height: 11px; flex: 0 0 11px; border-radius: 50%; background: var(--azul); transition: transform .22s ease, box-shadow .22s ease; }
+.logo:hover .dot { transform: scale(1.18); box-shadow: 0 0 0 5px rgba(19, 122, 159, .14); }
+.logo-word { display: inline-flex; align-items: baseline; }
+.logo-letter { display: inline-block; transition: color .22s ease, transform .22s ease, font-style .22s ease; text-decoration-thickness: 0; }
+.logo-letter:nth-child(1):hover { color: var(--azul); transform: translateY(-1px) rotate(-2deg); }
+.logo-letter:nth-child(2):hover { color: #2b7f9f; transform: translateY(1px) rotate(2deg); }
+.logo-letter:nth-child(3):hover { color: #253553; transform: translateY(-1px); }
+.logo-letter:nth-child(4):hover { color: #1f6f91; transform: translateY(1px) rotate(-1.5deg); }
+.logo-letter:nth-child(5):hover { color: #35516b; transform: translateY(-1px) rotate(1.5deg); }
+.logo-letter:nth-child(6):hover { color: var(--azul); transform: translateY(1px); }
+.logo-letter:nth-child(7):hover { color: #5b5b6b; transform: translateY(-1px) rotate(-1.5deg); }
+.logo-letter:nth-child(8):hover { color: var(--tinta); transform: translateY(1px) rotate(2deg); }
+.logo--quorum .logo-word { letter-spacing: -.025em; }
+.logo--quorum .logo-suffix { color: var(--azul); font-family: var(--display); font-size: .92rem; font-weight: 500; letter-spacing: 0; }
+.nav-links { display: flex; gap: 30px; align-items: center; font-size: .92rem; font-weight: 500; }
+.nav-links a { color: var(--gris); transition: color .2s; }
+.nav-links a:hover { color: var(--tinta); }
+.nav-link-shell { position: relative; display: inline-flex; align-items: center; }
+.nav-link-shell a { transition: color .2s ease, font-weight .2s ease; }
+.nav-link-shell.is-active a { color: var(--tinta); font-weight: 700; }
+.nav-link-shell.is-active::after { position: absolute; right: 0; bottom: -8px; left: 0; height: 2px; border-radius: 999px; background: var(--azul); content: ''; }
+.nav-blog-link { display: inline-flex; align-items: center; gap: 7px; }
+.nav-new-dot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: var(--azul); box-shadow: 0 0 0 4px rgba(19, 122, 159, .12); }
+.nav-cta { background: var(--tinta); color: var(--blanco) !important; padding: 10px 20px; border-radius: 100px; font-size: .86rem; font-weight: 600; }
+.nav-cta:hover { background: var(--azul); }
+.mobile-public-tabs { display: none; }
+
+@media (max-width: 860px) {
+  .nav-in { height: 62px; }
+  .nav-links { display: none; }
+  .mobile-public-tabs { position: fixed; right: 10px; bottom: max(10px, env(safe-area-inset-bottom, 0px)); left: 10px; z-index: 80; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 1px; min-height: 62px; padding: 6px; border: 1px solid rgba(26, 26, 55, .12); border-radius: 16px; background: rgba(255, 255, 255, .96); box-shadow: 0 16px 40px rgba(26, 26, 55, .2); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); isolation: isolate; transform: translateZ(0); }
+  .mobile-public-tabs.mobile-public-tabs--quorum { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .mobile-public-tab { position: relative; z-index: 1; display: grid; min-width: 0; min-height: 48px; place-items: center; align-content: center; gap: 3px; border-radius: 10px; color: var(--gris); font-size: .54rem; font-weight: 700; line-height: 1; text-align: center; transition: color .2s ease, background .2s ease; }
+  .mobile-public-tab .material-symbols-outlined { font-size: 21px; }
+  .mobile-public-tab.is-active { color: var(--tinta); background: rgba(19, 122, 159, .11); }
+  .mobile-public-tab.is-active .material-symbols-outlined { color: var(--azul); }
+  .mobile-public-tab:hover { background: rgba(19, 122, 159, .07); }
+}
+
+@media (min-width: 861px) and (max-width: 1180px) {
+  .nav-links { gap: 16px; font-size: .82rem; }
+  .nav-cta { padding-inline: 15px; }
+}

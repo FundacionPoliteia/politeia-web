@@ -5,6 +5,7 @@ import { useEffect, useId, useRef, useState, type CSSProperties, type ElementTyp
 import { createPortal } from 'react-dom';
 import type { GlossaryTerm } from '@politeia/quorum-contracts';
 import { annotateGlossaryText, glossaryOccurrenceId, type GlossaryTextSegment } from '@/lib/glossary';
+import { softHyphenate } from '@/lib/hyphenation';
 import MarkdownContent from '@/components/MarkdownContent';
 
 export default function GlossaryAnnotatedText({ text, terms, sectionId, occurrenceSectionId = sectionId, occurrenceMode = 'all', occurrenceOffsets = {}, excludedOccurrenceIds = [], as: Tag = 'p' }: { text: string; terms: GlossaryTerm[]; sectionId: string; occurrenceSectionId?: string; occurrenceMode?: 'all' | 'first' | 'custom'; occurrenceOffsets?: Record<string, number>; excludedOccurrenceIds?: string[]; as?: ElementType }) {
@@ -80,17 +81,17 @@ export default function GlossaryAnnotatedText({ text, terms, sectionId, occurren
         <button ref={(node) => { if (node) triggerRefs.current.set(key, node); else triggerRefs.current.delete(key); }} type="button" aria-haspopup="dialog" aria-expanded={active && pinned} aria-controls={active ? id : undefined} aria-describedby={active && !coarse && !pinned ? id : undefined}
           onMouseEnter={() => { if (!coarse && !pinned) { if (hoverTimer.current) clearTimeout(hoverTimer.current); hoverTimer.current = setTimeout(() => open(key, false), 140); } }} onFocus={() => { if (!coarse && !pinned) open(key, false); }}
           onBlur={(event) => { if (!coarse && !pinned && !event.currentTarget.parentElement?.contains(event.relatedTarget)) close(); }}
-          onClick={() => open(key, true)}>{segment.text}<span aria-hidden="true" className="glossary-mark">?</span></button>
+          onClick={() => open(key, true)} aria-label={segment.text}>{softHyphenate(segment.text)}<span aria-hidden="true" className="glossary-mark">?</span></button>
         {active && !coarse && !pinned && <span className={`glossary-popover ${tooltipPosition?.placement || 'above'}`} style={popoverStyle} id={id} role="tooltip">
-          <strong>{segment.term.term}</strong><span>{segment.term.shortDefinition}</span><small>Click para abrir la definición completa</small>
+          <strong>{softHyphenate(segment.term.term)}</strong><span>{segment.term.shortDefinition}</span><small>Click para abrir la definición completa</small>
         </span>}
       </dfn>;
     })}</Tag>
     {pinned && activeSegment && createPortal(
       <div className="glossary-modal-backdrop" onMouseDown={() => close(true)}>
-        <section ref={modalRef} className="glossary-modal" id={activePopupId} role="dialog" aria-modal="true" aria-labelledby={`${activePopupId}-title`} aria-describedby={`${activePopupId}-definition`} onMouseDown={(event) => event.stopPropagation()}>
+        <section ref={modalRef} className="glossary-modal" id={activePopupId} role="dialog" aria-modal="true" aria-label={activeSegment.term.term} aria-describedby={`${activePopupId}-definition`} onMouseDown={(event) => event.stopPropagation()}>
           <button className="glossary-modal-close" ref={closeRef} type="button" onClick={() => close(true)} aria-label="Cerrar definición">×</button>
-          <header><span>Glosario de Quórum</span><strong id={`${activePopupId}-title`}>{activeSegment.term.term}</strong></header>
+          <header><span>Glosario de Quórum</span><strong id={`${activePopupId}-title`}>{softHyphenate(activeSegment.term.term)}</strong></header>
           {activeSegment.term.shortDefinition && <p className="glossary-modal-lead">{activeSegment.term.shortDefinition}</p>}
           <div className="glossary-modal-definition" id={`${activePopupId}-definition`}><MarkdownContent value={activeSegment.term.definition} format={activeSegment.term.definitionFormat} /></div>
           {activeSegment.term.references.length > 0 && <section className="glossary-modal-references" aria-labelledby={`${activePopupId}-references`}><h3 id={`${activePopupId}-references`}>Fuentes y referencias</h3><ul>{activeSegment.term.references.map((reference) => <li key={reference.id}><a href={reference.url} target="_blank" rel="noreferrer">{reference.label} <span aria-hidden="true">↗</span></a></li>)}</ul></section>}
