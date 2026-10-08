@@ -57,7 +57,7 @@ h3 { font-size: 1.35rem; }
 .kinetic-advance-text { position: relative; z-index: 2; display: inline-block; text-shadow: 0 8px 28px color-mix(in srgb, var(--azul) 18%, transparent); transition: text-shadow .25s ease; pointer-events: none; }
 .kinetic-advance-canvas { position: absolute; z-index: 1; top: 50%; left: 50%; width: 142%; height: 168%; transform: translate(-50%, -50%); pointer-events: auto; }
 .kinetic-advance-canvas.is-pointer-active + .kinetic-advance-text { text-shadow: 0 10px 36px color-mix(in srgb, var(--azul) 26%, transparent); }
-.hero-copy { max-width: 62ch; color: var(--gris); font-size: 1.12rem; }
+.hero-copy { max-width: 62ch; color: var(--quorum-ink-soft); font-size: 1.12rem; }
 .hero-copy a { color: var(--azul); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
 .hero-copy a:hover { color: var(--tinta); }
 .hero-note { border: 1px solid var(--linea); border-left: 6px solid var(--azul); border-radius: var(--radius-panel); background: var(--blanco); box-shadow: var(--shadow-soft); padding: 28px; }
