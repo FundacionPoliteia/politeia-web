@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { stageProgress, type CatalogItem, type LegislativeStageExplanation, type ProjectStageExplanation, type WorkflowDefinition, type WorkflowStage } from '@politeia/quorum-contracts';
 import { getLegislativeStageContext } from '@/lib/legislativeStageContext';
 import type { StageVisualState } from '@/lib/projectStages';
@@ -22,6 +22,8 @@ export default function StageTracker({ workflow, currentStageId, previousStageId
   const progress = useMemo(() => stageProgress(workflow, currentStageId), [workflow, currentStageId]);
   const current = workflow.stages.find((stage) => stage.id === currentStageId);
   const branch = current?.branchFromId ? current : null;
+  const trackerScrollRef = useRef<HTMLDivElement>(null);
+  const currentStageRef = useRef<HTMLButtonElement>(null);
   const [hoveredStageId, setHoveredStageId] = useState<string | null>(null);
   const [pinnedStageId, setPinnedStageId] = useState<string | null>(null);
   const activeStageId = pinnedStageId || hoveredStageId;
@@ -32,6 +34,26 @@ export default function StageTracker({ workflow, currentStageId, previousStageId
   const hasDirectionalTransition = (visualState === 'backward' || visualState === 'forward') && currentStageIndex >= 0 && previousStageIndex >= 0;
   const transitionStart = Math.min(currentStageIndex, previousStageIndex);
   const transitionEnd = Math.max(currentStageIndex, previousStageIndex);
+
+  useEffect(() => {
+    const tracker = trackerScrollRef.current;
+    const stage = currentStageRef.current;
+    if (!tracker || !stage || !window.matchMedia('(max-width: 700px)').matches) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      const maxScrollLeft = Math.max(0, tracker.scrollWidth - tracker.clientWidth);
+      if (!maxScrollLeft) return;
+
+      const trackerBounds = tracker.getBoundingClientRect();
+      const stageBounds = stage.getBoundingClientRect();
+      const targetScrollLeft = tracker.scrollLeft
+        + stageBounds.left + stageBounds.width / 2
+        - trackerBounds.left - tracker.clientWidth / 2;
+      tracker.scrollLeft = Math.min(maxScrollLeft, Math.max(0, targetScrollLeft));
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [currentStageId, progress.length]);
 
   const openStage = (stage: WorkflowStage) => {
     if (!pinnedStageId) setHoveredStageId(stage.id);
@@ -58,7 +80,7 @@ export default function StageTracker({ workflow, currentStageId, previousStageId
     }}
     onKeyDownCapture={(event) => { if (event.key === 'Escape') close(); }}
   >
-    <div className="tracker-scroll" tabIndex={0} role="region" aria-label="Etapas del proyecto; desplazá horizontalmente para ver todas">
+    <div className="tracker-scroll" ref={trackerScrollRef} tabIndex={0} role="region" aria-label="Etapas del proyecto; desplazá horizontalmente para ver todas">
       <div className="tracker-main" style={{ '--track-stage-count': progress.length } as CSSProperties}>
         {progress.map((stage, index) => <button
           type="button"
@@ -67,6 +89,7 @@ export default function StageTracker({ workflow, currentStageId, previousStageId
           aria-describedby={activeStageId === stage.id ? 'stage-context-explanation' : undefined}
           aria-label={`Explicar la etapa ${stage.label}`}
           key={stage.id}
+          ref={stage.state === 'current' ? currentStageRef : undefined}
           onMouseEnter={() => openStage(stage)}
           onFocus={() => openStage(stage)}
           onClick={() => toggleStage(stage)}
