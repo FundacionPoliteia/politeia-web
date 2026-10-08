@@ -53,7 +53,7 @@ export default function ProjectExplorer({ data }: { data: PublicBootstrap }) {
       <div className={`project-filter-panel${filtersOpen ? ' open' : ''}`}>
         <button className="project-filter-toggle" type="button" aria-expanded={filtersOpen} aria-controls="project-filters" onClick={() => setFiltersOpen((current) => !current)}>
           <span><strong>Filtros</strong><small>{activeFilterCount ? `${activeFilterCount} ${activeFilterCount === 1 ? 'activo' : 'activos'}` : 'Buscar y refinar proyectos'}</small></span>
-          <span className="project-filter-chevron" aria-hidden="true">⌄</span>
+          <span className="project-filter-chevron material-symbols-outlined" aria-hidden="true">expand_more</span>
         </button>
         <div className="filters" id="project-filters" aria-label="Filtros de proyectos">
         <label className="control"><span>Buscar</span><input type="search" value={query} placeholder="Nombre, expediente o tema" onChange={(event) => submitQuery(event.target.value)} /></label>
