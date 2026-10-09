@@ -36,6 +36,37 @@ test('los filtros de proyectos se despliegan en mobile y permanecen visibles en 
   }
 });
 
+test('la ficha de proyecto mantiene sus datos en un encabezado compacto en mobile', async ({ page, request }, testInfo) => {
+  const apiBase = `http://localhost:${process.env.QUORUM_E2E_API_PORT || 8890}`;
+  const marker = `${testInfo.project.name}-${Date.now()}`.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+  const title = `Ficha compacta ${marker}`;
+  const slug = `ficha-compacta-${marker}`;
+  const createdProject = await request.post(`${apiBase}/v1/manage/projects`, { data: {
+    title, slug, workflowId: 'legislativo-nacional-v1', workflowVersion: 1, currentStageId: 'mesa-de-entrada',
+    docketNumber: `9000-${marker}`, entryDate: '2026-08-06', originChamberId: 'diputados', initiativeTypeId: 'poder-legislativo',
+    summary: 'Resumen breve de prueba.', impact: 'Impacto breve de prueba.', authorLegislatorId: null, signatoryIds: [], glossaryTermIds: [],
+    documents: [], sources: [], updates: [], featured: false, order: 99,
+  } });
+  const createdProjectBody = await createdProject.json();
+  expect(createdProject.ok(), JSON.stringify(createdProjectBody)).toBeTruthy();
+  const published = await request.post(`${apiBase}/v1/manage/projects/${createdProjectBody.item.id}/publish`, { data: { notifyFollowers: false } });
+  expect(published.ok(), await published.text()).toBeTruthy();
+
+  await page.goto(`/proyectos/${slug}`);
+  await expect(page.locator('.detail-hero h1')).toHaveText(title);
+  const projectFacts = page.locator('.project-facts-grid');
+  await expect(projectFacts.locator('.fact')).toHaveCount(4);
+  await expect(page.locator('.project-facts-updated')).toContainText('Última actualización');
+  const projectFactLayout = await projectFacts.evaluate((element) => ({ display: getComputedStyle(element).display, columns: getComputedStyle(element).gridTemplateColumns.split(' ').length, heroHeight: element.closest('.detail-hero')?.getBoundingClientRect().height || 0 }));
+  if ((page.viewportSize()?.width || 1280) <= 620) {
+    expect(projectFactLayout.display).toBe('grid');
+    expect(projectFactLayout.columns).toBe(2);
+    expect(projectFactLayout.heroHeight).toBeLessThan(400);
+  } else {
+    expect(projectFactLayout.display).toBe('contents');
+  }
+});
+
 test('el glosario contextual y sus términos largos se mantienen legibles', async ({ page, request }, testInfo) => {
   const apiBase = `http://localhost:${process.env.QUORUM_E2E_API_PORT || 8890}`;
   const marker = `${testInfo.project.name}-${Date.now()}`.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
@@ -99,6 +130,17 @@ test('el glosario contextual y sus términos largos se mantienen legibles', asyn
   expect(articleTermLayout.scrollWidth).toBeLessThanOrEqual(articleTermLayout.clientWidth + 1);
 
   await page.goto(`/proyectos/${slug}`);
+  const projectFacts = page.locator('.project-facts-grid');
+  await expect(projectFacts.locator('.fact')).toHaveCount(4);
+  await expect(page.locator('.project-facts-updated')).toContainText('Última actualización');
+  const projectFactLayout = await projectFacts.evaluate((element) => ({ display: getComputedStyle(element).display, columns: getComputedStyle(element).gridTemplateColumns.split(' ').length, heroHeight: element.closest('.detail-hero')?.getBoundingClientRect().height || 0 }));
+  if ((page.viewportSize()?.width || 1280) <= 620) {
+    expect(projectFactLayout.display).toBe('grid');
+    expect(projectFactLayout.columns).toBe(2);
+    expect(projectFactLayout.heroHeight).toBeLessThan(400);
+  } else {
+    expect(projectFactLayout.display).toBe('contents');
+  }
   const projectTermHeading = page.getByRole('link', { name: `Abrir la definición completa de ${term}`, exact: true }).locator('h3');
   await expect(projectTermHeading).toBeVisible();
   const projectTermLayout = await projectTermHeading.evaluate((element) => ({ scrollWidth: element.scrollWidth, clientWidth: element.clientWidth }));
