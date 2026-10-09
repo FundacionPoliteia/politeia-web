@@ -182,6 +182,7 @@ h3 { font-size: 1.35rem; }
 .content-block > h2 { scroll-margin-top: 104px; }
 .content-block h2 { margin-bottom: 18px; font-size: clamp(1.8rem, 3vw, 2.6rem); }
 .content-block p { color: var(--gris); font-size: 1.04rem; white-space: pre-wrap; }
+.project-detail-shell .content-block p { color: color-mix(in srgb, var(--gris) 82%, var(--tinta)); }
 .tracker { position: relative; z-index: 3; width: 100%; min-width: 0; margin: 20px 0 30px; padding: 26px; border: 1px solid var(--linea); border-radius: var(--radius-panel); background: var(--blanco); }
 .tracker-scroll { min-width: 0; overflow-x: auto; padding: 7px 6px 12px; scrollbar-width: thin; }
 .tracker-scroll:focus-visible { border-radius: 6px; outline-offset: 2px; }
