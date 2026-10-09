@@ -962,7 +962,7 @@ body:has(.management-root) > .site-header, body:has(.management-root) > .site-fo
   .project-section-heading > div { grid-column: 1; grid-row: 1; min-width: 0; }
   .project-section-heading > p { grid-column: 1 / -1; grid-row: 2; margin: 0 0 36px; }
   .project-section-explorer { grid-column: 1 / -1; grid-row: 3; }
-  .project-view-toggle--sticky { position: sticky; z-index: 51; top: 24px; grid-column: 2; grid-row: 1 / span 3; justify-self: end; align-self: start; margin-top: 30px; }
+  .project-view-toggle--sticky { position: sticky; z-index: 51; top: 9.5px; grid-column: 2; grid-row: 1 / span 3; justify-self: end; align-self: start; margin-top: 30px; }
   .project-view-toggle { display: inline-grid; grid-template-columns: repeat(2, 1fr); gap: 3px; border: 1px solid var(--linea); border-radius: 12px; background: var(--blanco); padding: 3px; box-shadow: 0 5px 16px rgba(26,26,55,.07); }
   .project-view-toggle button { display: grid; width: 38px; height: 36px; place-items: center; border: 0; border-radius: 8px; background: transparent; color: var(--gris); cursor: pointer; }
   .project-view-toggle button[aria-pressed="true"] { background: var(--quorum-blue-soft); color: var(--azul); }

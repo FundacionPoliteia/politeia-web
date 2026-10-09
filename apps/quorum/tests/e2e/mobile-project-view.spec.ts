@@ -67,7 +67,12 @@ test('la grilla compacta sólo cambia la vista mobile de las fichas', async ({ p
     expect(await grid.evaluate((element) => getComputedStyle(element).gridTemplateColumns.trim().split(/\s+/).length)).toBe(1);
     await grid.scrollIntoViewIfNeeded();
     await page.evaluate(() => window.scrollBy(0, 120));
-    await expect.poll(async () => (await toggle.boundingBox())?.y ?? -1).toBeCloseTo(24, 0);
+    await expect.poll(() => page.evaluate(() => {
+      const header = document.querySelector('.site-header')?.getBoundingClientRect();
+      const viewToggle = document.querySelector('.project-view-toggle--sticky')?.getBoundingClientRect();
+      if (!header || !viewToggle) return Number.POSITIVE_INFINITY;
+      return Math.abs((header.top + header.height / 2) - (viewToggle.top + viewToggle.height / 2));
+    })).toBeLessThanOrEqual(1);
   } else {
     await expect(toggle).toBeHidden();
     expect(await grid.evaluate((element) => getComputedStyle(element).gridTemplateColumns.trim().split(/\s+/).length)).toBe(3);
