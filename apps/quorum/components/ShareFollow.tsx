@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import Script from 'next/script';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { publicApiBase } from '@/lib/api';
 
 declare global { interface Window { turnstile?: { render: (element: HTMLElement, options: Record<string, unknown>) => string }; } }
@@ -11,6 +11,10 @@ export default function ShareFollow({ projectId, title, subscriptionsEnabled }: 
   const [dialog, setDialog] = useState(false);
   const [copied, setCopied] = useState(false);
   const [url, setUrl] = useState('');
+  const [minimized, setMinimized] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const actionsId = useId();
+  const toggleRef = useRef<HTMLButtonElement>(null);
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => setUrl(window.location.href), []);
   useEffect(() => () => {
@@ -33,7 +37,14 @@ export default function ShareFollow({ projectId, title, subscriptionsEnabled }: 
     metric('share-clicked');
   }
 
-  return <><div className="action-stack"><button className="button dark" type="button" onClick={share}>{copied ? 'Enlace copiado' : 'Compartir ficha'}</button><a className="button ghost" href={`https://wa.me/?text=${encodeURIComponent(`${title} · ${url}`)}`} target="_blank" rel="noreferrer">Enviar por WhatsApp</a>{subscriptionsEnabled && <button className="button primary" type="button" onClick={() => { setDialog(true); metric('follow-opened'); }}>Seguir proyecto</button>}</div>{dialog && <FollowDialog projectId={projectId} title={title} onClose={() => setDialog(false)} />}</>;
+  return <><section className={`sidebar-card project-share-card${minimized ? ' is-minimized' : ''}${expanded ? ' is-expanded' : ''}`} aria-label="Compartir ficha" onKeyDown={(event) => { if (event.key === 'Escape' && expanded) { setExpanded(false); toggleRef.current?.focus(); } }}>
+    <div className="project-share-message"><h3>Guardá o compartí esta ficha</h3><p>El enlace siempre apunta a la última versión publicada por el equipo de Quórum.</p></div>
+    <div className="project-share-mobile-controls">
+      <button ref={toggleRef} className="project-share-toggle" type="button" aria-label={expanded ? 'Cerrar opciones para compartir' : 'Abrir opciones para compartir'} aria-expanded={expanded} aria-controls={actionsId} onClick={() => { setMinimized(false); setExpanded(!expanded); }}><svg viewBox="0 0 24 24" aria-hidden="true">{expanded ? <path d="m6 9 6 6 6-6" /> : <><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4" /></>}</svg></button>
+      {!minimized && <button className="project-share-minimize" type="button" aria-label="Minimizar aviso para compartir" onClick={() => { setMinimized(true); setExpanded(false); toggleRef.current?.focus(); }}><span aria-hidden="true">×</span></button>}
+    </div>
+    <div id={actionsId} className="action-stack project-share-actions"><button className="button dark" type="button" onClick={share}>{copied ? 'Enlace copiado' : 'Compartir ficha'}</button><a className="button ghost" href={`https://wa.me/?text=${encodeURIComponent(`${title} · ${url}`)}`} target="_blank" rel="noreferrer">Enviar por WhatsApp</a>{subscriptionsEnabled && <button className="button primary" type="button" onClick={() => { setDialog(true); metric('follow-opened'); }}>Seguir proyecto</button>}</div>
+  </section>{dialog && <FollowDialog projectId={projectId} title={title} onClose={() => setDialog(false)} />}</>;
 }
 
 function FollowDialog({ projectId, title, onClose }: { projectId: string; title: string; onClose: () => void }) {

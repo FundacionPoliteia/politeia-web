@@ -246,6 +246,7 @@ h3 { font-size: 1.35rem; }
 .branch-status:hover .stage-info-mark, .branch-status:focus-visible .stage-info-mark, .branch-status.explaining .stage-info-mark { border-color: var(--azul); background: var(--azul); color: white; opacity: 1; }
 .sidebar-card { position: sticky; top: 98px; border: 1px solid var(--linea); border-radius: var(--radius-panel); background: var(--blanco); padding: 24px; }
 .sidebar-card h3 { margin-bottom: 16px; }
+.project-share-mobile-controls { display: none; }
 .action-stack { display: grid; gap: 10px; }
 .project-facts { grid-template-columns: repeat(auto-fit,minmax(min(100%,180px),1fr)); }
 .section-intro { margin-top: -8px; }
@@ -900,6 +901,20 @@ body:has(.management-root) > .site-header, body:has(.management-root) > .site-fo
   .footer-grid { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 860px) {
+  .project-share-aside { display: contents; }
+  .project-share-card { position: fixed; z-index: 79; right: 10px; bottom: calc(max(10px, env(safe-area-inset-bottom, 0px)) + 74px); left: 10px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; max-width: none; padding: 12px; border-radius: 14px; background: var(--blanco); box-shadow: 0 8px 28px rgba(26,26,55,.12); top: auto; }
+  .project-share-message { min-width: 0; }
+  .project-share-message h3 { margin: 0 0 4px; font-family: var(--texto); font-size: .8rem; line-height: 1.3; }
+  .project-share-message p { margin: 0; color: var(--gris); font-size: .75rem; line-height: 1.4; }
+  .project-share-mobile-controls { display: flex; align-items: center; gap: 4px; }
+  .project-share-toggle { display: grid; width: 44px; height: 44px; place-items: center; border: 0; border-radius: 12px; background: var(--tinta); color: var(--blanco); cursor: pointer; }
+  .project-share-toggle svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .project-share-minimize { align-self: start; width: 28px; height: 28px; border: 0; border-radius: 7px; background: transparent; color: var(--gris); font-size: 1.2rem; cursor: pointer; }
+  .project-share-card .project-share-actions { display: none; grid-column: 1 / -1; }
+  .project-share-card.is-expanded .project-share-actions { display: grid; }
+  .project-share-card .project-share-actions .button { min-height: 44px; padding: 10px 14px; font-size: .8rem; }
+  .project-share-card.is-minimized { left: auto; display: block; padding: 0; border: 0; background: transparent; }
+  .project-share-card.is-minimized .project-share-message { display: none; }
   .site-header .header-inner { height: 62px; }
   .site-header nav { display: none; }
   html:has(.mobile-public-tabs) { scroll-padding-bottom: calc(90px + env(safe-area-inset-bottom, 0px)); }
