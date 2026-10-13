@@ -101,6 +101,12 @@ export async function getManageBootstrap() {
   });
 }
 
+export async function getManageProject(id: string): Promise<Project> {
+  const project = await store().get<Project>('projects', id);
+  if (!project) throw notFound('Proyecto');
+  return project;
+}
+
 export async function previewProject(id: string, input?: unknown) {
   const project = await store().get<Project>('projects', id);
   if (!project) throw notFound('Proyecto');
@@ -111,10 +117,14 @@ export async function previewProject(id: string, input?: unknown) {
   return materializeProject(draft);
 }
 
-export async function createProject(input: unknown, actorEmail: string) {
+export async function createProject(input: unknown, actorEmail: string, idempotencyKey?: string) {
   const parsed = projectInputSchema.strict().parse(input);
   const timestamp = now();
-  const id = newId('project');
+  const key = idempotencyKey || randomUUID();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(key)) {
+    throw new ApiError(400, 'invalid_idempotency_key', 'La clave de guardado no es válida. Recargá el gestor antes de volver a intentar.');
+  }
+  const id = `project-${key}`;
   const project = projectSchema.parse({
     ...parsed,
     id,
@@ -126,10 +136,11 @@ export async function createProject(input: unknown, actorEmail: string) {
   });
   await validateProjectStageExplanations(project);
   if (project.votingResults) project.votingResults = await validateVotingProvenance(project.votingResults);
-  await ensureUniqueSlug(project.slug);
-  await store().set('projects', id, project);
-  await audit('project.created', actorEmail, id, { slug: project.slug });
-  return project;
+  const result = await store().createProject(project, {
+    id: newId('audit'), type: 'project.created', actorEmail, targetId: id,
+    details: { slug: project.slug }, createdAt: timestamp,
+  }, project.slug);
+  return { item: result.item, created: result.created };
 }
 
 export async function updateProject(id: string, input: unknown, actorEmail: string, expectedUpdatedAt?: string) {
@@ -147,9 +158,11 @@ export async function updateProject(id: string, input: unknown, actorEmail: stri
   const saved = await store().mutateProject(id, (current) => {
     if (!isDeepStrictEqual(current, existing)) throw new ApiError(409, 'project_draft_changed', 'El borrador cambió mientras guardabas. Conservamos tus cambios en pantalla; compará la versión guardada antes de reintentar.');
     return project;
+  }, {
+    audit: { id: newId('audit'), type: 'project.updated', actorEmail, targetId: id, details: { slug: project.slug }, createdAt: now() },
+    ...(parsed.slug && parsed.slug !== existing.slug ? { uniqueSlug: parsed.slug, releaseSlug: existing.slug } : {}),
   });
   if (!saved) throw notFound('Proyecto');
-  await audit('project.updated', actorEmail, id, { slug: project.slug });
   return saved;
 }
 
@@ -163,9 +176,10 @@ export async function saveProjectPosition(id: string, positionId: string, body: 
     if (!isDeepStrictEqual(existing, previous)) throw new ApiError(409, 'position_conflict', 'Esta declaración cambió en otra sesión. Conservamos tu texto: revisá la versión guardada antes de reemplazarla.');
     const positions = existing ? current.positions!.map((position) => position.id === positionId ? item : position) : [...(current.positions || []), item];
     return { ...current, positions: projectPositionsSchema.parse(positions), updatedAt: now(), updatedBy: actorEmail };
+  }, {
+    audit: { id: newId('audit'), type: 'project.position-saved', actorEmail, targetId: id, details: { positionId }, createdAt: now() },
   });
   if (!project) throw notFound('Proyecto');
-  await audit('project.position-saved', actorEmail, id, { positionId });
   return { item: project.positions!.find((position) => position.id === positionId), projectUpdatedAt: project.updatedAt };
 }
 
@@ -249,20 +263,30 @@ export async function restoreRevision(projectId: string, revisionId: string, act
     updatedAt: now(),
     updatedBy: actorEmail,
   });
-  await store().set('projects', projectId, restored);
-  await audit('project.revision-restored-to-draft', actorEmail, projectId, { revisionId });
-  return restored;
+  const saved = await store().mutateProject(projectId, (current) => {
+    if (!isDeepStrictEqual(current, existing)) throw new ApiError(409, 'project_draft_changed', 'El borrador cambió mientras restaurabas la revisión. Volvé a cargar el proyecto e intentá de nuevo.');
+    return restored;
+  }, {
+    audit: { id: newId('audit'), type: 'project.revision-restored-to-draft', actorEmail, targetId: projectId, details: { revisionId }, createdAt: now() },
+  });
+  if (!saved) throw notFound('Proyecto');
+  return saved;
 }
 
 export async function changeProjectVisibility(id: string, status: 'unpublished' | 'archived', actorEmail: string) {
   const project = await store().get<Project>('projects', id);
   if (!project) throw notFound('Proyecto');
   const updated = projectSchema.parse({ ...project, status, updatedAt: now(), updatedBy: actorEmail });
-  await store().set('projects', id, updated);
-  await store().delete('publicProjects', id);
-  await audit(`project.${status}`, actorEmail, id, {});
+  const saved = await store().mutateProject(id, (current) => {
+    if (!isDeepStrictEqual(current, project)) throw new ApiError(409, 'project_draft_changed', 'El borrador cambió en otra sesión. Revisá la versión guardada antes de continuar.');
+    return updated;
+  }, {
+    audit: { id: newId('audit'), type: `project.${status}`, actorEmail, targetId: id, details: {}, createdAt: now() },
+    removePublicProjection: true,
+  });
+  if (!saved) throw notFound('Proyecto');
   await revalidate(project.slug);
-  return updated;
+  return saved;
 }
 
 export async function saveLegislator(id: string | null, input: unknown, actorEmail: string) {

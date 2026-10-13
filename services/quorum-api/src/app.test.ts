@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Legislator, Project, SiteSettings } from '@politeia/quorum-contracts';
 import { createApp } from './app.js';
 import { resolveRoles } from './auth.js';
@@ -135,16 +135,56 @@ describe('Quórum API', () => {
     await request(createApp()).patch(`/v1/manage/projects/${project.id}`).send({ title: 'Cambio que debe rechazarse', unsupportedField: 'contenido' }).expect(422);
     expect(await testStore.get<Project>('projects', project.id)).toEqual(project);
   });
+  it('sincroniza el borrador más reciente y hace idempotente la creación con una clave estable', async () => {
+    const app = createApp();
+    const [seed] = await testStore.list<Project>('projects');
+    const { id: _id, status: _status, publishedRevisionId: _revision, publishedAt: _publishedAt, updatedAt: _updatedAt, updatedBy: _updatedBy, ...input } = seed;
+    const payload = { ...input, title: 'Proyecto idempotente de prueba', slug: 'proyecto-idempotente-prueba' };
+    const key = '68fd52e1-cd7c-4a22-955d-028235a034a4';
+    const auditCount = (await testStore.list('audits')).length;
+
+    const first = await request(app).post('/v1/manage/projects').set('Idempotency-Key', key).send(payload).expect(201);
+    expect(first.body.created).toBe(true);
+    const retry = await request(app).post('/v1/manage/projects').set('Idempotency-Key', key).send(payload).expect(200);
+    expect(retry.body.created).toBe(false);
+    expect(retry.body.item.id).toBe(first.body.item.id);
+    expect((await testStore.list('audits')).length).toBe(auditCount + 1);
+    await request(app).post('/v1/manage/projects').set('Idempotency-Key', '9c8bf4bb-b5b0-4120-a292-9dd4ecfbad74').send(payload).expect(409);
+    expect((await testStore.list('audits')).length).toBe(auditCount + 1);
+
+    const path = `/v1/manage/projects/${first.body.item.id}`;
+    expect((await request(app).get(path).expect(200)).body.item.updatedAt).toBe(first.body.item.updatedAt);
+    await request(app).patch(path).send({ title: 'Versión nueva del borrador' }).expect(200);
+    const fresh = (await request(app).get(path).expect(200)).body.item;
+    expect(fresh.title).toBe('Versión nueva del borrador');
+    expect(fresh.updatedAt).not.toBe(first.body.item.updatedAt);
+  });
+  it('devuelve las rutas de validación sin descartar los detalles de campos', async () => {
+    const [project] = await testStore.list<Project>('projects');
+    const response = await request(createApp()).patch(`/v1/manage/projects/${project.id}`).send({ positions: [{ id: 'incomplete', stance: 'for', name: ' ', quote: '' }] }).expect(422);
+    expect(response.body.error.code).toBe('validation_error');
+    expect(response.body.error.details.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: ['positions', 0, 'name'] }),
+      expect.objectContaining({ path: ['positions', 0, 'quote'] }),
+    ]));
+    expect((await testStore.get<Project>('projects', project.id))?.positions).toBeUndefined();
+  });
   it('rechaza guardar un formulario basado en una versión anterior del borrador', async () => {
     const [project] = await testStore.list<Project>('projects');
     const app = createApp();
     const path = `/v1/manage/projects/${project.id}`;
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
     await request(app).patch(path).set('If-Match', project.updatedAt).send({ title: 'Cambio confirmado en otra sesión' }).expect(200);
 
-    await request(app).patch(path).set('If-Match', project.updatedAt).send({ summary: 'Este texto no debe pisar la versión reciente.' }).expect(409);
-    const stored = await testStore.get<Project>('projects', project.id);
-    expect(stored?.title).toBe('Cambio confirmado en otra sesión');
-    expect(stored?.summary).toBe(project.summary);
+    try {
+      const response = await request(app).patch(path).set('If-Match', project.updatedAt).send({ summary: 'Este texto no debe pisar la versión reciente.' }).expect(409);
+      expect(warning).toHaveBeenCalledWith(response.body.error.requestId, {
+        code: 'project_draft_changed', status: 409, method: 'PATCH', path,
+      });
+      const stored = await testStore.get<Project>('projects', project.id);
+      expect(stored?.title).toBe('Cambio confirmado en otra sesión');
+      expect(stored?.summary).toBe(project.summary);
+    } finally { warning.mockRestore(); }
   });
   it('rechaza declaraciones inválidas sin sobrescribir las guardadas y conserva su orden en cambios parciales', async () => {
     const [project] = await testStore.list<Project>('projects');

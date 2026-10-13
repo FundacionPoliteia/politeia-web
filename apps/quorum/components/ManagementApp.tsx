@@ -19,6 +19,7 @@ import PublishDialog from '@/components/PublishDialog';
 import { changeSections } from '@politeia/quorum-contracts';
 import { projectPositionsSchema } from '@politeia/quorum-contracts';
 import type { ProjectPosition } from '@politeia/quorum-contracts';
+import { clearConfirmedProjectEditorRecoveries, projectEditorRecoveryKey, projectFieldLabel, projectValueForReview, readProjectEditorRecovery, reconcileProjectInputs, writeProjectEditorRecovery, type ProjectEditorRecovery } from '@/lib/projectEditorSync';
 import { SiteFooter, SiteHeader } from '@/components/SiteChrome';
 import QuorumRichTextEditor from '@/components/QuorumRichTextEditor';
 import StageExplanationEditor, { ProjectStageExplanationEditor } from '@/components/StageExplanationEditor';
@@ -35,6 +36,13 @@ type ExternalLegislatorSearchItem = { record: ExternalLegislatorRecord; link: Ex
 type Tab = 'tablero' | 'proyectos' | 'legisladores' | 'glosario' | 'catalogos' | 'seguidores' | 'configuracion' | 'usuarios' | 'historial' | 'nosotros';
 type SectionStatus = { dirty: boolean; busy: boolean };
 type SectionStatusReporter = (dirty: boolean, busy?: boolean) => void;
+
+class ManagementApiError extends Error {
+  constructor(message: string, public status: number, public code: string, public details: any, public requestId: string) {
+    super(message);
+    this.name = 'ManagementApiError';
+  }
+}
 
 declare global { interface Window { google?: { accounts: { id: { initialize: (options: Record<string, unknown>) => void; renderButton: (element: HTMLElement, options: Record<string, unknown>) => void } } } } }
 
@@ -137,7 +145,8 @@ export default function ManagementApp() {
     const body = response.status === 204 ? null : await response.json().catch(() => null);
     if (!response.ok) {
       const message = body?.error?.message || `La API rechazó la operación (HTTP ${response.status}).`;
-      throw new Error(body?.error?.requestId ? `${message} · referencia ${body.error.requestId}` : message);
+      const requestId = String(body?.error?.requestId || '');
+      throw new ManagementApiError(requestId ? `${message} · referencia ${requestId}` : message, response.status, String(body?.error?.code || ''), body?.error?.details, requestId);
     }
     return body;
   }, [user]);
@@ -168,7 +177,7 @@ export default function ManagementApp() {
         {message && <p className="message" role="status">{message}</p>}
         {tab === 'nosotros' && admin && <TeamManager call={call} uploadImage={file => uploadRichImage(call, file)} onDirtyChange={sectionStatusReporters.nosotros} />}
         {tab === 'tablero' && <Dashboard data={data} />}
-        {tab === 'proyectos' && <Projects navigation={projectNavigation} data={data} call={call} reload={reload} notify={setMessage} />}
+        {tab === 'proyectos' && <Projects userEmail={user.email} navigation={projectNavigation} data={data} call={call} reload={reload} notify={setMessage} />}
         {tab === 'legisladores' && <Legislators data={data} call={call} reload={reload} notify={setMessage} admin={admin} onStatusChange={sectionStatusReporters.legisladores} />}
         {tab === 'glosario' && <Glossary data={data} call={call} reload={reload} notify={setMessage} onStatusChange={sectionStatusReporters.glosario} />}
         {tab === 'catalogos' && <Catalogs data={data} call={call} reload={reload} notify={setMessage} onStatusChange={sectionStatusReporters.catalogos} />}
@@ -191,13 +200,13 @@ function Check({ ok, label }: { ok: boolean; label: string }) { return <div clas
 
 type AdminProps = { data: Bootstrap; call: (path: string, init?: RequestInit) => Promise<any>; reload: () => Promise<void>; notify: (value: string) => void };
 
-function Projects({ data, call, reload, notify, navigation }: AdminProps & { navigation: MutableRefObject<((action: () => void) => void) | null> }) {
+function Projects({ data, call, reload, notify, navigation, userEmail }: AdminProps & { userEmail: string; navigation: MutableRefObject<((action: () => void) => void) | null> }) {
   const [selectedId, setSelectedId] = useState(data.projects[0]?.id || 'new');
   const [editorDirty, setEditorDirty] = useState(false);
   const [pendingSelection, setPendingSelection] = useState<(() => void) | null>(null);
   const [switching, setSwitching] = useState(false);
   const [switchError, setSwitchError] = useState('');
-  const editorHandle = useRef<{ save: () => Promise<boolean> } | null>(null);
+  const editorHandle = useRef<{ save: () => Promise<boolean>; discard: () => void } | null>(null);
   const selected = data.projects.find((item) => item.id === selectedId);
   const bypassUnload = useRef(false);
   const dirtyRef = useRef(editorDirty); dirtyRef.current = editorDirty;
@@ -246,9 +255,9 @@ function Projects({ data, call, reload, notify, navigation }: AdminProps & { nav
     return () => { window.removeEventListener('beforeunload', warn); document.removeEventListener('click', link, true); };
   }, [editorDirty]);
   function select(nextId: string) { if (nextId !== selectedId) requestLeave(() => setSelectedId(nextId)); }
-  function discardAndSwitch() { if (!pendingSelection) return; pendingSelection(); setPendingSelection(null); setSwitchError(''); setEditorDirty(false); }
+  function discardAndSwitch() { if (!pendingSelection) return; editorHandle.current?.discard(); pendingSelection(); setPendingSelection(null); setSwitchError(''); setEditorDirty(false); }
   async function saveAndSwitch() { if (!pendingSelection || !editorHandle.current) return; setSwitchError(''); setSwitching(true); const saved = await editorHandle.current.save(); setSwitching(false); if (!saved) { setSwitchError('No se completó el guardado. Tus cambios siguen en pantalla; revisá los campos o las cargas pendientes antes de salir.'); return; } discardAndSwitch(); }
-  return <><div className="admin-split"><section className="admin-list"><button className="button primary full" onClick={() => select('new')}>Nuevo proyecto</button>{data.projects.map((item) => <button key={item.id} className={item.id === selectedId ? 'selected' : ''} onClick={() => select(item.id)}><strong>{item.title}</strong><span>{statusLabel(item.status)} · {item.docketNumber || 'Sin expediente'}</span></button>)}</section><ProjectEditor key={selected?.id || 'new'} project={selected} data={data} call={call} reload={reload} notify={notify} onCreated={setSelectedId} editorHandle={editorHandle} onDirtyChange={setEditorDirty} /></div>{pendingSelection && <ProjectLeaveDialog busy={switching} error={switchError} cancel={() => { setPendingSelection(null); setSwitchError(''); }} discard={discardAndSwitch} save={() => void saveAndSwitch()} />}</>;
+  return <><div className="admin-split"><section className="admin-list"><button className="button primary full" onClick={() => select('new')}>Nuevo proyecto</button>{data.projects.map((item) => <button key={item.id} className={item.id === selectedId ? 'selected' : ''} onClick={() => select(item.id)}><strong>{item.title}</strong><span>{statusLabel(item.status)} · {item.docketNumber || 'Sin expediente'}</span></button>)}</section><ProjectEditor key={selected?.id || 'new'} userEmail={userEmail} project={selected} data={data} call={call} reload={reload} notify={notify} onCreated={setSelectedId} editorHandle={editorHandle} onDirtyChange={setEditorDirty} /></div>{pendingSelection && <ProjectLeaveDialog busy={switching} error={switchError} cancel={() => { setPendingSelection(null); setSwitchError(''); }} discard={discardAndSwitch} save={() => void saveAndSwitch()} />}</>;
 }
 
 const projectEditorSections = [
@@ -269,21 +278,116 @@ function ProjectEditorNav() {
   return <nav className="project-editor-nav" aria-label="Secciones del proyecto"><div className="project-group-actions" role="group" aria-label="Expandir o colapsar todas las secciones"><button type="button" onClick={() => document.querySelectorAll<HTMLDetailsElement>('.project-editor-group').forEach((group) => { group.open = true; })}>Expandir todo</button><button type="button" onClick={() => document.querySelectorAll<HTMLDetailsElement>('.project-editor-group').forEach((group) => { group.open = false; })}>Colapsar todo</button></div><span className="project-editor-nav-label">Secciones</span><div>{projectEditorSections.map(([id, label]) => <button key={id} type="button" onClick={() => jump(id)}>{label}</button>)}</div></nav>;
 }
 
-function ProjectEditor({ project, data, call, reload, notify, onCreated, editorHandle, onDirtyChange }: AdminProps & { project?: Project; onCreated: (id: string) => void; editorHandle: MutableRefObject<{ save: () => Promise<boolean> } | null>; onDirtyChange: (dirty: boolean) => void }) {
+function ProjectEditor({ project, data, call, reload, notify, onCreated, editorHandle, onDirtyChange, userEmail }: AdminProps & { project?: Project; userEmail: string; onCreated: (id: string) => void; editorHandle: MutableRefObject<{ save: () => Promise<boolean>; discard: () => void } | null>; onDirtyChange: (dirty: boolean) => void }) {
   const storedWorkflow = data.workflows.find((item) => item.id === project?.workflowId) || data.workflows.find((item) => item.active) || data.workflows[0];
   const workflow = storedWorkflow ? withPreparationStage(storedWorkflow) : undefined;
   const [form, setForm] = useState<ProjectInput>(() => project ? projectToInput(project) : emptyProject(workflow));
   const latestForm = useRef(form); latestForm.current = form;
   const [confirmedForm, setConfirmedForm] = useState(form);
+  const confirmedFormRef = useRef(confirmedForm); confirmedFormRef.current = confirmedForm;
   const projectVersion = useRef(project?.updatedAt || '');
+  const latestServerForm = useRef<ProjectInput | null>(project ? projectToInput(project) : null);
+  const createKey = useRef('');
+  const createSubmission = useRef<ProjectInput | null>(null);
+  const [recoverySessionId] = useState(() => globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  const recoveryKey = projectEditorRecoveryKey(userEmail, project?.id, recoverySessionId);
+  const legacyRecoveryKey = `quorum:project-editor:v1:${encodeURIComponent(userEmail.trim().toLowerCase())}:${project?.id || 'new'}`;
+  const [editorReady, setEditorReady] = useState(false);
+  const [syncAttempt, setSyncAttempt] = useState(0);
+  const [syncError, setSyncError] = useState('');
+  const [syncRefreshing, setSyncRefreshing] = useState(false);
+  const [recoveryAvailable, setRecoveryAvailable] = useState(false);
+  const [recoveryCopiesFound, setRecoveryCopiesFound] = useState(0);
+  const [recoveryStorageError, setRecoveryStorageError] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [syncConflict, setSyncConflict] = useState<{ base: ProjectInput; local: ProjectInput; remote: ProjectInput; updatedAt: string; keys: Array<keyof ProjectInput>; projectId?: string } | null>(null);
+  const [conflictChoices, setConflictChoices] = useState<Partial<Record<keyof ProjectInput, 'local' | 'remote'>>>({});
   const [pendingInputs, setPendingInputs] = useState<Set<string>>(() => new Set());
   const registerPending = useCallback((id: string, pending: boolean) => setPendingInputs((current) => { if (current.has(id) === pending) return current; const next = new Set(current); if (pending) next.add(id); else next.delete(id); return next; }), []);
   const [savedPositions, setSavedPositions] = useState(project?.positions);
   const [savingPosition, setSavingPosition] = useState(false);
   const [photoUploading, setPhotoUploading] = useState(false);
   const positionSaveInFlight = useRef(false);
+  const editRevision = useRef(0);
+  const lastSynchronizedAt = useRef(0);
+  const refreshInFlight = useRef(false);
   const [preview, setPreview] = useState(false); const [publish, setPublish] = useState(false); const [publishGate, setPublishGate] = useState<'unsaved' | 'blocked' | null>(null); const [publishGateError, setPublishGateError] = useState(''); const [saving, setSaving] = useState(false); const [savingChronology, setSavingChronology] = useState(false);
   const [projectAction, setProjectAction] = useState<'unpublish' | 'archive' | null>(null); const [projectActionBusy, setProjectActionBusy] = useState(false); const [projectActionError, setProjectActionError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    setEditorReady(false);
+    setSyncError('');
+    const loadedRecovery = readProjectEditorRecovery(recoveryKey, legacyRecoveryKey);
+    const recovery = loadedRecovery?.value || null;
+    setRecoveryCopiesFound(loadedRecovery?.copiesFound || 0);
+    setRecoveryStorageError(false);
+    if (recovery) {
+      createKey.current = recovery.createKey;
+      createSubmission.current = recovery.createSubmission;
+    } else if (!createKey.current) createKey.current = crypto.randomUUID();
+
+    if (!project) {
+      const initial = emptyProject(workflow);
+      const restored = Boolean(recovery && !sameValue(recovery.form, recovery.base));
+      confirmedFormRef.current = recovery?.base || initial;
+      setConfirmedForm(recovery?.base || initial);
+      setForm(restored ? recovery!.form : initial);
+      setRecoveryAvailable(restored);
+      setSavedPositions(undefined);
+      setEditorReady(true);
+      lastSynchronizedAt.current = Date.now();
+      return () => { active = false; };
+    }
+
+    call(`/v1/manage/projects/${project.id}`, { cache: 'no-store' }).then((body) => {
+      if (!active) return;
+      const latest = body.item as Project;
+      if (!latest?.updatedAt) throw new Error('La API no devolvió la versión vigente del proyecto.');
+      const remote = projectToInput(latest);
+      const restored = Boolean(recovery && !sameValue(recovery.form, recovery.base));
+      latestServerForm.current = remote;
+      projectVersion.current = latest.updatedAt;
+      lastSynchronizedAt.current = Date.now();
+      confirmedFormRef.current = remote;
+      setConfirmedForm(remote);
+      if (restored) {
+        const reconciliation = reconcileProjectInputs(recovery!.base, recovery!.form, remote);
+        setForm(reconciliation.merged);
+        if (reconciliation.conflicts.length) {
+          setSyncConflict({ base: recovery!.base, local: recovery!.form, remote, updatedAt: latest.updatedAt, keys: reconciliation.conflicts });
+          setConflictChoices({});
+        }
+      } else setForm(remote);
+      setSavedPositions(latest.positions);
+      setRecoveryAvailable(restored);
+      setEditorReady(true);
+    }).catch((error) => {
+      if (!active) return;
+      setSyncError(error instanceof Error ? error.message : 'No pudimos sincronizar la versión guardada.');
+    });
+    return () => { active = false; };
+  }, [call, project?.id, recoveryKey, legacyRecoveryKey, userEmail, syncAttempt]);
+
+  useEffect(() => {
+    if (!editorReady) return;
+    const recoveryForm = syncConflict?.local || form;
+    const recoveryBase = syncConflict?.base || confirmedForm;
+    const dirty = !sameValue(recoveryForm, recoveryBase);
+    const recovery: ProjectEditorRecovery | null = dirty ? {
+      form: recoveryForm, base: recoveryBase, createKey: createKey.current,
+      createSubmission: createSubmission.current, savedAt: Date.now(),
+    } : null;
+    if (dirty) {
+      const persisted = writeProjectEditorRecovery(recoveryKey, recovery, legacyRecoveryKey);
+      setRecoveryStorageError(!persisted);
+    } else {
+      clearConfirmedProjectEditorRecoveries(recoveryKey, confirmedForm);
+      writeProjectEditorRecovery(recoveryKey, null, legacyRecoveryKey);
+      setRecoveryStorageError(false);
+      setRecoveryAvailable(false);
+    }
+  }, [editorReady, form, confirmedForm, recoveryKey, legacyRecoveryKey, syncConflict]);
   const storedForm = confirmedForm;
   const revisions = data.revisions.filter((item) => item.projectId === project?.id).sort((a, b) => b.number - a.number);
   const latestRevision = revisions[0];
@@ -295,50 +399,336 @@ function ProjectEditor({ project, data, call, reload, notify, onCreated, editorH
   const publicationIssues = project ? getPublicationIssues(project, form, false, isDirty || savedChangesPending, data) : [];
   const canPublish = Boolean(project && !isDirty && publicationIssues.length === 0);
   const stageChanged = Boolean(latestRevision && effectiveProjectStageId(latestRevision.snapshot) !== effectiveProjectStageId({ currentStageId: form.currentStageId, updates: form.updates || [] }));
-  const set = (key: keyof ProjectInput, value: unknown) => setForm((current) => ({ ...current, [key]: value }));
+  const set = (key: keyof ProjectInput, value: unknown) => {
+    setValidationErrors([]);
+    const next = { ...latestForm.current, [key]: value } as ProjectInput;
+    latestForm.current = next;
+    editRevision.current += 1;
+    setForm(next);
+    if (editorReady) {
+      const persisted = writeProjectEditorRecovery(recoveryKey, {
+        form: next, base: confirmedFormRef.current, createKey: createKey.current,
+        createSubmission: createSubmission.current, savedAt: Date.now(),
+      }, legacyRecoveryKey);
+      setRecoveryStorageError(!persisted);
+      if (persisted) setRecoveryAvailable(true);
+    }
+  };
+
+  function showValidationIssues(issues: Array<{ path: PropertyKey[]; message: string }>) {
+    setValidationErrors(issues.map((issue) => `${projectFieldLabel(issue.path)}: ${issue.message}`));
+  }
+
+  function showApiValidation(error: unknown) {
+    if (!(error instanceof ManagementApiError) || error.code !== 'validation_error') return false;
+    const issues = error.details?.issues;
+    if (Array.isArray(issues) && issues.length) showValidationIssues(issues);
+    else {
+      const fieldErrors = error.details?.fieldErrors;
+      const entries = fieldErrors && typeof fieldErrors === 'object' ? Object.entries(fieldErrors) : [];
+      setValidationErrors(entries.flatMap(([key, values]) => Array.isArray(values) ? values.map((message) => `${projectFieldLabel([key])}: ${String(message)}`) : []));
+    }
+    if (error.requestId) setValidationErrors((current) => [...current, `Referencia de la API: ${error.requestId}`]);
+    notify(`${error.message}. Tus cambios siguen en el formulario.`);
+    return true;
+  }
+
+  async function synchronizeProject(base: ProjectInput, local: ProjectInput) {
+    if (!project) return null;
+    let body: any;
+    try { body = await call(`/v1/manage/projects/${project.id}`, { cache: 'no-store' }); }
+    catch (error) {
+      setSyncError(error instanceof Error ? error.message : 'No pudimos sincronizar la versión más reciente.');
+      throw error;
+    }
+    const latest = body.item as Project;
+    if (!latest?.updatedAt) {
+      const error = new Error('La API no devolvió la versión vigente del proyecto.');
+      setSyncError(error.message);
+      throw error;
+    }
+    lastSynchronizedAt.current = Date.now();
+    setSyncError('');
+    const remote = projectToInput(latest);
+    projectVersion.current = latest.updatedAt;
+    latestServerForm.current = remote;
+    setSavedPositions(latest.positions);
+
+    if (sameValue(remote, local)) {
+      confirmedFormRef.current = remote;
+      setConfirmedForm(remote);
+      setForm(remote);
+      setSyncConflict(null);
+      setConflictChoices({});
+      setValidationErrors([]);
+      return { project: latest, form: remote, remote, alreadySaved: true };
+    }
+
+    if (sameValue(remote, base)) {
+      setSyncConflict(null);
+      setConflictChoices({});
+      return { project: latest, form: local, remote, alreadySaved: false };
+    }
+
+    const reconciliation = reconcileProjectInputs(base, local, remote);
+    if (reconciliation.conflicts.length) {
+      setSyncConflict({ base, local, remote, updatedAt: latest.updatedAt, keys: reconciliation.conflicts });
+      setConflictChoices({});
+      return null;
+    }
+
+    confirmedFormRef.current = remote;
+    setConfirmedForm(remote);
+    setForm(reconciliation.merged);
+    setSyncConflict(null);
+    setConflictChoices({});
+    setValidationErrors([]);
+    return { project: latest, form: reconciliation.merged, remote, alreadySaved: false };
+  }
+
+  async function refreshBeforeEditing(force = false) {
+    if (!project || !editorReady || syncError || syncConflict || saving || savingChronology || projectActionBusy || refreshInFlight.current) return;
+    if (!force && Date.now() - lastSynchronizedAt.current < 20_000) return;
+    refreshInFlight.current = true;
+    setSyncRefreshing(true);
+    const revisionAtStart = editRevision.current;
+    try {
+      await synchronizeProject(confirmedFormRef.current, latestForm.current);
+      if (editRevision.current !== revisionAtStart) {
+        // A keystroke can land before React applies `inert`; reconcile that last edit too.
+        await synchronizeProject(confirmedFormRef.current, latestForm.current);
+      }
+    } catch {
+      // synchronizeProject preserves the editor state and exposes the retry control.
+    } finally {
+      refreshInFlight.current = false;
+      setSyncRefreshing(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!project || !editorReady || syncError || syncConflict || saving || savingChronology || projectActionBusy) return;
+    const refreshIfStale = () => {
+      if (document.visibilityState === 'visible') void refreshBeforeEditing();
+    };
+    const refreshOnReturn = () => {
+      if (document.visibilityState === 'visible') void refreshBeforeEditing(true);
+    };
+    const timer = window.setInterval(refreshIfStale, 30_000);
+    window.addEventListener('focus', refreshOnReturn);
+    document.addEventListener('visibilitychange', refreshOnReturn);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refreshOnReturn);
+      document.removeEventListener('visibilitychange', refreshOnReturn);
+    };
+  }, [project?.id, editorReady, syncError, syncConflict, saving, savingChronology, projectActionBusy]);
+
+  function resolveProjectConflict(key: keyof ProjectInput, choice: 'local' | 'remote') {
+    if (!syncConflict) return;
+    const nextChoices = { ...conflictChoices, [key]: choice };
+    setConflictChoices(nextChoices);
+    if (!syncConflict.keys.every((item) => nextChoices[item])) return;
+    const result = reconcileProjectInputs(syncConflict.base, syncConflict.local, syncConflict.remote).merged;
+    for (const item of syncConflict.keys) {
+      if (nextChoices[item] === 'local') (result as Record<keyof ProjectInput, unknown>)[item] = syncConflict.local[item];
+    }
+    projectVersion.current = syncConflict.updatedAt;
+    latestServerForm.current = syncConflict.remote;
+    confirmedFormRef.current = syncConflict.remote;
+    setConfirmedForm(syncConflict.remote);
+    setForm(result);
+    setValidationErrors([]);
+    setSyncConflict(null);
+    setConflictChoices({});
+    notify('Versiones combinadas. Revisá el proyecto y guardá para confirmar tus cambios.');
+    if (syncConflict.projectId) {
+      const projectRecoveryKey = projectEditorRecoveryKey(userEmail, syncConflict.projectId, recoverySessionId);
+      const persisted = writeProjectEditorRecovery(projectRecoveryKey, {
+        form: result, base: syncConflict.remote, createKey: createKey.current, createSubmission: null, savedAt: Date.now(),
+      });
+      setRecoveryStorageError(!persisted);
+      if (persisted) writeProjectEditorRecovery(recoveryKey, null, legacyRecoveryKey);
+      onCreated(syncConflict.projectId);
+    }
+  }
+
+  function discardRecoveredEdits() {
+    const remote = latestServerForm.current || emptyProject(workflow);
+    setConfirmedForm(remote);
+    setForm(remote);
+    setRecoveryAvailable(false);
+    setSyncConflict(null);
+    const cleared = writeProjectEditorRecovery(recoveryKey, null, legacyRecoveryKey);
+    setRecoveryStorageError(!cleared);
+  }
+
   async function save(): Promise<boolean> {
+    if (!editorReady || syncError) { notify('Esperá a que el gestor termine de sincronizar el proyecto.'); return false; }
+    if (refreshInFlight.current) { notify('Esperá a que termine la sincronización antes de guardar. Tus cambios siguen en pantalla.'); return false; }
+    if (syncConflict) { notify('Resolvé primero los campos que cambiaron en esta sesión y en la versión guardada.'); return false; }
     if (pendingInputs.size) { notify('Terminá de incorporar o descartá las fotos, documentos o actas pendientes antes de guardar.'); return false; }
     if (savingChronology || projectActionBusy) { notify('Esperá a que termine la operación en curso.'); return false; }
     if (photoUploading) { notify('Esperá a que termine de subir la foto.'); return false; }
     if (positionSaveInFlight.current) { notify('Esperá a que termine de guardarse la declaración.'); return false; }
     if (!isDirty || saving) return !isDirty;
-    const positionsCheck = projectPositionsSchema.safeParse(form.positions || []);
-    if (!positionsCheck.success) { notify(`A favor / En contra: ${positionsCheck.error.issues[0].message}`); return false; }
+    const parsedForm = projectInputSchema.strict().safeParse(form);
+    if (!parsedForm.success) {
+      showValidationIssues(parsedForm.error.issues);
+      notify('Corregí los campos señalados. Tus cambios siguen en el formulario.');
+      return false;
+    }
+    let positionsCheck = projectPositionsSchema.safeParse(parsedForm.data.positions || []);
+    if (!positionsCheck.success) { showValidationIssues(positionsCheck.error.issues); return false; }
+    setValidationErrors([]);
     setSaving(true);
-    const submitted = form;
+    let submitted = parsedForm.data;
     try {
-      const body = await call(project ? `/v1/manage/projects/${project.id}` : '/v1/manage/projects', { method: project ? 'PATCH' : 'POST', headers: { 'content-type': 'application/json', ...(projectVersion.current ? { 'if-match': projectVersion.current } : {}) }, body: JSON.stringify(form) });
-      const omitted = Object.keys(form).filter((key) => form[key as keyof ProjectInput] !== undefined && !Object.prototype.hasOwnProperty.call(body?.item || {}, key));
+      let body: any;
+      if (project) {
+        const baseAtRequest = confirmedForm;
+        const synchronized = await synchronizeProject(baseAtRequest, submitted);
+        if (!synchronized) return false;
+        if (synchronized.alreadySaved) {
+          notify('Estos cambios ya estaban guardados en la versión más reciente.');
+          try { await reload(); } catch { /* The confirmed server copy remains in the editor. */ }
+          return true;
+        }
+        submitted = synchronized.form;
+        const mergedValidation = projectInputSchema.strict().safeParse(submitted);
+        if (!mergedValidation.success) { showValidationIssues(mergedValidation.error.issues); return false; }
+        submitted = mergedValidation.data;
+        positionsCheck = projectPositionsSchema.safeParse(submitted.positions || []);
+        if (!positionsCheck.success) { showValidationIssues(positionsCheck.error.issues); return false; }
+        try {
+          body = await call(`/v1/manage/projects/${project.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json', 'if-match': synchronized.project.updatedAt }, body: JSON.stringify(submitted) });
+        } catch (error) {
+          if (!(error instanceof ManagementApiError) || error.status !== 409) throw error;
+          const retrySync = await synchronizeProject(synchronized.remote, submitted);
+          if (!retrySync) return false;
+          if (retrySync.alreadySaved) body = { item: retrySync.project };
+          submitted = retrySync.form;
+          const retryValidation = projectInputSchema.strict().safeParse(submitted);
+          if (!retryValidation.success) { showValidationIssues(retryValidation.error.issues); return false; }
+          submitted = retryValidation.data;
+          if (!retrySync.alreadySaved) body = await call(`/v1/manage/projects/${project.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json', 'if-match': retrySync.project.updatedAt }, body: JSON.stringify(submitted) });
+          positionsCheck = projectPositionsSchema.safeParse(submitted.positions || []);
+          if (!positionsCheck.success) { showValidationIssues(positionsCheck.error.issues); return false; }
+        }
+      } else {
+        if (!createSubmission.current) createSubmission.current = submitted;
+        const recoverySaved = writeProjectEditorRecovery(recoveryKey, { form: submitted, base: confirmedForm, createKey: createKey.current, createSubmission: createSubmission.current, savedAt: Date.now() }, legacyRecoveryKey);
+        if (!recoverySaved) throw new Error('No pudimos guardar la copia local de recuperación. Para proteger el borrador, no lo enviamos todavía; mantené esta pestaña abierta, copiá el contenido importante y revisá el almacenamiento del navegador.');
+        body = await call('/v1/manage/projects', { method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': createKey.current }, body: JSON.stringify(submitted) });
+        if (body.created === false) {
+          const originalSubmission = createSubmission.current || submitted;
+          const recoveredProject = projectToInput(body.item as Project);
+          const recovered = reconcileProjectInputs(originalSubmission, submitted, recoveredProject);
+          projectVersion.current = body.item.updatedAt;
+          latestServerForm.current = recoveredProject;
+          if (recovered.conflicts.length) {
+            const restoredConflicts = reconcileProjectInputs(originalSubmission, submitted, recoveredProject);
+            setSyncConflict({ base: originalSubmission, local: submitted, remote: recoveredProject, updatedAt: body.item.updatedAt, keys: restoredConflicts.conflicts, projectId: body.item.id });
+            setConflictChoices({});
+            const projectRecoveryKey = projectEditorRecoveryKey(userEmail, body.item.id, recoverySessionId);
+            const persisted = writeProjectEditorRecovery(projectRecoveryKey, { form: submitted, base: originalSubmission, createKey: createKey.current, createSubmission: originalSubmission, savedAt: Date.now() });
+            setRecoveryStorageError(!persisted);
+            return false;
+          }
+          submitted = recovered.merged;
+          const recoveredValidation = projectInputSchema.strict().safeParse(submitted);
+          if (!recoveredValidation.success) { showValidationIssues(recoveredValidation.error.issues); return false; }
+          submitted = recoveredValidation.data;
+          positionsCheck = projectPositionsSchema.safeParse(submitted.positions || []);
+          if (!positionsCheck.success) { showValidationIssues(positionsCheck.error.issues); return false; }
+          if (!sameValue(recovered.merged, recoveredProject)) {
+            body = await call(`/v1/manage/projects/${body.item.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json', 'if-match': body.item.updatedAt }, body: JSON.stringify(recovered.merged) });
+          } else body = { item: body.item };
+        }
+      }
+      if (!body?.item?.id || !body.item.updatedAt) throw new Error('La API no confirmó el identificador y la versión del borrador. Conservamos tus cambios para reintentar.');
+      const omitted = Object.keys(submitted).filter((key) => submitted[key as keyof ProjectInput] !== undefined && !Object.prototype.hasOwnProperty.call(body?.item || {}, key));
       if (omitted.length) throw new Error(`El servidor no confirmó todos los campos (${omitted.join(', ')}). Conservamos tus cambios en pantalla. No publiques todavía: la API necesita actualizarse.`);
       if (!sameValue(body.item.positions || [], positionsCheck.data)) throw new Error('El servidor no confirmó las declaraciones completas, incluidas sus fotos. Conservamos tus cambios; actualizá la API antes de publicar.');
       const confirmed = projectToInput(body.item);
       if (!sameValue(projectInputSchema.parse(confirmed), projectInputSchema.parse(submitted))) throw new Error('El servidor no confirmó todos los valores enviados. Conservamos tus cambios para reintentar.');
       projectVersion.current = body.item.updatedAt;
+      latestServerForm.current = confirmed;
+      confirmedFormRef.current = confirmed;
       setConfirmedForm(confirmed);
-      const editedWhileSaving = latestForm.current !== submitted;
+      const editedWhileSaving = !sameValue(latestForm.current, submitted);
       if (!editedWhileSaving) setForm(confirmed);
       setSavedPositions(body.item.positions);
       notify('Borrador guardado. Los cambios todavía no son públicos.');
       try { await reload(); } catch { notify('Borrador guardado. No se pudo refrescar el listado; los datos confirmados se conservaron.'); }
-      if (!project) onCreated(body.item.id);
-      return !editedWhileSaving && (latestForm.current === submitted || sameValue(latestForm.current, confirmed));
-    } catch (error) { notify(error instanceof Error ? error.message : 'No pudimos guardar.'); return false; }
+      if (!project) {
+        if (editedWhileSaving) {
+          const createdProjectRecoveryKey = projectEditorRecoveryKey(userEmail, body.item.id, recoverySessionId);
+          const persisted = writeProjectEditorRecovery(createdProjectRecoveryKey, {
+            form: latestForm.current, base: confirmed, createKey: createKey.current,
+            createSubmission: submitted, savedAt: Date.now(),
+          });
+          if (!persisted) throw new Error('El proyecto se creó y la versión enviada quedó guardada, pero no pudimos respaldar los cambios que escribiste durante el envío. Seguís en esta pantalla; guardá la copia local antes de continuar.');
+        }
+        writeProjectEditorRecovery(recoveryKey, null, legacyRecoveryKey);
+        onCreated(body.item.id);
+      }
+      return !editedWhileSaving && sameValue(latestForm.current, submitted);
+    } catch (error) {
+      if (showApiValidation(error)) return false;
+      notify(error instanceof Error ? error.message : 'No pudimos guardar. Tus cambios siguen en el formulario y en la copia local de recuperación.');
+      return false;
+    }
     finally { setSaving(false); }
   }
-  editorHandle.current = { save };
+  editorHandle.current = { save, discard: discardRecoveredEdits };
   useEffect(() => { onDirtyChange(isDirty || photoUploading || pendingInputs.size > 0 || saving || savingChronology || savingPosition || projectActionBusy); }, [isDirty, photoUploading, pendingInputs, saving, savingChronology, savingPosition, projectActionBusy, onDirtyChange]);
   async function saveChronology() {
-    if (photoUploading || positionSaveInFlight.current) return;
+    if (!editorReady || syncError || syncConflict) { notify('Esperá a que el gestor termine de sincronizar y resolvé cualquier diferencia antes de guardar la cronología.'); return; }
+    if (refreshInFlight.current) { notify('Esperá a que termine la sincronización antes de guardar la cronología.'); return; }
+    if (photoUploading || positionSaveInFlight.current || pendingInputs.size) return;
     if (!project || !chronologyDirty || savingChronology || saving) return;
+    const localValidation = projectInputSchema.partial().strict().safeParse({ updates: latestForm.current.updates || [] });
+    if (!localValidation.success) {
+      showValidationIssues(localValidation.error.issues);
+      notify('Corregí los datos de la cronología antes de guardarla.');
+      return;
+    }
+    setValidationErrors([]);
     setSavingChronology(true);
     try {
-      const body = await call(`/v1/manage/projects/${project.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json', 'if-match': projectVersion.current }, body: JSON.stringify({ updates: form.updates || [] }) });
+      const synchronized = await synchronizeProject(confirmedForm, latestForm.current);
+      if (!synchronized) return;
+      if (sameValue(synchronized.form.updates || [], synchronized.remote.updates || [])) {
+        notify('La cronología ya coincide con la versión guardada más reciente.');
+        return;
+      }
+      let updates = synchronized.form.updates || [];
+      let body: any;
+      try {
+        body = await call(`/v1/manage/projects/${project.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json', 'if-match': synchronized.project.updatedAt }, body: JSON.stringify({ updates }) });
+      } catch (error) {
+        if (!(error instanceof ManagementApiError) || error.status !== 409) throw error;
+        const retry = await synchronizeProject(synchronized.remote, latestForm.current);
+        if (!retry) return;
+        if (sameValue(retry.form.updates || [], retry.remote.updates || [])) {
+          notify('La cronología ya coincide con la versión guardada más reciente.');
+          return;
+        }
+        updates = retry.form.updates || [];
+        body = await call(`/v1/manage/projects/${project.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json', 'if-match': retry.project.updatedAt }, body: JSON.stringify({ updates }) });
+      }
+      if (!body?.item?.updatedAt || !sameValue(body.item.updates || [], updates)) throw new Error('El servidor no confirmó la cronología completa. Conservamos tus cambios.');
+      const confirmed = projectToInput(body.item);
       projectVersion.current = body.item.updatedAt;
-      if (!sameValue(body.item.updates, form.updates || [])) throw new Error('El servidor no confirmó la cronología completa. Conservamos tus cambios.');
-      setConfirmedForm((current) => ({ ...current, updates: body.item.updates }));
-      setForm((current) => sameValue(current.updates, form.updates) ? { ...current, updates: body.item.updates } : current);
+      latestServerForm.current = confirmed;
+      setConfirmedForm(confirmed);
+      setForm((current) => sameValue(current.updates || [], updates) ? { ...current, updates: confirmed.updates } : current);
       notify('Cronología guardada en el borrador. Publicá la revisión desde el sector global cuando esté aprobada.');
-    } catch (error) { notify(error instanceof Error ? error.message : 'No pudimos guardar la cronología.'); }
+    } catch (error) {
+      if (showApiValidation(error)) return;
+      notify(error instanceof Error ? error.message : 'No pudimos guardar la cronología. Tus cambios siguen en el formulario y en la copia local de recuperación.');
+    }
     finally { setSavingChronology(false); }
   }
   async function uploadEditorImage(file: File) { return uploadRichImage(call, file); }
@@ -379,27 +769,59 @@ function ProjectEditor({ project, data, call, reload, notify, onCreated, editorH
     setPublishGate(null); setPublish(true);
   }
   function requestProjectAction(action: 'unpublish' | 'archive') {
+    if (!editorReady || syncError || syncConflict) { notify('Esperá a que el proyecto termine de sincronizar y resolvé cualquier diferencia.'); return; }
+    if (isDirty || pendingInputs.size) { notify('Guardá o descartá los cambios pendientes antes de cambiar la visibilidad del proyecto.'); return; }
     if (photoUploading || positionSaveInFlight.current) return;
     setProjectActionError('');
     setProjectAction(action);
   }
   async function confirmProjectAction() {
     if (!project || !projectAction || projectActionBusy) return;
+    if (!editorReady || syncError || syncConflict || isDirty || pendingInputs.size) {
+      setProjectActionError('El proyecto tiene cambios pendientes o todavía no está sincronizado. Guardá o resolvé las diferencias antes de continuar.');
+      return;
+    }
     setProjectActionBusy(true);
     setProjectActionError('');
     try {
-      await call(`/v1/manage/projects/${project.id}/${projectAction}`, { method: 'POST' });
+      const synchronized = await synchronizeProject(confirmedForm, latestForm.current);
+      if (!synchronized || !sameValue(synchronized.form, synchronized.remote)) {
+        setProjectActionError('El borrador cambió en otra sesión. Revisá la versión sincronizada antes de cambiar su visibilidad.');
+        return;
+      }
+      const result = await call(`/v1/manage/projects/${project.id}/${projectAction}`, { method: 'POST' });
+      if (!result?.item?.updatedAt) throw new Error('La API no confirmó el nuevo estado del proyecto.');
+      const confirmed = projectToInput(result.item as Project);
+      projectVersion.current = result.item.updatedAt;
+      latestServerForm.current = confirmed;
+      setConfirmedForm(confirmed);
+      setForm(confirmed);
       notify(projectAction === 'unpublish' ? 'Proyecto despublicado. El borrador y su historial se conservaron.' : 'Proyecto archivado. El contenido y su historial se conservaron.');
       setProjectAction(null);
       await reload();
     } catch (error) {
+      if (error instanceof ManagementApiError && error.status === 409) {
+        try {
+          await synchronizeProject(confirmedForm, latestForm.current);
+          setProjectActionError('El borrador cambió mientras confirmabas. Se sincronizó la versión más reciente; revisala y volvé a confirmar.');
+          return;
+        } catch { /* Keep the conflict and report the original operation failure. */ }
+      }
       setProjectActionError(error instanceof Error ? error.message : `No pudimos ${projectAction === 'unpublish' ? 'despublicar' : 'archivar'} el proyecto.`);
     } finally {
       setProjectActionBusy(false);
     }
   }
   if (!workflow) return <section className="admin-panel"><h2>Falta un flujo activo</h2><p>Creá o activá una definición de etapas antes de dar de alta proyectos.</p></section>;
-  return <PendingProjectEdits.Provider value={registerPending}><div className="project-editor-layout" inert={saving || savingChronology || projectActionBusy}><aside className="project-editor-aside"><ProjectEditorNav /></aside><section className="admin-panel editor-form">
+  return <PendingProjectEdits.Provider value={registerPending}><div className="project-editor-shell">
+    {!editorReady && !syncError && project && <p className="message" role="status">Sincronizando la última versión guardada antes de habilitar la edición…</p>}
+    {syncRefreshing && <p className="message" role="status">Revisando cambios guardados en otras sesiones antes de continuar…</p>}
+    {syncError && <div className="message error" role="alert"><p>{syncError}</p><button className="button ghost" type="button" onClick={() => setSyncAttempt((value) => value + 1)}>Reintentar sincronización</button></div>}
+    {recoveryStorageError && <div className="message error" role="alert"><p>No pudimos crear o actualizar la copia local de recuperación. El contenido sigue en pantalla, pero podría perderse si se cierra esta pestaña: guardá en el servidor antes de salir y revisá el espacio o los permisos de almacenamiento del navegador.</p></div>}
+    {recoveryAvailable && !syncConflict && <div className="message" role="status"><p>Recuperamos cambios locales y los combinamos con la última versión guardada. Revisalos antes de guardar.{recoveryCopiesFound > 1 ? ` Hay ${recoveryCopiesFound} copias locales; las demás siguen preservadas.` : ''}</p><button className="button ghost" type="button" onClick={discardRecoveredEdits}>Descartar cambios recuperados</button></div>}
+    {syncConflict && <section className="message error project-sync-conflict" role="alert" aria-labelledby="project-sync-conflict-title"><h3 id="project-sync-conflict-title">Este proyecto cambió en otra sesión</h3><p>Elegí qué versión conservar en cada campo. Los cambios no se reemplazan hasta que confirmes la selección y guardes.</p>{syncConflict.keys.map((key) => <div className="project-sync-conflict-field" key={key}><strong>{projectFieldLabel([key])}</strong><div className="project-sync-conflict-values"><div><span>En esta sesión</span><pre>{projectValueForReview(syncConflict.local[key])}</pre></div><div><span>Última versión guardada</span><pre>{projectValueForReview(syncConflict.remote[key])}</pre></div></div><div className="project-sync-conflict-actions"><button type="button" className={conflictChoices[key] === 'local' ? 'button primary' : 'button ghost'} onClick={() => resolveProjectConflict(key, 'local')}>Conservar esta sesión</button><button type="button" className={conflictChoices[key] === 'remote' ? 'button primary' : 'button ghost'} onClick={() => resolveProjectConflict(key, 'remote')}>Usar versión guardada</button></div></div>)}</section>}
+    {validationErrors.length > 0 && <div className="message error" role="alert"><strong>Revisá estos campos antes de guardar:</strong><ul>{validationErrors.map((error, index) => <li key={`${index}-${error}`}>{error}</li>)}</ul></div>}
+    <div className="project-editor-layout" inert={saving || savingChronology || projectActionBusy || syncRefreshing || !editorReady || Boolean(syncError) || Boolean(syncConflict)}><aside className="project-editor-aside"><ProjectEditorNav /></aside><section className="admin-panel editor-form">
     <div className="project-editor-toolbar"><div className="project-editor-heading"><div className="panel-title"><div><div className="status-line"><span className="status-pill">{project ? statusLabel(project.status) : 'Nuevo borrador'}</span>{isDirty && <span className="unsaved-pill">Cambios sin guardar</span>}</div><h2>{project?.title || 'Nuevo proyecto'}</h2></div><div className="editor-actions"><button className="button ghost" onClick={() => setPreview(true)} disabled={!project}>Previsualizar</button><button className="button primary" onClick={save} disabled={!isDirty || saving || savingChronology}>{saving ? 'Guardando…' : 'Guardar'}</button></div></div></div></div>
     <details id="project-info" className="project-editor-group project-editor-anchor" open><summary>Datos básicos</summary><div className="project-editor-group-body"><div className="form-grid"><Field label="Estado inicial del proyecto"><select value={form.currentStageId} onChange={(e) => set('currentStageId', e.target.value)}>{workflow.stages.filter((item) => item.active).sort((a, b) => a.order - b.order).map((item) => <option key={item.id} value={item.id}>{item.label}{item.branchFromId ? ' (rama)' : ''}</option>)}</select></Field><Field label="Situación pública"><select value={isPublicDebateProject(form) ? PUBLIC_DEBATE_FILTER_ID : 'etapa-legislativa'} onChange={(event) => set('publicDebate', event.target.value === PUBLIC_DEBATE_FILTER_ID)}><option value="etapa-legislativa">Según etapa legislativa</option><option value={PUBLIC_DEBATE_FILTER_ID}>En debate público</option></select><small>No cambia la cámara de origen ni la etapa legislativa.</small></Field><Field label="Título"><input value={form.title} onChange={(e) => { set('title', e.target.value); if (!project) set('slug', slugify(e.target.value)); }} /></Field><Field label="Slug estable"><input value={form.slug} onChange={(e) => set('slug', slugify(e.target.value))} disabled={Boolean(project?.publishedAt)} /></Field><Field label="Expediente"><input value={form.docketNumber || ''} onChange={(e) => set('docketNumber', e.target.value)} /></Field><Field label="Fecha de ingreso"><input type="date" value={form.entryDate || ''} onChange={(e) => set('entryDate', e.target.value || null)} /></Field><Field label="Cámara de origen"><select value={form.originChamberId || ''} onChange={(e) => set('originChamberId', e.target.value || null)}><option value="">Seleccionar</option>{data.catalogs.filter((item) => item.kind === 'chamber' && item.active && item.id !== LEGACY_PUBLIC_DEBATE_CATALOG_ID).map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}{form.originChamberId === LEGACY_PUBLIC_DEBATE_CATALOG_ID && <option value={LEGACY_PUBLIC_DEBATE_CATALOG_ID}>En Debate Público (clasificación anterior)</option>}</select></Field><Field label="Iniciativa"><select value={form.initiativeTypeId || ''} onChange={(e) => set('initiativeTypeId', e.target.value || null)}><option value="">Seleccionar</option>{data.catalogs.filter((item) => item.kind === 'initiative' && item.active).map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></Field><SingleLegislatorPicker items={data.legislators} value={form.authorLegislatorId || null} onChange={(value) => set('authorLegislatorId', value)} /></div></div></details>
     {effectiveProjectStageId({ currentStageId: form.currentStageId, updates: form.updates || [] }) === PREPARATION_STAGE_ID && <aside className="preparation-editor-note"><strong>En preparación · todavía sin presentación formal</strong><p>Podés publicar borradores o propuestas en circulación sin expediente, fecha, cámara ni iniciativa confirmados. Completá los datos que conozcas y citá las fuentes en Documentos o Fuentes.</p><p>Cuando se presente, completá los datos de ingreso y agregá una actualización en Cronología con la nueva etapa. Conservá el estado inicial para mantener el historial de esta misma ficha.</p></aside>}<details id="project-presentation" className="project-editor-group project-editor-anchor" open><summary>Identidad y jerarquía</summary><div className="project-editor-group-body"><ProjectPresentationSettings featured={form.featured || false} icon={projectIcon(form)} order={form.order || 0} onFeaturedChange={(value) => set('featured', value)} onIconChange={(value) => set('icon', value)} onOrderChange={(value) => set('order', value)} /></div></details>
@@ -418,8 +840,8 @@ function ProjectEditor({ project, data, call, reload, notify, onCreated, editorH
     {publishGate === 'unsaved' && <div className="dialog-backdrop" onMouseDown={() => !saving && setPublishGate(null)}><section className="dialog warning-dialog" role="alertdialog" aria-modal="true" aria-labelledby="publish-unsaved-title" aria-describedby="publish-unsaved-description" onMouseDown={(event) => event.stopPropagation()}><span className="eyebrow">Cambios sin guardar</span><h2 id="publish-unsaved-title">¿Guardar y preparar la publicación?</h2><p id="publish-unsaved-description">La publicación debe usar la versión que estás viendo. Primero guardaremos todos los cambios de esta pantalla y, si el guardado termina correctamente, podrás revisar y confirmar la nueva revisión pública.</p>{publishGateError && <p className="message error" role="alert">{publishGateError}</p>}<div className="dialog-actions"><button className="button ghost" type="button" disabled={saving} onClick={() => setPublishGate(null)}>Cancelar</button><button className="button primary" type="button" disabled={saving} onClick={() => void saveAndOpenPublication()}>{saving ? 'Guardando…' : 'Guardar y publicar'}</button></div></section></div>}
     {publishGate === 'blocked' && <div className="dialog-backdrop" onMouseDown={() => setPublishGate(null)}><section className="dialog warning-dialog" role="alertdialog" aria-modal="true" aria-labelledby="publish-blocked-title" onMouseDown={(event) => event.stopPropagation()}><span className="eyebrow">Antes de publicar</span><h2 id="publish-blocked-title">Faltan datos para publicar</h2><p>Corregí estos puntos en el proyecto y volvé a elegir “Publicar revisión”:</p><ul className="publication-blockers">{publicationIssues.map((issue) => <li key={issue}>{issue}</li>)}</ul><div className="dialog-actions"><button className="button primary" type="button" onClick={() => setPublishGate(null)}>Volver a editar</button></div></section></div>}
     {projectAction && project && <div className="dialog-backdrop" onMouseDown={() => { if (!projectActionBusy) setProjectAction(null); }}><section className={`dialog warning-dialog project-action-dialog ${projectAction}`} role="alertdialog" aria-modal="true" aria-labelledby="project-action-title" aria-describedby="project-action-description" onMouseDown={(event) => event.stopPropagation()}><span className="eyebrow">Confirmación requerida</span><h2 id="project-action-title">¿{projectAction === 'unpublish' ? 'Despublicar' : 'Archivar'} {project.title}?</h2><div className="confirmation-card"><strong>{projectAction === 'unpublish' ? 'La ficha dejará de estar disponible públicamente' : 'El proyecto saldrá del circuito activo'}</strong><p id="project-action-description">{projectAction === 'unpublish' ? 'Se retirará inmediatamente de la web pública. El borrador, los archivos y el historial de revisiones se conservarán para poder trabajar y publicarlo nuevamente.' : 'Se retirará inmediatamente de la web pública y quedará marcado como archivado. No se eliminarán el contenido, los archivos ni el historial editorial.'}</p></div>{projectActionError && <p className="message error" role="alert">{projectActionError}</p>}<div className="dialog-actions"><button className="button ghost" type="button" disabled={projectActionBusy} onClick={() => setProjectAction(null)}>Cancelar</button><button className={projectAction === 'unpublish' ? 'button warning' : 'button danger'} type="button" disabled={projectActionBusy} onClick={() => void confirmProjectAction()}>{projectActionBusy ? 'Procesando…' : projectAction === 'unpublish' ? 'Sí, despublicar' : 'Sí, archivar'}</button></div></section></div>}
-    {preview && project && <PreviewDialog project={project} form={form} settings={data.settings} legislators={data.legislators.filter((legislator) => legislator.published)} call={call} close={() => setPreview(false)} />}{publish && project && <PublishDialog project={project} names={Object.fromEntries([...data.legislators.map((item) => [item.id, item.fullName]), ...data.glossary.map((item) => [item.id, item.term]), ...data.catalogs.map((item) => [item.id, item.label]), ...data.workflows.flatMap((item) => [[item.id, item.name], ...item.stages.map((stage) => [stage.id, stage.label])])])} suggestedNotify={stageChanged} call={call} reload={reload} notify={notify} close={() => setPublish(false)} />}
-  </section></div></PendingProjectEdits.Provider>;
+    {preview && project && <PreviewDialog project={project} form={form} settings={data.settings} legislators={data.legislators.filter((legislator) => legislator.published)} call={call} close={() => setPreview(false)} />}{publish && project && <PublishDialog project={project} names={Object.fromEntries([...data.legislators.map((item) => [item.id, item.fullName]), ...data.glossary.map((item) => [item.id, item.term]), ...data.catalogs.map((item) => [item.id, item.label]), ...data.workflows.flatMap((item) => [[item.id, item.name], ...item.stages.map((stage) => [stage.id, stage.label])])])} suggestedNotify={stageChanged} call={call} reload={reload} notify={notify} onProjectUpdated={(updated) => { const confirmed = projectToInput(updated); projectVersion.current = updated.updatedAt; latestServerForm.current = confirmed; setConfirmedForm(confirmed); setForm((current) => sameValue(current, confirmed) ? confirmed : current); }} close={() => setPublish(false)} />}
+  </section></div></div></PendingProjectEdits.Provider>;
 }
 
 function ProjectPresentationSettings({ featured, icon, order, onFeaturedChange, onIconChange, onOrderChange }: {

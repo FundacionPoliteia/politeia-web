@@ -11,7 +11,7 @@ import { authenticateGoogleCredential, buildSession, readSession, requireAuth, r
 import { exportFirestoreBackup } from './backup.js';
 import { config } from './config.js';
 import {
-  changeProjectVisibility, createProject, getManageBootstrap, getPublicBootstrap, getPublicProject, listPublicProjects,
+  changeProjectVisibility, createProject, getManageBootstrap, getManageProject, getPublicBootstrap, getPublicProject, listPublicProjects,
   previewProject, publishProject, reviewProjectPublication, restoreRevision, saveCatalog, saveGlossaryTerm, saveLegislator, saveWorkflow, updateProject, updateSettings, saveProjectPosition,
 } from './contentService.js';
 import { ApiError } from './errors.js';
@@ -117,7 +117,11 @@ export function createApp() {
   }));
   app.get('/v1/manage/projects/:id/preview', requireRole('quorum_editor'), asyncHandler(async (req, res) => res.json({ item: await previewProject(String(req.params.id)) })));
   app.post('/v1/manage/projects/:id/preview', requireRole('quorum_editor'), asyncHandler(async (req, res) => res.json({ item: await previewProject(String(req.params.id), req.body) })));
-  app.post('/v1/manage/projects', requireRole('quorum_editor'), asyncHandler(async (req, res) => res.status(201).json({ item: await createProject(req.body, req.user!.email) })));
+  app.get('/v1/manage/projects/:id', requireRole('quorum_editor'), asyncHandler(async (req, res) => res.json({ item: await getManageProject(String(req.params.id)) })));
+  app.post('/v1/manage/projects', requireRole('quorum_editor'), asyncHandler(async (req, res) => {
+    const result = await createProject(req.body, req.user!.email, req.header('idempotency-key') || undefined);
+    res.status(result.created ? 201 : 200).json(result);
+  }));
   app.patch('/v1/manage/projects/:id', requireRole('quorum_editor'), asyncHandler(async (req, res) => res.json({ item: await updateProject(String(req.params.id), req.body, req.user!.email, req.header('if-match') || undefined) })));
   app.put('/v1/manage/projects/:id/positions/:positionId', requireRole('quorum_editor'), asyncHandler(async (req, res) => res.json(await saveProjectPosition(String(req.params.id), String(req.params.positionId), req.body, req.user!.email))));
   app.post('/v1/manage/projects/:id/publish', requireRole('quorum_editor'), asyncHandler(async (req, res) => res.json(await publishProject(String(req.params.id), req.body, req.user!.email))));
@@ -216,9 +220,14 @@ function asyncHandler(handler: (req: Request, res: Response, next: NextFunction)
 }
 
 function errorHandler(error: unknown, req: Request, res: Response, _next: NextFunction) {
-  if (error instanceof ZodError) return res.status(422).json({ error: { code: 'validation_error', message: 'Revisá los datos enviados', requestId: req.requestId, details: error.flatten() } });
+  if (error instanceof ZodError) {
+    const issues = error.issues.map((issue) => ({ path: issue.path, message: issue.message }));
+    console.warn(req.requestId, { code: 'validation_error', method: req.method, path: req.path, fields: issues.map((issue) => issue.path) });
+    return res.status(422).json({ error: { code: 'validation_error', message: 'Revisá los datos enviados', requestId: req.requestId, details: { ...error.flatten(), issues } } });
+  }
   if (error instanceof Error && error.message === 'Origin not allowed') return res.status(403).json({ error: { code: 'origin_not_allowed', message: 'Origen no permitido', requestId: req.requestId } });
   const apiError = error instanceof ApiError ? error : new ApiError(500, 'internal_error', 'Ocurrió un error inesperado');
+  if (apiError.status === 409) console.warn(req.requestId, { code: apiError.code, status: apiError.status, method: req.method, path: req.path });
   if (apiError.status >= 500) console.error(req.requestId, error);
   return res.status(apiError.status).json({ error: { code: apiError.code, message: apiError.message, requestId: req.requestId, ...(apiError.details ? { details: apiError.details } : {}) } });
 }

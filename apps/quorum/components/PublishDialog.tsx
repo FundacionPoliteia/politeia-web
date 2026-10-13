@@ -5,10 +5,10 @@ import { type Project, type ProjectChangeReport } from '@politeia/quorum-contrac
 import PublicationChanges from './PublicationChanges';
 
 type Review = { title: string; report: ProjectChangeReport; token: string; baselineRevision: number | null; canNotifyFollowers: boolean };
-export default function PublishDialog({ project, suggestedNotify, names, call, reload, notify, close }: {
+export default function PublishDialog({ project, suggestedNotify, names, call, reload, notify, onProjectUpdated, close }: {
   project: Project; suggestedNotify: boolean; names: Record<string, string>;
   call: (path: string, init?: RequestInit) => Promise<any>; reload: () => Promise<void>;
-  notify: (value: string) => void; close: () => void;
+  notify: (value: string) => void; onProjectUpdated: (project: Project) => void; close: () => void;
 }) {
   const [summary, setSummary] = useState('');
   const [send, setSend] = useState(suggestedNotify);
@@ -33,11 +33,17 @@ export default function PublishDialog({ project, suggestedNotify, names, call, r
     if (!review) return;
     setBusy(true); setError('');
     try {
-      await call(`/v1/manage/projects/${project.id}/publish`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({
+      const result = await call(`/v1/manage/projects/${project.id}/publish`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({
         changeSummary: summary, notifyFollowers: review.canNotifyFollowers && send, reviewToken: review.token,
       }) });
+      let updatedProject = result?.project as Project | undefined;
+      if (!updatedProject?.updatedAt) {
+        try { updatedProject = (await call(`/v1/manage/projects/${project.id}`, { cache: 'no-store' })).item as Project; }
+        catch { /* Publication succeeded; never invite a duplicate publish attempt because of a refresh failure. */ }
+      }
+      if (updatedProject?.updatedAt) onProjectUpdated(updatedProject);
       try { await reload(); } catch { /* Publishing succeeded; do not invite a duplicate retry. */ }
-      notify('La revisión fue publicada con el registro de secciones modificadas.'); close();
+      notify(updatedProject?.updatedAt ? 'La revisión fue publicada con el registro de secciones modificadas.' : 'La revisión fue publicada. Recargá el gestor para sincronizar la versión actual.'); close();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'No pudimos publicar.');
       setReview(null); setConfirming(false);

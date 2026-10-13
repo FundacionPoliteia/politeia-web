@@ -14,6 +14,7 @@ import type { TeamMember } from '@politeia/quorum-contracts';
 export const collections = {
   teamMembers: 'quorumTeamMembers',
   projects: 'quorumProjects',
+  projectSlugLocks: 'quorumProjectSlugLocks',
   publicProjects: 'quorumPublicProjects',
   legislators: 'quorumLegislators',
   glossary: 'quorumGlossaryTerms',
@@ -67,7 +68,13 @@ export interface DataStore {
   set<T extends RecordValue>(collection: CollectionKey, id: string, value: T): Promise<T>;
   delete(collection: CollectionKey, id: string): Promise<void>;
   publish(bundle: PublishBundle): Promise<void>;
-  mutateProject(id: string, mutate: (project: Project) => Project): Promise<Project | null>;
+  createProject(project: Project, audit: RecordValue, uniqueSlug: string): Promise<{ item: Project; created: boolean }>;
+  mutateProject(id: string, mutate: (project: Project) => Project, options?: {
+    audit?: RecordValue;
+    uniqueSlug?: string;
+    releaseSlug?: string;
+    removePublicProjection?: boolean;
+  }): Promise<Project | null>;
   acquireIntegrationLease(sourceId: string, runId: string, leaseUntil: string): Promise<boolean>;
   finalizeIntegrationRun(source: ExternalSource, run: ExternalSyncRun): Promise<void>;
   applyLegislatorReview(bundle: LegislatorReviewBundle): Promise<void>;
@@ -118,12 +125,37 @@ class MemoryStore implements DataStore {
     invalidateCollectionCache(collection);
   }
 
-  async mutateProject(id: string, mutate: (project: Project) => Project) {
+  async createProject(project: Project, audit: RecordValue, uniqueSlug: string) {
+    const projects = this.records.get('projects')!;
+    const existing = projects.get(project.id);
+    if (existing) return { item: structuredClone(existing) as unknown as Project, created: false };
+    if ([...projects.values()].some((item) => item.slug === uniqueSlug)) {
+      throw new ApiError(409, 'project_slug_exists', 'Ya existe un proyecto con ese slug');
+    }
+    projects.set(project.id, structuredClone(project) as unknown as RecordValue);
+    this.records.get('audits')!.set(String(audit.id), structuredClone(audit));
+    invalidateCollectionCache('projects');
+    invalidateCollectionCache('audits');
+    return { item: structuredClone(project), created: true };
+  }
+
+  async mutateProject(id: string, mutate: (project: Project) => Project, options: {
+    audit?: RecordValue;
+    uniqueSlug?: string;
+    removePublicProjection?: boolean;
+  } = {}) {
     const current = this.records.get('projects')!.get(id);
     if (!current) return null;
     const next = mutate(structuredClone(current) as Project);
+    if (options.uniqueSlug && [...this.records.get('projects')!.values()].some((item) => item.id !== id && item.slug === options.uniqueSlug)) {
+      throw new ApiError(409, 'project_slug_exists', 'Ya existe un proyecto con ese slug');
+    }
     this.records.get('projects')!.set(id, structuredClone(next));
+    if (options.audit) this.records.get('audits')!.set(String(options.audit.id), structuredClone(options.audit));
+    if (options.removePublicProjection) this.records.get('publicProjects')!.delete(id);
     invalidateCollectionCache('projects');
+    if (options.audit) invalidateCollectionCache('audits');
+    if (options.removePublicProjection) invalidateCollectionCache('publicProjects');
     return structuredClone(next);
   }
 
@@ -193,16 +225,62 @@ class FirestoreStore implements DataStore {
     return this.firestore.collection(collections[key]);
   }
 
-  async mutateProject(id: string, mutate: (project: Project) => Project) {
+  async createProject(project: Project, audit: RecordValue, uniqueSlug: string) {
+    const projectRef = this.collection('projects').doc(project.id);
+    const auditRef = this.collection('audits').doc(String(audit.id));
+    const slugLockRef = this.collection('projectSlugLocks').doc(uniqueSlug);
+    const result = await this.firestore.runTransaction(async (transaction) => {
+      const existing = await transaction.get(projectRef);
+      if (existing.exists) return { item: { id: existing.id, ...existing.data() } as Project, created: false };
+      const slugMatches = await transaction.get(this.collection('projects').where('slug', '==', uniqueSlug));
+      const slugLock = await transaction.get(slugLockRef);
+      if (!slugMatches.empty || slugLock.exists) throw new ApiError(409, 'project_slug_exists', 'Ya existe un proyecto con ese slug');
+      transaction.create(projectRef, project);
+      transaction.create(auditRef, audit);
+      transaction.create(slugLockRef, { id: uniqueSlug, projectId: project.id });
+      return { item: project, created: true };
+    });
+    if (result.created) {
+      invalidateCollectionCache('projects');
+      invalidateCollectionCache('audits');
+    }
+    return result;
+  }
+
+  async mutateProject(id: string, mutate: (project: Project) => Project, options: {
+    audit?: RecordValue;
+    uniqueSlug?: string;
+    releaseSlug?: string;
+    removePublicProjection?: boolean;
+  } = {}) {
     const ref = this.collection('projects').doc(id);
     const result = await this.firestore.runTransaction(async (transaction) => {
       const snapshot = await transaction.get(ref);
       if (!snapshot.exists) return null;
       const next = mutate({ ...snapshot.data(), id } as Project);
+      let nextSlugLockExists = false;
+      let ownsPreviousSlugLock = false;
+      if (options.uniqueSlug) {
+        const matches = await transaction.get(this.collection('projects').where('slug', '==', options.uniqueSlug));
+        if (matches.docs.some((item) => item.id !== id)) throw new ApiError(409, 'project_slug_exists', 'Ya existe un proyecto con ese slug');
+        const nextSlugLock = await transaction.get(this.collection('projectSlugLocks').doc(options.uniqueSlug));
+        nextSlugLockExists = nextSlugLock.exists;
+        if (nextSlugLock.exists && nextSlugLock.data()?.projectId !== id) throw new ApiError(409, 'project_slug_exists', 'Ya existe un proyecto con ese slug');
+      }
+      if (options.releaseSlug) {
+        const previousSlugLock = await transaction.get(this.collection('projectSlugLocks').doc(options.releaseSlug));
+        ownsPreviousSlugLock = previousSlugLock.exists && previousSlugLock.data()?.projectId === id;
+      }
       transaction.set(ref, next);
+      if (options.uniqueSlug && !nextSlugLockExists) transaction.create(this.collection('projectSlugLocks').doc(options.uniqueSlug), { id: options.uniqueSlug, projectId: id });
+      if (options.audit) transaction.create(this.collection('audits').doc(String(options.audit.id)), options.audit);
+      if (options.removePublicProjection) transaction.delete(this.collection('publicProjects').doc(id));
+      if (options.releaseSlug && ownsPreviousSlugLock) transaction.delete(this.collection('projectSlugLocks').doc(options.releaseSlug));
       return next;
     });
     invalidateCollectionCache('projects');
+    if (options.audit) invalidateCollectionCache('audits');
+    if (options.removePublicProjection) invalidateCollectionCache('publicProjects');
     return result;
   }
 
