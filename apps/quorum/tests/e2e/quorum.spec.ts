@@ -67,6 +67,101 @@ test('la ficha de proyecto mantiene sus datos en un encabezado compacto en mobil
   }
 });
 
+test('el perfil público de un cargo Otro muestra sus datos completos en el modal', async ({ page, request }, testInfo) => {
+  const apiBase = `http://localhost:${process.env.QUORUM_E2E_API_PORT || 8890}`;
+  const marker = `${testInfo.project.name}-${Date.now()}`.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+  const presidentName = 'Javier Gerardo Milei';
+  const profileSlug = 'javier-gerardo-milei-e2e';
+  const photoUrl = 'https://example.com/presidente-e2e.jpg';
+  await page.route(photoUrl, (route) => route.fulfill({
+    status: 200,
+    contentType: 'image/svg+xml',
+    body: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 160"><rect width="120" height="160" fill="#dff0f4"/><circle cx="60" cy="50" r="28" fill="#1a1a37"/><path d="M14 160c4-46 27-68 46-68s42 22 46 68" fill="#1687ad"/></svg>',
+  }));
+
+  const existingProfilesResponse = await request.get(`${apiBase}/v1/manage/bootstrap`);
+  const existingProfiles = (await existingProfilesResponse.json()).legislators;
+  let profileBody = existingProfiles.find((item: { slug: string }) => item.slug === profileSlug) ? { item: existingProfiles.find((item: { slug: string }) => item.slug === profileSlug) } : null;
+  if (!profileBody) {
+    const profileResponse = await request.post(`${apiBase}/v1/manage/legislators`, { data: {
+      fullName: presidentName, slug: profileSlug, photoUrl, party: 'Poder Ejecutivo', bloc: 'Administración nacional', district: 'Nacional', office: 'otro',
+      mandateStart: '2023-12-10', mandateEnd: null, academicTitle: 'Presidente de la Nación', bio: 'Jefe del Estado y del Poder Ejecutivo Nacional.',
+      attendance: { value: 96, asOf: '2026-09-01', sourceUrl: 'https://example.com/asistencia' }, published: true,
+    } });
+    profileBody = await profileResponse.json();
+    expect(profileResponse.ok(), JSON.stringify(profileBody)).toBeTruthy();
+  }
+
+  const attributionName = 'Firma sin perfil E2E';
+  const attributionSlug = 'firma-sin-perfil-e2e';
+  let attributionBody = existingProfiles.find((item: { slug: string }) => item.slug === attributionSlug) ? { item: existingProfiles.find((item: { slug: string }) => item.slug === attributionSlug) } : null;
+  if (!attributionBody) {
+    const attributionResponse = await request.post(`${apiBase}/v1/manage/legislators`, { data: {
+      fullName: attributionName, slug: attributionSlug, party: 'Partido de prueba', bloc: '', district: '', office: 'diputado',
+      mandateStart: null, mandateEnd: null, academicTitle: '', bio: '', attendance: null, published: false,
+    } });
+    attributionBody = await attributionResponse.json();
+    expect(attributionResponse.ok(), JSON.stringify(attributionBody)).toBeTruthy();
+  }
+
+  const slug = `perfil-cargo-otro-${marker}`;
+  const projectResponse = await request.post(`${apiBase}/v1/manage/projects`, { data: {
+    title: `Proyecto con perfil presidencial ${marker}`, slug, workflowId: 'legislativo-nacional-v1', workflowVersion: 1, currentStageId: 'mesa-de-entrada',
+    docketNumber: `9200-${marker}`, entryDate: '2026-08-06', originChamberId: 'diputados', initiativeTypeId: 'poder-ejecutivo',
+    summary: 'Resumen suficiente para publicar una ficha con perfil vinculado.', impact: 'Impacto suficiente para probar los datos del perfil público en el modal.',
+    authorLegislatorId: profileBody!.item.id, signatoryIds: [attributionBody!.item.id], glossaryTermIds: [], documents: [], sources: [], updates: [], featured: false, order: 99,
+  } });
+  const projectBody = await projectResponse.json();
+  expect(projectResponse.ok(), JSON.stringify(projectBody)).toBeTruthy();
+  const publishResponse = await request.post(`${apiBase}/v1/manage/projects/${projectBody.item.id}/publish`, { data: { notifyFollowers: false } });
+  expect(publishResponse.ok(), await publishResponse.text()).toBeTruthy();
+
+  await page.goto(`/proyectos/${slug}`);
+  const trigger = page.locator('.author-card');
+  await expect(trigger).toContainText(presidentName);
+  await trigger.click();
+  const modal = page.getByRole('dialog', { name: presidentName });
+  await expect(modal).toBeVisible();
+  await expect(modal.locator('.legislator-modal-identity')).toContainText('Perfil público');
+  await expect(modal.locator('.person-photo-portrait img')).toHaveAttribute('src', photoUrl);
+  const cargo = await modal.locator('.legislator-modal-data > div').evaluateAll((fields) => fields.find((field) => field.querySelector('dt')?.textContent === 'Cargo')?.querySelector('dd')?.textContent);
+  expect(cargo).toBe('Presidente de la Nación');
+  await expect(modal.locator('.legislator-modal-data')).toContainText('Poder Ejecutivo');
+  await expect(modal.locator('.legislator-modal-data')).toContainText('Administración nacional');
+  await expect(modal.locator('.legislator-modal-data')).toContainText('Nacional');
+  await expect(modal.locator('.legislator-modal-data')).toContainText('96%');
+  await expect(modal.locator('.legislator-modal-data')).not.toContainText('Formación');
+  await expect(modal.locator('.legislator-modal-bio')).toContainText('Jefe del Estado');
+  const portraitLayout = await modal.locator('.person-photo-portrait').evaluate((element) => ({ width: element.getBoundingClientRect().width, height: element.getBoundingClientRect().height }));
+  expect(portraitLayout.width).toBeLessThan(portraitLayout.height);
+  const modalLayout = await modal.evaluate((element) => ({ scrollWidth: element.scrollWidth, clientWidth: element.clientWidth }));
+  expect(modalLayout.scrollWidth).toBeLessThanOrEqual(modalLayout.clientWidth + 1);
+  const axe = await new AxeBuilder({ page }).include('.legislator-modal').analyze();
+  expect(axe.violations.filter((item) => ['critical', 'serious'].includes(item.impact || ''))).toEqual([]);
+  await page.screenshot({ path: testInfo.outputPath('modal-perfil-publico.png') });
+  await page.keyboard.press('Escape');
+  await expect(modal).toBeHidden();
+
+  const attributionTrigger = page.locator('.person-chip').filter({ hasText: attributionName });
+  await expect(attributionTrigger).toBeVisible();
+  await attributionTrigger.click();
+  const attributionModal = page.getByRole('dialog', { name: attributionName });
+  await expect(attributionModal.locator('.legislator-modal-identity')).toContainText('Datos de atribución');
+  await expect(attributionModal).not.toContainText('Perfil ampliado en preparación');
+  await expect(attributionModal.locator('.legislator-modal-data')).toContainText('Partido de prueba');
+
+  await page.goto(`/legisladores/${profileBody!.item.slug}`);
+  await expect(page.getByRole('heading', { name: presidentName })).toBeVisible();
+  await expect(page.locator('.fact').filter({ hasText: 'Cargo' }).locator('strong')).toHaveText('Presidente de la Nación');
+  await expect(page.getByRole('heading', { name: 'Formación', exact: true })).toHaveCount(0);
+  const profilePortrait = page.locator('.legislator-profile-heading .person-photo-portrait');
+  await expect(profilePortrait).toBeVisible();
+  const profileLayout = await page.locator('.legislator-profile-facts').evaluate((element) => ({ columns: getComputedStyle(element).gridTemplateColumns.split(' ').length, scrollWidth: element.scrollWidth, clientWidth: element.clientWidth }));
+  expect(profileLayout.scrollWidth).toBeLessThanOrEqual(profileLayout.clientWidth + 1);
+  expect(profileLayout.columns).toBe((page.viewportSize()?.width || 1280) <= 620 ? 2 : 4);
+  await page.screenshot({ path: testInfo.outputPath('perfil-publico-completo.png'), fullPage: true });
+});
+
 test('el glosario contextual y sus términos largos se mantienen legibles', async ({ page, request }, testInfo) => {
   const apiBase = `http://localhost:${process.env.QUORUM_E2E_API_PORT || 8890}`;
   const marker = `${testInfo.project.name}-${Date.now()}`.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
@@ -174,7 +269,8 @@ test('el glosario contextual y sus términos largos se mantienen legibles', asyn
   await expect(legislatorModal).toContainText('Córdoba');
   await expect(legislatorModal).toContainText('Partido de Prueba');
   await expect(legislatorModal).toContainText('Bloque Federal');
-  await expect(legislatorModal).toContainText('Perfil ampliado en preparación');
+  await expect(legislatorModal).not.toContainText('Perfil ampliado en preparación');
+  await expect(legislatorModal.locator('.person-photo-portrait')).toBeVisible();
   const legislatorAxe = await new AxeBuilder({ page }).include('.legislator-modal').analyze();
   expect(legislatorAxe.violations.filter((item) => ['critical', 'serious'].includes(item.impact || ''))).toEqual([]);
   await page.keyboard.press('Escape');

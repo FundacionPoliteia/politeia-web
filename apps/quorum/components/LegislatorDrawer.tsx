@@ -86,18 +86,24 @@ export default function LegislatorDrawer({ author, signatories, profiles, childr
       </section>
     </div>}
     {selected && <div className="legislator-modal-backdrop" onMouseDown={close}>
-      <section ref={modalRef} className="legislator-modal" role="dialog" aria-modal="true" aria-labelledby="legislator-modal-name" aria-describedby={!selectedProfile ? 'legislator-modal-status' : undefined} onMouseDown={(event) => event.stopPropagation()}>
+      <section ref={modalRef} className="legislator-modal" role="dialog" aria-modal="true" aria-labelledby="legislator-modal-name" onMouseDown={(event) => event.stopPropagation()}>
         <button ref={closeRef} className="legislator-modal-close" type="button" aria-label="Cerrar perfil" onClick={close}>×</button>
-        <header className="legislator-modal-header"><PersonPhoto url={selectedProfile?.photoUrl ?? selected.photoUrl} name={selected.fullName} large /><span className="eyebrow">{selectedProfile ? 'Perfil legislativo' : 'Datos de atribución'}</span><h2 id="legislator-modal-name">{selected.fullName}</h2>{selectedProfile && <span className="status-pill">Perfil público verificado</span>}</header>
+        <header className="legislator-modal-header">
+          <PersonPhoto url={selectedProfile?.photoUrl ?? selected.photoUrl} name={selected.fullName} large portrait />
+          <div className="legislator-modal-identity">
+            <span className="eyebrow">{selectedProfile?.office === 'otro' ? 'Perfil público' : selectedProfile ? 'Perfil legislativo' : 'Datos de atribución'}</span>
+            <h2 id="legislator-modal-name">{selected.fullName}</h2>
+            {selectedProfile && <span className="status-pill">Perfil público verificado</span>}
+          </div>
+        </header>
         <dl className="legislator-modal-data">
-          <div><dt>Cargo</dt><dd>{officeLabel(selected.office)}</dd></div>
+          <div><dt>Cargo</dt><dd>{selectedProfile?.office === 'otro' && selectedProfile.academicTitle.trim() ? selectedProfile.academicTitle : officeLabel(selected.office)}</dd></div>
           <div><dt>Distrito</dt><dd>{selected.district || 'Sin dato disponible'}</dd></div>
           <div><dt>Partido</dt><dd>{selected.party || 'Sin dato disponible'}</dd></div>
           <div><dt>Bloque</dt><dd>{selected.bloc || 'Sin dato disponible'}</dd></div>
-          {selectedProfile && <><div><dt>Mandato</dt><dd>{formatDate(selectedProfile.mandateStart)} — {formatDate(selectedProfile.mandateEnd)}</dd></div><div><dt>Formación</dt><dd>{selectedProfile.academicTitle || 'Sin dato disponible'}</dd></div>{selectedProfile.attendance && <div className="legislator-modal-data-wide"><dt>Asistencia</dt><dd>{selectedProfile.attendance.value}% al {formatDate(selectedProfile.attendance.asOf)} · <a href={selectedProfile.attendance.sourceUrl} target="_blank" rel="noreferrer">Consultar fuente ↗</a></dd></div>}</>}
+          {selectedProfile && <><div><dt>Mandato</dt><dd>{formatDate(selectedProfile.mandateStart)} — {formatDate(selectedProfile.mandateEnd)}</dd></div>{selectedProfile.office !== 'otro' && <div><dt>Formación</dt><dd>{selectedProfile.academicTitle || 'Sin dato disponible'}</dd></div>}{selectedProfile.attendance && <div className="legislator-modal-data-wide"><dt>Asistencia</dt><dd>{selectedProfile.attendance.value}% al {formatDate(selectedProfile.attendance.asOf)} · <a href={selectedProfile.attendance.sourceUrl} target="_blank" rel="noreferrer">Consultar fuente ↗</a></dd></div>}</>}
         </dl>
         {selectedProfile?.bio && <section className="legislator-modal-bio"><h3>Perfil</h3><p>{selectedProfile.bio}</p></section>}
-        {!selectedProfile && <div className="legislator-modal-status" id="legislator-modal-status"><strong>Perfil ampliado en preparación</strong><p>Estos datos de autoría o firma fueron aprobados al publicar el proyecto. La biografía completa todavía está en revisión editorial.</p></div>}
         <footer className="legislator-modal-actions">{selectedProfile && <Link className="button primary" href={`/legisladores/${selectedProfile.slug}`}>Ver perfil completo</Link>}<button className="button ghost" type="button" onClick={close}>Cerrar</button></footer>
       </section>
     </div>}
