@@ -115,7 +115,7 @@ export default function ProjectPositionsEditor({ items, legislators, savedItems,
             setActiveNameId(item.id);
           }} />
           {activeNameId === item.id && suggestions.length > 0 && <div className={styles.nameSuggestions} role="listbox" aria-label="Diputados y senadores recomendados">{suggestions.map((legislator) => <button key={legislator.id} type="button" role="option" onMouseDown={(event) => event.preventDefault()} onClick={() => chooseLegislator(item.id, legislator)}><strong>{legislator.fullName}</strong><small>{legislator.office === 'diputado' ? 'Diputado/a' : 'Senador/a'} · {legislator.bloc || legislator.party || 'Sin bloque'}</small></button>)}</div>}
-          <small className={styles.nameHint}>Buscá o elegí un diputado/a o senador/a cargado. El nombre abre el modal sólo si coincide exactamente con un perfil publicado.</small>
+          <small className={styles.nameHint}>Buscá o elegí un diputado/a o senador/a cargado.</small>
         </div>
         <label className="field">Cargo o espacio político<input maxLength={200} value={item.role} onChange={(e) => update(item.id, { role: e.target.value })} /></label>
         <label className="field">Fecha de la declaración<input type="date" value={item.date || ''} onChange={(e) => update(item.id, { date: e.target.value || null })} /></label>

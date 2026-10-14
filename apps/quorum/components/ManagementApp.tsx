@@ -20,6 +20,7 @@ import { changeSections } from '@politeia/quorum-contracts';
 import { projectPositionsSchema } from '@politeia/quorum-contracts';
 import type { ProjectPosition } from '@politeia/quorum-contracts';
 import { clearConfirmedProjectEditorRecoveries, projectEditorRecoveryKey, projectFieldLabel, projectValueForReview, readProjectEditorRecovery, reconcileProjectInputs, writeProjectEditorRecovery, type ProjectEditorRecovery } from '@/lib/projectEditorSync';
+import { describeManagementFailure, describeProjectValidationIssue } from '@/lib/managementErrors';
 import { SiteFooter, SiteHeader } from '@/components/SiteChrome';
 import QuorumRichTextEditor from '@/components/QuorumRichTextEditor';
 import StageExplanationEditor, { ProjectStageExplanationEditor } from '@/components/StageExplanationEditor';
@@ -38,7 +39,7 @@ type SectionStatus = { dirty: boolean; busy: boolean };
 type SectionStatusReporter = (dirty: boolean, busy?: boolean) => void;
 
 class ManagementApiError extends Error {
-  constructor(message: string, public status: number, public code: string, public details: any, public requestId: string) {
+  constructor(message: string, public status: number, public code: string, public details: any, public requestId: string, public serverMessage = message) {
     super(message);
     this.name = 'ManagementApiError';
   }
@@ -139,14 +140,21 @@ export default function ManagementApp() {
 
   const call = useCallback(async (path: string, init: RequestInit = {}) => {
     const headers = new Headers(init.headers); if (user?.csrfToken && !['GET', 'HEAD'].includes(init.method || 'GET')) headers.set('x-csrf-token', user.csrfToken);
+    const method = (init.method || 'GET').toUpperCase();
+    const action = path.endsWith('/publish') ? 'publicar la revisión' : path.includes('/positions/') ? 'guardar la declaración' : path === '/v1/manage/projects' && method === 'POST' ? 'crear el borrador' : path.startsWith('/v1/manage/projects/') && method === 'PATCH' ? 'guardar el borrador' : 'procesar la solicitud';
     let response: Response;
     try { response = await fetch(`${publicApiBase}${path}`, { ...init, headers, credentials: 'include' }); }
-    catch { throw new Error('No pudimos conectarnos con la API de Quórum. Verificá que el backend local esté encendido.'); }
+    catch {
+      const message = describeManagementFailure({ status: 0, code: 'network_error' }, action);
+      throw new ManagementApiError(message, 0, 'network_error', null, '');
+    }
     const body = response.status === 204 ? null : await response.json().catch(() => null);
     if (!response.ok) {
-      const message = body?.error?.message || `La API rechazó la operación (HTTP ${response.status}).`;
+      const serverMessage = body?.error?.message || `La API rechazó la operación (HTTP ${response.status}).`;
       const requestId = String(body?.error?.requestId || '');
-      throw new ManagementApiError(requestId ? `${message} · referencia ${requestId}` : message, response.status, String(body?.error?.code || ''), body?.error?.details, requestId);
+      const code = String(body?.error?.code || '');
+      const message = describeManagementFailure({ status: response.status, code, serverMessage, requestId }, action);
+      throw new ManagementApiError(message, response.status, code, body?.error?.details, requestId, serverMessage);
     }
     return body;
   }, [user]);
@@ -416,7 +424,7 @@ function ProjectEditor({ project, data, call, reload, notify, onCreated, editorH
   };
 
   function showValidationIssues(issues: Array<{ path: PropertyKey[]; message: string }>) {
-    setValidationErrors(issues.map((issue) => `${projectFieldLabel(issue.path)}: ${issue.message}`));
+    setValidationErrors(issues.map((issue) => describeProjectValidationIssue(issue)));
   }
 
   function showApiValidation(error: unknown) {
@@ -426,10 +434,10 @@ function ProjectEditor({ project, data, call, reload, notify, onCreated, editorH
     else {
       const fieldErrors = error.details?.fieldErrors;
       const entries = fieldErrors && typeof fieldErrors === 'object' ? Object.entries(fieldErrors) : [];
-      setValidationErrors(entries.flatMap(([key, values]) => Array.isArray(values) ? values.map((message) => `${projectFieldLabel([key])}: ${String(message)}`) : []));
+      setValidationErrors(entries.flatMap(([key, values]) => Array.isArray(values) ? values.map((message) => describeProjectValidationIssue({ path: [key], code: 'custom', message: String(message) })) : []));
     }
     if (error.requestId) setValidationErrors((current) => [...current, `Referencia de la API: ${error.requestId}`]);
-    notify(`${error.message}. Tus cambios siguen en el formulario.`);
+    notify(error.message);
     return true;
   }
 
@@ -601,7 +609,7 @@ function ProjectEditor({ project, data, call, reload, notify, onCreated, editorH
         positionsCheck = projectPositionsSchema.safeParse(submitted.positions || []);
         if (!positionsCheck.success) { showValidationIssues(positionsCheck.error.issues); return false; }
         try {
-          body = await call(`/v1/manage/projects/${project.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json', 'if-match': synchronized.project.updatedAt }, body: JSON.stringify(submitted) });
+          body = await call(`/v1/manage/projects/${project.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json', 'x-quorum-expected-updated-at': synchronized.project.updatedAt }, body: JSON.stringify(submitted) });
         } catch (error) {
           if (!(error instanceof ManagementApiError) || error.status !== 409) throw error;
           const retrySync = await synchronizeProject(synchronized.remote, submitted);
@@ -611,7 +619,7 @@ function ProjectEditor({ project, data, call, reload, notify, onCreated, editorH
           const retryValidation = projectInputSchema.strict().safeParse(submitted);
           if (!retryValidation.success) { showValidationIssues(retryValidation.error.issues); return false; }
           submitted = retryValidation.data;
-          if (!retrySync.alreadySaved) body = await call(`/v1/manage/projects/${project.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json', 'if-match': retrySync.project.updatedAt }, body: JSON.stringify(submitted) });
+          if (!retrySync.alreadySaved) body = await call(`/v1/manage/projects/${project.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json', 'x-quorum-expected-updated-at': retrySync.project.updatedAt }, body: JSON.stringify(submitted) });
           positionsCheck = projectPositionsSchema.safeParse(submitted.positions || []);
           if (!positionsCheck.success) { showValidationIssues(positionsCheck.error.issues); return false; }
         }
@@ -642,7 +650,7 @@ function ProjectEditor({ project, data, call, reload, notify, onCreated, editorH
           positionsCheck = projectPositionsSchema.safeParse(submitted.positions || []);
           if (!positionsCheck.success) { showValidationIssues(positionsCheck.error.issues); return false; }
           if (!sameValue(recovered.merged, recoveredProject)) {
-            body = await call(`/v1/manage/projects/${body.item.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json', 'if-match': body.item.updatedAt }, body: JSON.stringify(recovered.merged) });
+            body = await call(`/v1/manage/projects/${body.item.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json', 'x-quorum-expected-updated-at': body.item.updatedAt }, body: JSON.stringify(recovered.merged) });
           } else body = { item: body.item };
         }
       }
@@ -706,7 +714,7 @@ function ProjectEditor({ project, data, call, reload, notify, onCreated, editorH
       let updates = synchronized.form.updates || [];
       let body: any;
       try {
-        body = await call(`/v1/manage/projects/${project.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json', 'if-match': synchronized.project.updatedAt }, body: JSON.stringify({ updates }) });
+        body = await call(`/v1/manage/projects/${project.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json', 'x-quorum-expected-updated-at': synchronized.project.updatedAt }, body: JSON.stringify({ updates }) });
       } catch (error) {
         if (!(error instanceof ManagementApiError) || error.status !== 409) throw error;
         const retry = await synchronizeProject(synchronized.remote, latestForm.current);
@@ -716,7 +724,7 @@ function ProjectEditor({ project, data, call, reload, notify, onCreated, editorH
           return;
         }
         updates = retry.form.updates || [];
-        body = await call(`/v1/manage/projects/${project.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json', 'if-match': retry.project.updatedAt }, body: JSON.stringify({ updates }) });
+        body = await call(`/v1/manage/projects/${project.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json', 'x-quorum-expected-updated-at': retry.project.updatedAt }, body: JSON.stringify({ updates }) });
       }
       if (!body?.item?.updatedAt || !sameValue(body.item.updates || [], updates)) throw new Error('El servidor no confirmó la cronología completa. Conservamos tus cambios.');
       const confirmed = projectToInput(body.item);

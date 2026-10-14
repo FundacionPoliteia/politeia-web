@@ -122,7 +122,10 @@ export function createApp() {
     const result = await createProject(req.body, req.user!.email, req.header('idempotency-key') || undefined);
     res.status(result.created ? 201 : 200).json(result);
   }));
-  app.patch('/v1/manage/projects/:id', requireRole('quorum_editor'), asyncHandler(async (req, res) => res.json({ item: await updateProject(String(req.params.id), req.body, req.user!.email, req.header('if-match') || undefined) })));
+  app.patch('/v1/manage/projects/:id', requireRole('quorum_editor'), asyncHandler(async (req, res) => {
+    const expectedUpdatedAt = req.header('x-quorum-expected-updated-at') || req.header('if-match') || undefined;
+    res.json({ item: await updateProject(String(req.params.id), req.body, req.user!.email, expectedUpdatedAt) });
+  }));
   app.put('/v1/manage/projects/:id/positions/:positionId', requireRole('quorum_editor'), asyncHandler(async (req, res) => res.json(await saveProjectPosition(String(req.params.id), String(req.params.positionId), req.body, req.user!.email))));
   app.post('/v1/manage/projects/:id/publish', requireRole('quorum_editor'), asyncHandler(async (req, res) => res.json(await publishProject(String(req.params.id), req.body, req.user!.email))));
   app.get('/v1/manage/projects/:id/publication-review', requireRole('quorum_editor'), asyncHandler(async (req, res) => res.json(await reviewProjectPublication(String(req.params.id)))));

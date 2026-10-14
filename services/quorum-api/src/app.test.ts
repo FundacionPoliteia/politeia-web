@@ -174,10 +174,10 @@ describe('Quórum API', () => {
     const app = createApp();
     const path = `/v1/manage/projects/${project.id}`;
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    await request(app).patch(path).set('If-Match', project.updatedAt).send({ title: 'Cambio confirmado en otra sesión' }).expect(200);
+    await request(app).patch(path).set('X-Quorum-Expected-Updated-At', project.updatedAt).send({ title: 'Cambio confirmado en otra sesión' }).expect(200);
 
     try {
-      const response = await request(app).patch(path).set('If-Match', project.updatedAt).send({ summary: 'Este texto no debe pisar la versión reciente.' }).expect(409);
+      const response = await request(app).patch(path).set('X-Quorum-Expected-Updated-At', project.updatedAt).send({ summary: 'Este texto no debe pisar la versión reciente.' }).expect(409);
       expect(warning).toHaveBeenCalledWith(response.body.error.requestId, {
         code: 'project_draft_changed', status: 409, method: 'PATCH', path,
       });
@@ -185,6 +185,17 @@ describe('Quórum API', () => {
       expect(stored?.title).toBe('Cambio confirmado en otra sesión');
       expect(stored?.summary).toBe(project.summary);
     } finally { warning.mockRestore(); }
+  });
+
+  it('mantiene compatibilidad de concurrencia con clientes anteriores que envían If-Match', async () => {
+    const [project] = await testStore.list<Project>('projects');
+    const app = createApp();
+    const response = await request(app).patch(`/v1/manage/projects/${project.id}`)
+      .set('If-Match', project.updatedAt)
+      .send({ title: 'Guardado desde cliente anterior' })
+      .expect(200);
+
+    expect(response.body.item.title).toBe('Guardado desde cliente anterior');
   });
   it('rechaza declaraciones inválidas sin sobrescribir las guardadas y conserva su orden en cambios parciales', async () => {
     const [project] = await testStore.list<Project>('projects');
