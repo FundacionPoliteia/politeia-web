@@ -32,35 +32,41 @@ const emptySettings: SiteSettings = {
   subscriptionsEnabled: false, privacyPolicyApproved: false, updatedAt: new Date(0).toISOString(),
 };
 
-export async function fetchPublicBootstrap(options: { fresh?: boolean } = {}): Promise<PublicBootstrap> {
+export async function fetchPublicBootstrap(options: { fresh?: boolean; throwOnError?: boolean } = {}): Promise<PublicBootstrap> {
   try {
     const requestOptions = options.fresh
       ? { headers: serverPublicAccessHeaders(), cache: 'no-store' as const }
       : { headers: serverPublicAccessHeaders(), next: { revalidate: 300, tags: ['quorum-public'] } };
     const response = await fetch(`${serverApiBase}/v1/public/bootstrap`, requestOptions);
     if (!response.ok) throw new Error('Public API unavailable');
-    return await response.json() as PublicBootstrap;
-  } catch {
+    const data = await response.json() as Partial<PublicBootstrap> | null;
+    if (!data || !Array.isArray(data.projects) || !Array.isArray(data.catalogs) || !Array.isArray(data.workflows)
+      || !data.settings || !Array.isArray(data.legislators) || !Array.isArray(data.glossary)) {
+      throw new Error('Public API returned an invalid bootstrap response');
+    }
+    return data as PublicBootstrap;
+  } catch (error) {
+    if (options.throwOnError) throw error;
     return { projects: [], catalogs: [], workflows: [], settings: emptySettings, legislators: [], glossary: [] };
   }
 }
 
 export async function fetchPublicProject(slug: string): Promise<PublicProject | null> {
-  try {
-    const response = await fetch(`${serverApiBase}/v1/public/projects/${encodeURIComponent(slug)}?projection=${publicProjectionVersion}`, { headers: serverPublicAccessHeaders(), next: { revalidate: 300, tags: ['quorum-public', `quorum-project-${slug}`] } });
-    if (response.status === 404) return null;
-    if (!response.ok) throw new Error('Project API unavailable');
-    return (await response.json()).item as PublicProject;
-  } catch { return null; }
+  const response = await fetch(`${serverApiBase}/v1/public/projects/${encodeURIComponent(slug)}?projection=${publicProjectionVersion}`, { headers: serverPublicAccessHeaders(), cache: 'no-store' });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error('Project API unavailable');
+  const body = await response.json() as { item?: PublicProject } | null;
+  if (!body?.item || body.item.slug !== slug) throw new Error('Project API returned an invalid project response');
+  return body.item;
 }
 
 export async function fetchPublicLegislator(slug: string): Promise<Legislator | null> {
-  const data = await fetchPublicBootstrap({ fresh: true });
+  const data = await fetchPublicBootstrap({ fresh: true, throwOnError: true });
   return data.legislators.find((item) => item.slug === slug) || null;
 }
 
 export async function fetchGlossaryTerm(slug: string): Promise<GlossaryTerm | null> {
-  const data = await fetchPublicBootstrap({ fresh: true });
+  const data = await fetchPublicBootstrap({ fresh: true, throwOnError: true });
   return data.glossary.find((item) => item.slug === slug) || null;
 }
 

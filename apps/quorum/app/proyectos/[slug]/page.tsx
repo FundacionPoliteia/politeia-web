@@ -15,7 +15,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 export default async function ProjectPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const [project, bootstrap] = await Promise.all([fetchPublicProject(slug), fetchPublicBootstrap()]);
+  const [project, bootstrap] = await Promise.all([fetchPublicProject(slug), fetchPublicBootstrap({ fresh: true, throwOnError: true })]);
   if (!project) notFound();
   return <ProjectDetail project={project} subscriptionsEnabled={bootstrap.settings.subscriptionsEnabled} stageExplanations={bootstrap.settings.legislativeStageExplanations} legislators={bootstrap.legislators} />;
 }

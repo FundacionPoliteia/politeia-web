@@ -41,6 +41,9 @@ test('la ficha de proyecto mantiene sus datos en un encabezado compacto en mobil
   const marker = `${testInfo.project.name}-${Date.now()}`.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
   const title = `Ficha compacta ${marker}`;
   const slug = `ficha-compacta-${marker}`;
+  const missingProjectResponse = await request.get(`/proyectos/${slug}`);
+  expect(missingProjectResponse.status()).toBe(404);
+
   const createdProject = await request.post(`${apiBase}/v1/manage/projects`, { data: {
     title, slug, workflowId: 'legislativo-nacional-v1', workflowVersion: 1, currentStageId: 'mesa-de-entrada',
     docketNumber: `9000-${marker}`, entryDate: '2026-08-06', originChamberId: 'diputados', initiativeTypeId: 'poder-legislativo',
@@ -163,7 +166,9 @@ test('el perfil público de un cargo Otro muestra sus datos completos en el moda
 
   const sitemapResponse = await request.get('/sitemap.xml');
   expect(sitemapResponse.ok(), await sitemapResponse.text()).toBeTruthy();
-  expect(await sitemapResponse.text()).toContain(`/legisladores/${profileBody!.item.slug}`);
+  const sitemap = await sitemapResponse.text();
+  expect(sitemap).toContain(`/legisladores/${profileBody!.item.slug}`);
+  expect(sitemap).not.toMatch(/<loc>[^<]*\/proyectos<\/loc>/);
 });
 
 test('el glosario contextual y sus términos largos se mantienen legibles', async ({ page, request }, testInfo) => {
