@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { fetchPublicBootstrap } from '@/lib/api';
 import { softHyphenate } from '@/lib/hyphenation';
+import PublicContentUnavailable from '@/components/PublicContentUnavailable';
 
 // This route reads the managed glossary from Cloud Run. It must not be
 // prerendered during a Vercel build, where that dependency may be unavailable.
@@ -14,7 +15,12 @@ export const metadata: Metadata = {
 };
 
 export default async function GlossaryPage() {
-  const { glossary } = await fetchPublicBootstrap({ fresh: true, throwOnError: true });
+  let glossary;
+  try {
+    ({ glossary } = await fetchPublicBootstrap({ fresh: true, throwOnError: true }));
+  } catch {
+    return <PublicContentUnavailable title="El glosario no está disponible por el momento" message="No pudimos conectar con el servicio. Volvé a intentarlo en unos minutos." retryHref="/glosario" />;
+  }
   return <main id="contenido">
     <section className="detail-hero"><div className="shell"><span className="eyebrow">Lenguaje claro</span><h1>Glosario legislativo</h1><p className="hero-copy">Definiciones propias para entender el recorrido de una ley, acompañadas por referencias oficiales cuando corresponde.</p></div></section>
     <section className="section"><div className="shell">

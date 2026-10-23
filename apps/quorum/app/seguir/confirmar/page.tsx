@@ -6,6 +6,6 @@ export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Confirmar seguimiento', robots: { index: false, follow: false } };
 
 export default async function ConfirmPage({ searchParams }: { searchParams: Promise<{ token?: string }> }) {
-  const [{ token = '' }, { projects }] = await Promise.all([searchParams, fetchPublicBootstrap({ fresh: true, throwOnError: true })]);
+  const [{ token = '' }, { projects }] = await Promise.all([searchParams, fetchPublicBootstrap({ fresh: true })]);
   return <main id="contenido"><section className="shell article-page"><span className="eyebrow">Seguimiento por correo</span><h1>Confirmá tu suscripción</h1><SubscriptionManager mode="confirm" token={token} projects={projects} /></section></main>;
 }

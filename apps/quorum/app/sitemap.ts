@@ -10,7 +10,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://quorum.politeia.ar';
   const absoluteUrl = (path: string) => new URL(path, baseUrl).toString();
-  const { projects, legislators, glossary } = await fetchPublicBootstrap({ fresh: true, throwOnError: true });
+  const { projects, legislators, glossary } = await fetchPublicBootstrap({ fresh: true });
 
   return [
     { url: absoluteUrl('/'), changeFrequency: 'weekly', priority: 1 },
