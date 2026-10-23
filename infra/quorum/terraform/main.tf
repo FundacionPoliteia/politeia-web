@@ -223,10 +223,20 @@ resource "google_cloud_run_v2_service" "api" {
   location            = var.region
   deletion_protection = true
   ingress             = "INGRESS_TRAFFIC_ALL"
+
+  dynamic "traffic" {
+    for_each = each.key == "production" ? [true] : []
+    content {
+      type    = "TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST"
+      percent = 100
+    }
+  }
+
   template {
     service_account = google_service_account.api[each.key].email
     scaling {
-      min_instance_count = each.key == "production" ? 1 : 0
+      # Allow idle APIs to scale to zero; the next request can incur a cold start.
+      min_instance_count = 0
       max_instance_count = 10
     }
     containers {
