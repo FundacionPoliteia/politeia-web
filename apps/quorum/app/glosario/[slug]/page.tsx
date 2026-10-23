@@ -1,15 +1,15 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { fetchGlossaryTerm, fetchPublicBootstrap } from '@/lib/api';
+import { fetchGlossaryTerm } from '@/lib/api';
 import MarkdownContent from '@/components/MarkdownContent';
 import { richTextExcerpt } from '@/lib/richText';
 import { softHyphenate } from '@/lib/hyphenation';
 
-export async function generateStaticParams() {
-  const { glossary } = await fetchPublicBootstrap();
-  return glossary.map(({ slug }) => ({ slug }));
-}
+// Terms are managed in Cloud Run, independently of Vercel builds.
+// Resolve every slug at request time so new terms are available immediately.
+export const dynamic = 'force-dynamic';
+export const dynamicParams = true;
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;

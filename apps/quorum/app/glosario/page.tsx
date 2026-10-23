@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 };
 
 export default async function GlossaryPage() {
-  const { glossary } = await fetchPublicBootstrap();
+  const { glossary } = await fetchPublicBootstrap({ fresh: true });
   return <main id="contenido">
     <section className="detail-hero"><div className="shell"><span className="eyebrow">Lenguaje claro</span><h1>Glosario legislativo</h1><p className="hero-copy">Definiciones propias para entender el recorrido de una ley, acompañadas por referencias oficiales cuando corresponde.</p></div></section>
     <section className="section"><div className="shell">

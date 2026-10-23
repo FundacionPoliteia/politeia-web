@@ -3,12 +3,13 @@ import Link from 'next/link';
 import PersonPhoto from '@/components/PersonPhoto';
 import type { Legislator } from '@politeia/quorum-contracts';
 import { notFound } from 'next/navigation';
-import { fetchPublicBootstrap, fetchPublicLegislator, formatDate } from '@/lib/api';
+import { fetchPublicLegislator, formatDate } from '@/lib/api';
 
-export async function generateStaticParams() {
-  const { legislators } = await fetchPublicBootstrap();
-  return legislators.map(({ slug }) => ({ slug }));
-}
+// Profiles are editorial data from Cloud Run, not build-time Next content.
+// Resolve every slug at request time so newly published profiles don't 404
+// until the next Vercel build.
+export const dynamic = 'force-dynamic';
+export const dynamicParams = true;
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const item = await fetchPublicLegislator((await params).slug);

@@ -32,9 +32,12 @@ const emptySettings: SiteSettings = {
   subscriptionsEnabled: false, privacyPolicyApproved: false, updatedAt: new Date(0).toISOString(),
 };
 
-export async function fetchPublicBootstrap(): Promise<PublicBootstrap> {
+export async function fetchPublicBootstrap(options: { fresh?: boolean } = {}): Promise<PublicBootstrap> {
   try {
-    const response = await fetch(`${serverApiBase}/v1/public/bootstrap`, { headers: serverPublicAccessHeaders(), next: { revalidate: 300, tags: ['quorum-public'] } });
+    const requestOptions = options.fresh
+      ? { headers: serverPublicAccessHeaders(), cache: 'no-store' as const }
+      : { headers: serverPublicAccessHeaders(), next: { revalidate: 300, tags: ['quorum-public'] } };
+    const response = await fetch(`${serverApiBase}/v1/public/bootstrap`, requestOptions);
     if (!response.ok) throw new Error('Public API unavailable');
     return await response.json() as PublicBootstrap;
   } catch {
@@ -52,12 +55,12 @@ export async function fetchPublicProject(slug: string): Promise<PublicProject | 
 }
 
 export async function fetchPublicLegislator(slug: string): Promise<Legislator | null> {
-  const data = await fetchPublicBootstrap();
+  const data = await fetchPublicBootstrap({ fresh: true });
   return data.legislators.find((item) => item.slug === slug) || null;
 }
 
 export async function fetchGlossaryTerm(slug: string): Promise<GlossaryTerm | null> {
-  const data = await fetchPublicBootstrap();
+  const data = await fetchPublicBootstrap({ fresh: true });
   return data.glossary.find((item) => item.slug === slug) || null;
 }
 

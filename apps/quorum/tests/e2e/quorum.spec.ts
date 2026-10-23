@@ -160,6 +160,10 @@ test('el perfil público de un cargo Otro muestra sus datos completos en el moda
   expect(profileLayout.scrollWidth).toBeLessThanOrEqual(profileLayout.clientWidth + 1);
   expect(profileLayout.columns).toBe((page.viewportSize()?.width || 1280) <= 620 ? 2 : 4);
   await page.screenshot({ path: testInfo.outputPath('perfil-publico-completo.png'), fullPage: true });
+
+  const sitemapResponse = await request.get('/sitemap.xml');
+  expect(sitemapResponse.ok(), await sitemapResponse.text()).toBeTruthy();
+  expect(await sitemapResponse.text()).toContain(`/legisladores/${profileBody!.item.slug}`);
 });
 
 test('el glosario contextual y sus términos largos se mantienen legibles', async ({ page, request }, testInfo) => {
@@ -223,6 +227,10 @@ test('el glosario contextual y sus términos largos se mantienen legibles', asyn
   expect(await articleTermHeading.textContent()).toContain('Desburocratiz\u00adación');
   const articleTermLayout = await articleTermHeading.evaluate((element) => ({ scrollWidth: element.scrollWidth, clientWidth: element.clientWidth }));
   expect(articleTermLayout.scrollWidth).toBeLessThanOrEqual(articleTermLayout.clientWidth + 1);
+
+  const sitemapResponse = await request.get('/sitemap.xml');
+  expect(sitemapResponse.ok(), await sitemapResponse.text()).toBeTruthy();
+  expect(await sitemapResponse.text()).toContain(`/glosario/${createdTermBody.item.slug}`);
 
   await page.goto(`/proyectos/${slug}`);
   const projectFacts = page.locator('.project-facts-grid');
