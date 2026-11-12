@@ -1012,6 +1012,27 @@ test('POST /v1/posts stores author note', async () => {
   }
 });
 
+test('POST /v1/posts rejects a draft without content', async () => {
+  const session = buildSessionCookie({
+    email: 'dev@politeia.ar',
+    name: 'Dev Politeia',
+    roles: ['admin'],
+  });
+
+  const res = await request(createApp())
+    .post('/v1/posts')
+    .set('Cookie', `${config.sessionCookieName}=${encodeURIComponent(session)}`)
+    .send({
+      title: 'Borrador sin contenido',
+      contentMarkdown: '',
+      tags: [],
+    })
+    .expect(400);
+
+  assert.equal(res.body.error.message, 'contentMarkdown is required');
+  assert.match(res.body.error.requestId, /^[0-9a-f-]{36}$/i);
+});
+
 test('review assignment directory always lists reviewers and requires admin opt-in', async () => {
   const firestore = createMemoryFirestore();
   setFirestoreForTests(firestore);

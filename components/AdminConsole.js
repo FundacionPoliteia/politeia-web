@@ -341,6 +341,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
   const googlePromptAttemptedRef = useRef(false);
   const userRef = useRef(null);
   const docxInputRef = useRef(null);
+  const latestContentMarkdownRef = useRef(EMPTY_FORM.contentMarkdown);
   const profilePhotoInputRef = useRef(null);
   const adminProfilePhotoInputRef = useRef(null);
   const profilePermissionsRef = useRef(null);
@@ -453,6 +454,10 @@ export default function AdminConsole({ surface = 'editorial' }) {
   useEffect(() => {
     userRef.current = user;
   }, [user]);
+
+  useEffect(() => {
+    latestContentMarkdownRef.current = form.contentMarkdown;
+  }, [form.contentMarkdown]);
 
   useEffect(() => {
     if (!GOOGLE_CLIENT_ID) return;
@@ -1702,7 +1707,21 @@ export default function AdminConsole({ surface = 'editorial' }) {
       throw new Error('Solicitá edición para modificar un post publicado.');
     }
 
-    const invalidReferenceIndex = form.references.findIndex((reference) => (
+    const contentMarkdown = latestContentMarkdownRef.current;
+    const formToSave = contentMarkdown === form.contentMarkdown
+      ? form
+      : normalizeForm({ ...form, contentMarkdown });
+
+    if (!formToSave.title.trim()) {
+      document.getElementById('post-title')?.focus();
+      throw new Error('Agregá un título antes de guardar.');
+    }
+    if (!formToSave.contentMarkdown.trim()) {
+      document.querySelector('.rich-editor-content [contenteditable="true"]')?.focus();
+      throw new Error('Agregá el contenido de la nota antes de guardar.');
+    }
+
+    const invalidReferenceIndex = formToSave.references.findIndex((reference) => (
       reference.text.trim()
       && reference.url.trim()
       && !isValidHttpsUrl(reference.url)
@@ -1712,13 +1731,14 @@ export default function AdminConsole({ surface = 'editorial' }) {
       throw new Error('Revisá el enlace de la referencia: debe ser una URL HTTPS válida.');
     }
 
-    const payload = buildPayload(form, canChooseSlug);
-    const isEditing = Boolean(form.id);
-    const data = await api(isEditing ? `/v1/posts/${form.id}` : '/v1/posts', {
+    const payload = buildPayload(formToSave, canChooseSlug);
+    const isEditing = Boolean(formToSave.id);
+    const data = await api(isEditing ? `/v1/posts/${formToSave.id}` : '/v1/posts', {
       method: isEditing ? 'PATCH' : 'POST',
       body: JSON.stringify(payload),
     });
     const nextForm = postToForm(data.item);
+    latestContentMarkdownRef.current = nextForm.contentMarkdown;
     setForm(nextForm);
     setSavedForm(nextForm);
     setUseManualAuthorNote(Boolean(nextForm.authorNote));
@@ -2123,6 +2143,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
 
   function selectPostForEdit(post) {
     const nextForm = postToForm(post);
+    latestContentMarkdownRef.current = nextForm.contentMarkdown;
     setForm(nextForm);
     setSavedForm(nextForm);
     setUseManualAuthorNote(Boolean(nextForm.authorNote));
@@ -3914,6 +3935,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
                           authorName: profileAuthorName,
                           showAuthorNote: hasAuthorProfile,
                         });
+                        latestContentMarkdownRef.current = nextForm.contentMarkdown;
                         setForm(nextForm);
                         setSavedForm(nextForm);
                         setUseManualAuthorNote(false);
@@ -4005,7 +4027,7 @@ export default function AdminConsole({ surface = 'editorial' }) {
 
                   <label>
                     Título
-                    <input disabled={publishedAuthorLocked} value={form.title} onChange={(e) => updateForm('title', e.target.value)} required />
+                    <input disabled={publishedAuthorLocked} id="post-title" value={form.title} onChange={(e) => updateForm('title', e.target.value)} required />
                   </label>
 
                   <div className="admin-two" data-help-id="blog-metadata">
@@ -5345,6 +5367,9 @@ export default function AdminConsole({ surface = 'editorial' }) {
   );
 
   function updateForm(field, value) {
+    if (field === 'contentMarkdown') {
+      latestContentMarkdownRef.current = normalizeInputValue(value);
+    }
     setForm((current) => normalizeForm({
       ...current,
       [field]: value,
